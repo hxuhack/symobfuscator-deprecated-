@@ -1,3 +1,5 @@
+#!/bin/bash
+
 git add .
 git commit -m "update"
 spawn git push origin master
