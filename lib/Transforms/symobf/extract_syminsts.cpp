@@ -4,6 +4,8 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/IR/Instruction.h"
+#include <list> 
 using namespace llvm;
 
 #define DEBUG_TYPE "Extract_SymInsts"
@@ -18,7 +20,20 @@ namespace {
     static char ID; 
     ExtSymInsts() : FunctionPass(ID) {}
     virtual bool runOnFunction(Function &F){
-      errs()<<symvar<<'\n';
+      errs()<<"Function " << F.getName()<<"\n";
+      std::list<BasicBlock *> basicBlocks;
+      for (Function::iterator i=F.begin();i!=F.end();++i) {
+        basicBlocks.push_back((BasicBlock *)i);
+      }
+      while(!basicBlocks.empty()){
+        BasicBlock* basicBlock = basicBlocks.front();
+        for (BasicBlock::iterator inst = basicBlock->begin(); inst!=basicBlock->end(); ++inst){
+          //(dynamic_cast<Instruction> inst).getName();
+          inst->print(errs());
+        }
+        basicBlocks.pop_front();
+      }
+      return false;
     }
   };
 /*
