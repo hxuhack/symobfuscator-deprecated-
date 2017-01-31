@@ -1,4 +1,5 @@
 #!/bin/bash
+#!/usr/bin/expect
 
 git add .
 git commit -m "update"
