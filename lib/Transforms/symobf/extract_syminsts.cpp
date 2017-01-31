@@ -4,7 +4,8 @@
 #include "llvm/Pass.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/raw_ostream.h"
-#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/InstrTypes.h"
 #include <list> 
 using namespace llvm;
 
@@ -20,7 +21,7 @@ namespace {
     static char ID; 
     ExtSymInsts() : FunctionPass(ID) {}
     virtual bool runOnFunction(Function &F){
-      errs()<<"Function " << F.getName()<<"\n";
+      //errs()<<"Function " << F.getName()<<"\n";
       std::list<BasicBlock *> basicBlocks;
       for (Function::iterator i=F.begin();i!=F.end();++i) {
         basicBlocks.push_back((BasicBlock *)i);
@@ -28,40 +29,25 @@ namespace {
       while(!basicBlocks.empty()){
         BasicBlock* basicBlock = basicBlocks.front();
         basicBlock->print(errs());
+        errs()<<"--------------------\n";
         for (BasicBlock::iterator it = basicBlock->begin(); it!=basicBlock->end(); ++it){
           Instruction *inst = dyn_cast<Instruction>(it); 
-          errs()<<inst->getOpcodeName()<<"\n";
+          //errs()<<inst->getName()<<"\n";
+	  if(AllocaInst *allocaInst = dyn_cast<AllocaInst>(inst)){
+            errs()<<"+ALLOCA INST:"<<allocaInst->getName()<<"="<<allocaInst->getValueName()<<"\n";
+ 	  }
+	  if(LoadInst *loadInst = dyn_cast<LoadInst>(inst)){
+            errs()<<"+LOAD INST:"<<"="<<loadInst->getValueName()<<loadInst->getName()<<"\n";
+	  }
+	  if(BinaryOperator *bOp = dyn_cast<BinaryOperator>(inst)){
+            errs()<<"BIN_OP:"<<bOp->getOpcode()<<"\n";
+ 	  }
         }
         basicBlocks.pop_front();
       }
       return false;
     }
   };
-/*
-  struct extract_syminsts1 : public BasicBlockPass {
-    static char ID; // Pass identification, replacement for typeid
-    extract_syminsts1() : BasicBlockPass(ID) {}
-    virtual bool runOnBasicBlock(BasicBlock &BB) {
-      for (BasicBlock::iterator it = BB.begin(); it != BB.end(); ++it){
-        //errs()<<it->getName() <<":"<<it->getOpcodeName()<<'\n';
-        it->print(errs());
-        errs()<<'\n';
-      }
-      return false;
-    }
-  };
-*/
-/*
-  struct extract_syminsts : public ImmutablePass {
-    static char ID; //
-    extract_syminsts() : ImmutablePass(ID) {}
-    virtual bool runOnModule(Module &MD) {
-      errs()<<MD.getNamedValue("str")<<'\n';
-      errs()<<symvar<<'\n';
-      return false;
-    }
-  };
-*/
 }
 
 char ExtSymInsts::ID = 0;
