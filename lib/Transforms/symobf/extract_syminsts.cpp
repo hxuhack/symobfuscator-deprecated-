@@ -27,9 +27,10 @@ namespace {
       }
       while(!basicBlocks.empty()){
         BasicBlock* basicBlock = basicBlocks.front();
-        for (BasicBlock::iterator inst = basicBlock->begin(); inst!=basicBlock->end(); ++inst){
-          //(dynamic_cast<Instruction> inst).getName();
-          inst->print(errs());
+        basicBlock->print(errs());
+        for (BasicBlock::iterator it = basicBlock->begin(); it!=basicBlock->end(); ++it){
+          Instruction *inst = dyn_cast<Instruction>(it); 
+          errs()<<inst->getOpcodeName()<<"\n";
         }
         basicBlocks.pop_front();
       }
