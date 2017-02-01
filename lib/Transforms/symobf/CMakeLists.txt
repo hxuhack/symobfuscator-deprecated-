@@ -1,6 +1,6 @@
 
-add_llvm_loadable_module( LLVMsymbof
-  extract_syminsts.cpp
+add_llvm_loadable_module(symobf 
+  taint.cpp
 
   DEPENDS
   intrinsics_gen
