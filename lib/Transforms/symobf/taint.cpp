@@ -10,6 +10,7 @@ Feature: Taint LLVM IR instructions
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/InstVisitor.h"
 #include "logger.hpp"
 #include <list> 
 
@@ -24,11 +25,35 @@ const std::string default_symvar = "symvar";
 static cl::opt<std::string> symvar("symvar", cl::desc("choose a symbolic variable to obfuscate"), cl::value_desc("variable name"), cl::init(default_symvar), cl::Optional);
 
 namespace {
+  class TaintEngine : public InstVisitor<TaintEngine>{
+
+    SmallVector<Value*, 32> taintSourceVec;
+
+    public:
+    TaintEngine(){}
+
+    void SetSource(Value *val) {
+      taintSourceVec.push_back(val);
+    }
+  };
+
   struct Taint : public FunctionPass {
     static char ID; 
     Taint() : FunctionPass(ID) {}
+
+    //Main function
     virtual bool runOnFunction(Function &F){
-      //errs()<<"Function " << F.getName()<<"\n";
+      LOG(L_DEBUG) << "Function: " << F.getName().str();
+
+      TaintEngine taintEngine;
+      
+      // Set taint source: all arguments
+      for (Function::arg_iterator argIt = F.arg_begin(); argIt != F.arg_end(); ++argIt){
+        Value *argValue = &*argIt;
+        LOG(L_DEBUG) << "Argument: " << argValue->getName().str();
+	taintEngine.SetSource(argValue);
+      }
+
       std::list<BasicBlock *> basicBlocks;
       for (Function::iterator i=F.begin();i!=F.end();++i) {
         basicBlocks.push_back((BasicBlock *)i);
