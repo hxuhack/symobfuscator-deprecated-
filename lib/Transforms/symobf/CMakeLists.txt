@@ -1,6 +1,7 @@
 
 add_llvm_loadable_module(symobf 
-  taint.cpp
+  Taint.cpp
+  TaintEngine.cpp
 
   DEPENDS
   intrinsics_gen

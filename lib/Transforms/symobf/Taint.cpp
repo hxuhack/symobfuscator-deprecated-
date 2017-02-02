@@ -12,6 +12,7 @@ Feature: Taint LLVM IR instructions
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/InstVisitor.h"
 #include "logger.hpp"
+#include "TaintEngine.hpp"
 #include <list> 
 
 using namespace llvm;
@@ -24,18 +25,7 @@ const std::string default_symvar = "symvar";
 
 static cl::opt<std::string> symvar("symvar", cl::desc("choose a symbolic variable to obfuscate"), cl::value_desc("variable name"), cl::init(default_symvar), cl::Optional);
 
-namespace {
-  class TaintEngine : public InstVisitor<TaintEngine>{
-
-    SmallVector<Value*, 32> taintSourceVec;
-
-    public:
-    TaintEngine(){}
-
-    void SetSource(Value *val) {
-      taintSourceVec.push_back(val);
-    }
-  };
+namespace Taint{
 
   struct Taint : public FunctionPass {
     static char ID; 
@@ -52,8 +42,9 @@ namespace {
         Value *argValue = &*argIt;
         LOG(L_DEBUG) << "Argument: " << argValue->getName().str();
 	taintEngine.SetSource(argValue);
+	taintEngine.Propagate();
       }
-
+/*
       std::list<BasicBlock *> basicBlocks;
       for (Function::iterator i=F.begin();i!=F.end();++i) {
         basicBlocks.push_back((BasicBlock *)i);
@@ -77,10 +68,11 @@ namespace {
         }
         basicBlocks.pop_front();
       }
+*/
       return false;
     }
   };
 }
 
-char Taint::ID = 0;
-static RegisterPass<Taint> X("taint", "taint llvm instructions");
+char Taint::Taint::ID = 0;
+static RegisterPass<Taint::Taint> X("taint", "taint llvm instructions");
