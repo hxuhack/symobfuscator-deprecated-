@@ -13,13 +13,10 @@ The TaintEngine if referenced with llvm SCCP.cpp
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/InstVisitor.h"
-#include "TaintEngine.hpp"
 #include "Logger.hpp"
 #include <list> 
 
 using namespace llvm;
-using namespace taint;
-
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
 loglevel_e loglevel = L2_DEBUG;
