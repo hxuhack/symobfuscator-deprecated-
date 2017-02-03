@@ -16,6 +16,7 @@ Feature: Taint LLVM IR instructions
 #include <list> 
 
 using namespace llvm;
+using namespace taint;
 
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
@@ -25,18 +26,50 @@ const std::string default_symvar = "symvar";
 
 static cl::opt<std::string> symvar("symvar", cl::desc("choose a symbolic variable to obfuscate"), cl::value_desc("variable name"), cl::init(default_symvar), cl::Optional);
 
-namespace Taint{
+namespace {
 
-  struct Taint : public FunctionPass {
+  class TaintEngine : public InstVisitor<TaintEngine>{
+
+    private:
+    SmallVector<Value*, 32> taintSourceVec;
+    SmallPtrSet<BasicBlock*, 8> bbSet;
+
+    public:
+    void SetSource(Value *val) {
+      taintSourceVec.push_back(val);
+    }
+
+    void Propagate(){
+      while(!taintSourceVec.empty()){
+        Value *val = taintSourceVec.pop_back_val();
+        LOG(L_DEBUG) << val->getName().str();
+        for (Value::use_iterator useIt = val->use_begin(); useIt != val->use_end(); ++useIt){
+	  if(Instruction *inst = dyn_cast<Instruction>(*useIt)){
+            LOG(L_DEBUG) << inst->getOpcodeName();
+	    OperandChangedState(inst);
+          }
+        }
+      }
+    }
+    void OperandChangedState(Instruction *inst) {
+      if (bbSet.count(inst->getParent())){   // Instruction is executable?
+        LOG(L_DEBUG) << "bbSet";
+        //visit(*inst);
+      }
+    }
+  };
+}
+
+namespace {
+
+  struct TaintPass : public FunctionPass {
     static char ID; 
-    Taint() : FunctionPass(ID) {}
+    TaintPass() : FunctionPass(ID) {}
 
     //Main function
     virtual bool runOnFunction(Function &F){
       LOG(L_DEBUG) << "Function: " << F.getName().str();
-
       TaintEngine taintEngine;
-      
       // Set taint source: all arguments
       for (Function::arg_iterator argIt = F.arg_begin(); argIt != F.arg_end(); ++argIt){
         Value *argValue = &*argIt;
@@ -74,5 +107,5 @@ namespace Taint{
   };
 }
 
-char Taint::Taint::ID = 0;
-static RegisterPass<Taint::Taint> X("taint", "taint llvm instructions");
+char TaintPass::ID = 0;
+static RegisterPass<TaintPass> X("taint", "taint llvm instructions");

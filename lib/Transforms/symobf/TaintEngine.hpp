@@ -1,3 +1,6 @@
+#ifndef _TAINT_ENGINE_HPP_
+#define _TAINT_ENGINE_HPP_
+
 #include "llvm/ADT/Statistic.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/BasicBlock.h"
@@ -12,17 +15,23 @@
 
 using namespace llvm;
 
-namespace Taint{
+namespace taint{
 
   class TaintEngine : public InstVisitor<TaintEngine>{
 
     SmallVector<Value*, 32> taintSourceVec;
+    SmallPtrSet<BasicBlock*, 8> bbSet;
 
     public:
     TaintEngine();
 
-    void SetSource(Value *val);
+    void SetSource(Value *);
     void Propagate();
+ 
+    private:
+    void OperandChangedState(Instruction *);
 
   };
 }
+
+#endif
