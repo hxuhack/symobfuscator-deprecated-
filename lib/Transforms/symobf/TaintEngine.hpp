@@ -10,7 +10,7 @@
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/InstVisitor.h"
-#include "logger.hpp"
+#include "Logger.hpp"
 #include <list> 
 
 using namespace llvm;
