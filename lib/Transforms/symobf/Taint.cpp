@@ -31,18 +31,13 @@ namespace {
 /// LatticeVal class - This class represents the different lattice values that an LLVM value may occupy.  It is a simple class with value semantics.
 class LatticeVal {
   enum LvType {
-    /// unknown - This LLVM Value has no known value yet.
     unknown,
-
-    /// constant - This LLVM Value has a specific constant value.
     constant,
-
     /// forcedconstant - This LLVM Value was thought to be undef until
     /// ResolvedUndefsIn.  This is treated just like 'constant', but if merged
     /// with another (different) constant, it goes to overdefined, instead of
     /// asserting.
     forcedconstant,
-
     /// overdefined - This instruction is not known to be constant, and we know
     /// it has a value.
     overdefined
@@ -169,31 +164,18 @@ public:
   bool ResolvedUndefsIn(Function &);
   bool IsEdgeFeasible(BasicBlock *From, BasicBlock *To);
   void GetFeasibleSuccessors(TerminatorInst &TI, SmallVectorImpl<bool> &Succs);
-
   /// MarkAnythingOverdefined - Mark the specified value overdefined.  This
   /// works with both scalars and structs.
-  void MarkAnythingOverdefined(Value *V) {
-    if (StructType *STy = dyn_cast<StructType>(V->getType()))
-      for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
-        MarkOverdefined(GetStructValueState(V, i), V);
-    else
-      MarkOverdefined(V);
-  }
+  void MarkAnythingOverdefined(Value *);
 
 
 private:
   friend class InstVisitor<TaintEngine>;
   void visitStoreInst     (StoreInst &I);
   void visitLoadInst      (LoadInst &I);
-    // visit implementations - Something changed in this instruction.  Either an
-    // operand made a transition, or the instruction is newly executable.  Change
-    // the value type of I to reflect these changes if appropriate.
   void visitPHINode(PHINode &I);
-
-    // Terminators
   void visitReturnInst(ReturnInst &I);
   void visitTerminatorInst(TerminatorInst &TI);
-
   void visitCastInst(CastInst &I);
   void visitSelectInst(SelectInst &I);
   void visitBinaryOperator(Instruction &I);
@@ -205,17 +187,10 @@ private:
   void visitInsertValueInst(InsertValueInst &IVI);
   void visitLandingPadInst(LandingPadInst &I) { MarkAnythingOverdefined(&I); }
   void visitFuncletPadInst(FuncletPadInst &FPI) { MarkAnythingOverdefined(&FPI);}
-  void visitCatchSwitchInst(CatchSwitchInst &CPI) {
-      MarkAnythingOverdefined(&CPI);
-      visitTerminatorInst(CPI);
-  }
-    // Instructions that cannot be folded away.
+  void visitCatchSwitchInst(CatchSwitchInst &);
   void visitGetElementPtrInst(GetElementPtrInst &I);
   void visitCallInst      (CallInst &I) {visitCallSite(&I);}
-  void visitInvokeInst    (InvokeInst &II) {
-    visitCallSite(&II);
-    visitTerminatorInst(II);
-  }
+  void visitInvokeInst    (InvokeInst &);
   void visitCallSite      (CallSite CS);
   void visitResumeInst    (TerminatorInst &I) {  }
   void visitUnreachableInst(TerminatorInst &I) { }
@@ -224,119 +199,145 @@ private:
   void visitAtomicRMWInst (AtomicRMWInst &I) { MarkOverdefined(&I); }
   void visitAllocaInst    (Instruction &I) { MarkOverdefined(&I); }
   void visitVAArgInst     (Instruction &I) { MarkAnythingOverdefined(&I); }
-  void visitInstruction(Instruction &inst) {
-    // If a new instruction is added to LLVM that we don't handle.
-    LOG(L_WARNING) << "TaintEngine: Don't know how to handle:";
-    inst.print(errs());
-    MarkAnythingOverdefined(&inst);   // Just in case
-  }
-
-  LatticeVal &GetValueState(Value *val) {
-    assert(!val->getType()->isStructTy() && "Should use GetStructValueState");
-    std::pair<DenseMap<Value*, LatticeVal>::iterator, bool> lvPair =valueState.insert(std::make_pair(val, LatticeVal()));
-    LatticeVal &lv = lvPair.first->second;
-
-    if (!lvPair.second)
-      return lv;  // Common case, already in the map.
-
-    if (Constant *con = dyn_cast<Constant>(val)) {
-      // Undef values remain unknown.
-      if (!isa<UndefValue>(val)){
-        lv.MarkConstant(con);          // Constants are constant
-      }
-    }
-    // All others are underdefined by default.
-    return lv;
-  }
-
-  LatticeVal &GetStructValueState(Value *V, unsigned i) {
-    assert(V->getType()->isStructTy() && "Should use GetValueState");
-    assert(i < cast<StructType>(V->getType())->getNumElements() &&
-           "Invalid element #");
-
-    std::pair<DenseMap<std::pair<Value*, unsigned>, LatticeVal>::iterator,
-              bool> I = structValueState.insert(
-                        std::make_pair(std::make_pair(V, i), LatticeVal()));
-    LatticeVal &LV = I.first->second;
-
-    if (!I.second)
-      return LV;  // Common case, already in the map.
-
-    if (Constant *C = dyn_cast<Constant>(V)) {
-      Constant *Elt = C->getAggregateElement(i);
-
-      if (!Elt)
-        LV.MarkOverdefined();      // Unknown sort of constant.
-      else if (isa<UndefValue>(Elt))
-        ; // Undef values remain unknown.
-      else
-        LV.MarkConstant(Elt);      // Constants are constant.
-    }
-
-    // All others are underdefined by default.
-    return LV;
-  }
-
-  void MarkOverdefined(LatticeVal &IV, Value *V) {
-    if (!IV.MarkOverdefined()) return;
-    // Only instructions go on the work list
-    taintSourceVec.push_back(V);
-  }
-
-  void MarkForcedConstant(Value *V, Constant *C) {
-    assert(!V->getType()->isStructTy() && "Should use other method");
-    LatticeVal &IV = valueState[V];
-    IV.MarkForcedConstant(C);
-    PushToWorkList(IV, V);
-  }
-
-  void MarkEdgeExecutable(BasicBlock *Source, BasicBlock *Dest) {
-    if (!knownFeasibleEdges.insert(Edge(Source, Dest)).second)
-      return;  // This edge is already known to be executable!
-
-    if (!MarkBlockExecutable(Dest)) {
-      // If the destination is already executable, we just made an *edge*
-      // feasible that wasn't before.  Revisit the PHI nodes in the block
-      // because they have potentially new operands.
-      PHINode *PN;
-      for (BasicBlock::iterator I = Dest->begin(); (PN = dyn_cast<PHINode>(I)); ++I)
-        visitPHINode(*PN);
-    }
-  }
-
-  void PushToWorkList(LatticeVal &IV, Value *V) {
-    if (IV.IsOverdefined())
-      return taintSourceVec.push_back(V);
-    instWorkVec.push_back(V);
-  }
-
-  void MarkConstant(LatticeVal &IV, Value *V, Constant *C) {
-    if (!IV.MarkConstant(C)) return;
-    PushToWorkList(IV, V);
-  }
-
-  void MarkConstant(Value *V, Constant *C) {
-    assert(!V->getType()->isStructTy() && "Should use other method");
-    MarkConstant(valueState[V], V, C);
-  }
-
-  void MergeInValue(LatticeVal &IV, Value *V, LatticeVal MergeWithV) {
-    if (IV.IsOverdefined() || MergeWithV.IsUnknown())
-      return;  // Noop.
-    if (MergeWithV.IsOverdefined())
-      return MarkOverdefined(IV, V);
-    if (IV.IsUnknown())
-      return MarkConstant(IV, V, MergeWithV.GetConstant());
-    if (IV.GetConstant() != MergeWithV.GetConstant())
-      return MarkOverdefined(IV, V);
-  }
-
-  void MergeInValue(Value *V, LatticeVal MergeWithV) {
-    assert(!V->getType()->isStructTy() && "Should use other method");
-    MergeInValue(valueState[V], V, MergeWithV);
-  }
+  void visitInstruction(Instruction &); 
+  LatticeVal &GetValueState(Value *); 
+  LatticeVal &GetStructValueState(Value *, unsigned );
+  void MarkOverdefined(LatticeVal &, Value *);
+  void MarkForcedConstant(Value *, Constant *);
+  void MarkEdgeExecutable(BasicBlock *, BasicBlock *);
+  void PushToWorkList(LatticeVal &, Value *); 
+  void MarkConstant(LatticeVal &, Value *, Constant *);
+  void MarkConstant(Value *, Constant *);
+  void MergeInValue(LatticeVal &, Value *, LatticeVal);
+  void MergeInValue(Value *, LatticeVal);
 };
 //End TaintEngine Definition
+
+void TaintEngine::MergeInValue(Value *V, LatticeVal MergeWithV) {
+  assert(!V->getType()->isStructTy() && "Should use other method");
+  MergeInValue(valueState[V], V, MergeWithV);
+}
+
+void TaintEngine::MarkConstant(LatticeVal &IV, Value *V, Constant *C) {
+  if (!IV.MarkConstant(C)) 
+    return;
+  PushToWorkList(IV, V);
+}
+
+void TaintEngine::MarkConstant(Value *V, Constant *C) {
+  assert(!V->getType()->isStructTy() && "Should use other method");
+  MarkConstant(valueState[V], V, C);
+}
+
+void TaintEngine::PushToWorkList(LatticeVal &IV, Value *V) {
+  if (IV.IsOverdefined())
+    return taintSourceVec.push_back(V);
+  instWorkVec.push_back(V);
+}
+
+void TaintEngine::visitInvokeInst (InvokeInst &II) {
+  visitCallSite(&II);
+  visitTerminatorInst(II);
+}
+
+void TaintEngine::MarkOverdefined(LatticeVal &IV, Value *V) {
+  if (!IV.MarkOverdefined()) 
+    return;
+  // Only instructions go on the work list
+  taintSourceVec.push_back(V);
+}
+
+void TaintEngine::MarkForcedConstant(Value *V, Constant *C) {
+  assert(!V->getType()->isStructTy() && "Should use other method");
+  LatticeVal &IV = valueState[V];
+  IV.MarkForcedConstant(C);
+  PushToWorkList(IV, V);
+}
+
+void TaintEngine::MergeInValue(LatticeVal &IV, Value *V, LatticeVal MergeWithV) {
+  if (IV.IsOverdefined() || MergeWithV.IsUnknown())
+    return;  // Noop.
+  if (MergeWithV.IsOverdefined())
+    return MarkOverdefined(IV, V);
+  if (IV.IsUnknown())
+    return MarkConstant(IV, V, MergeWithV.GetConstant());
+  if (IV.GetConstant() != MergeWithV.GetConstant())
+    return MarkOverdefined(IV, V);
+ }
+
+void TaintEngine::visitCatchSwitchInst(CatchSwitchInst &CPI) {
+    MarkAnythingOverdefined(&CPI);
+    visitTerminatorInst(CPI);
+}
+
+void TaintEngine::MarkAnythingOverdefined(Value *V) {
+  if (StructType *STy = dyn_cast<StructType>(V->getType()))
+    for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
+      MarkOverdefined(GetStructValueState(V, i), V);
+  else
+    MarkOverdefined(V);
+}
+
+void TaintEngine::MarkEdgeExecutable(BasicBlock *Source, BasicBlock *Dest) {
+  if (!knownFeasibleEdges.insert(Edge(Source, Dest)).second)
+    return;  // This edge is already known to be executable!
+
+  if (!MarkBlockExecutable(Dest)) {
+    // If the destination is already executable, we just made an *edge*
+    // feasible that wasn't before.  Revisit the PHI nodes in the block
+    // because they have potentially new operands.
+    PHINode *PN;
+    for (BasicBlock::iterator I = Dest->begin(); (PN = dyn_cast<PHINode>(I)); ++I)
+      visitPHINode(*PN);
+  }
+}
+
+void TaintEngine::visitInstruction(Instruction &inst) {
+  // If a new instruction is added to LLVM that we don't handle.
+  LOG(L_WARNING) << "TaintEngine: Don't know how to handle:";
+  inst.print(errs());
+  MarkAnythingOverdefined(&inst);   // Just in case
+}
+
+LatticeVal& TaintEngine::GetStructValueState(Value *V, unsigned i) {
+  assert(V->getType()->isStructTy() && "Should use GetValueState");
+  assert(i < cast<StructType>(V->getType())->getNumElements() && "Invalid element #");
+  std::pair<DenseMap<std::pair<Value*, unsigned>, LatticeVal>::iterator, bool> I = structValueState.insert(
+                        std::make_pair(std::make_pair(V, i), LatticeVal()));
+  LatticeVal &LV = I.first->second;
+
+  if (!I.second)
+    return LV;  // Common case, already in the map.
+
+  if (Constant *C = dyn_cast<Constant>(V)) {
+    Constant *Elt = C->getAggregateElement(i);
+    if (!Elt)
+      LV.MarkOverdefined();      // Unknown sort of constant.
+    else if (isa<UndefValue>(Elt))
+      ; // Undef values remain unknown.
+    else
+      LV.MarkConstant(Elt);      // Constants are constant.
+  }
+
+    // All others are underdefined by default.
+  return LV;
+ }
+
+LatticeVal& TaintEngine::GetValueState(Value *val) {
+  assert(!val->getType()->isStructTy() && "Should use GetStructValueState");
+  std::pair<DenseMap<Value*, LatticeVal>::iterator, bool> lvPair =valueState.insert(std::make_pair(val, LatticeVal()));
+  LatticeVal &lv = lvPair.first->second;
+  if (!lvPair.second)
+    return lv;  // Common case, already in the map.
+  if (Constant *con = dyn_cast<Constant>(val)) {
+    // Undef values remain unknown.
+    if (!isa<UndefValue>(val)){
+      lv.MarkConstant(con);          // Constants are constant
+    }
+  }
+  // All others are underdefined by default.
+  return lv;
+}
 
 bool TaintEngine::MarkBlockExecutable(BasicBlock *bb) {
     if (!bbExe.insert(bb).second) 
