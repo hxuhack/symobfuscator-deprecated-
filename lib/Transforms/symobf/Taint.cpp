@@ -15,13 +15,15 @@ The TaintEngine if referenced with llvm SCCP.cpp
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/Analysis/ConstantFolding.h"
 #include "Logger.hpp"
 #include <list> 
 
 using namespace llvm;
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
-loglevel_e loglevel = L2_DEBUG;
+loglevel_e loglevel = L1_DEBUG;
 
 //This is to set parameters passing to opt
 //const std::string default_symvar = "argv";
@@ -130,8 +132,9 @@ void LatticeVal::MarkForcedConstant(Constant *V) {
 namespace{
 class TaintEngine : public InstVisitor<TaintEngine>{
 
-  //const DataLayout &dataLayout;
-  //const TargetLibraryInfo *targetLib;
+
+  const DataLayout &DL;
+  const TargetLibraryInfo *TLI;
 
   SmallPtrSet<BasicBlock*, 8> bbExe;
 
@@ -145,6 +148,7 @@ class TaintEngine : public InstVisitor<TaintEngine>{
   DenseMap<GlobalVariable*, LatticeVal> trackedGlobals;
   DenseMap<Function*, LatticeVal> trackedRetVals;
   DenseMap<std::pair<Function*, unsigned>, LatticeVal> trackedMultipleRetVals;
+  SmallPtrSet<Function*, 16> trackingIncomingArguments;
 
   DenseMap<Value*, LatticeVal> valueState; 
   DenseMap<std::pair<Value*, unsigned>, LatticeVal> structValueState;
@@ -156,6 +160,7 @@ class TaintEngine : public InstVisitor<TaintEngine>{
 
 public:
   //TaintEngine(const DataLayout &dataLayout, const TargetLibraryInfo *targetLib): dataLayout(dataLayout), targetLib(targetLib) {}
+  TaintEngine(const DataLayout &DL) : DL(DL) {}
   void SetSource(Value*);
   void Propagate();
   void VisitInst(Instruction*);
@@ -213,45 +218,45 @@ private:
 };
 //End TaintEngine Definition
 
-void TaintEngine::MergeInValue(Value *V, LatticeVal MergeWithV) {
-  assert(!V->getType()->isStructTy() && "Should use other method");
-  MergeInValue(valueState[V], V, MergeWithV);
+void TaintEngine::MergeInValue(Value *val, LatticeVal mergeWithV) {
+  assert(!val->getType()->isStructTy() && "Should use other method");
+  MergeInValue(valueState[val], val, mergeWithV);
 }
 
-void TaintEngine::MarkConstant(LatticeVal &IV, Value *V, Constant *C) {
-  if (!IV.MarkConstant(C)) 
+void TaintEngine::MarkConstant(LatticeVal &latticeVal, Value *val, Constant *con) {
+  if (!latticeVal.MarkConstant(con)) 
     return;
-  PushToWorkList(IV, V);
+  PushToWorkList(latticeVal, val);
 }
 
-void TaintEngine::MarkConstant(Value *V, Constant *C) {
-  assert(!V->getType()->isStructTy() && "Should use other method");
-  MarkConstant(valueState[V], V, C);
+void TaintEngine::MarkConstant(Value *val, Constant *con) {
+  assert(!val->getType()->isStructTy() && "Should use other method");
+  MarkConstant(valueState[val], val, con);
 }
 
-void TaintEngine::PushToWorkList(LatticeVal &IV, Value *V) {
-  if (IV.IsOverdefined())
-    return taintSourceVec.push_back(V);
-  instWorkVec.push_back(V);
+void TaintEngine::PushToWorkList(LatticeVal &latticeVal, Value *val) {
+  if (latticeVal.IsOverdefined())
+    return taintSourceVec.push_back(val);
+  instWorkVec.push_back(val);
 }
 
-void TaintEngine::visitInvokeInst (InvokeInst &II) {
-  visitCallSite(&II);
-  visitTerminatorInst(II);
+void TaintEngine::visitInvokeInst (InvokeInst &invokeInst) {
+  visitCallSite(&invokeInst);
+  visitTerminatorInst(invokeInst);
 }
 
-void TaintEngine::MarkOverdefined(LatticeVal &IV, Value *V) {
-  if (!IV.MarkOverdefined()) 
+void TaintEngine::MarkOverdefined(LatticeVal &latticeVal, Value *val) {
+  if (!latticeVal.MarkOverdefined()) 
     return;
   // Only instructions go on the work list
-  taintSourceVec.push_back(V);
+  taintSourceVec.push_back(val);
 }
 
-void TaintEngine::MarkForcedConstant(Value *V, Constant *C) {
-  assert(!V->getType()->isStructTy() && "Should use other method");
-  LatticeVal &IV = valueState[V];
-  IV.MarkForcedConstant(C);
-  PushToWorkList(IV, V);
+void TaintEngine::MarkForcedConstant(Value *val, Constant *con) {
+  assert(!val->getType()->isStructTy() && "Should use other method");
+  LatticeVal &latticeVal = valueState[val];
+  latticeVal.MarkForcedConstant(con);
+  PushToWorkList(latticeVal, val);
 }
 
 void TaintEngine::MergeInValue(LatticeVal &IV, Value *V, LatticeVal MergeWithV) {
@@ -265,10 +270,6 @@ void TaintEngine::MergeInValue(LatticeVal &IV, Value *V, LatticeVal MergeWithV) 
     return MarkOverdefined(IV, V);
  }
 
-void TaintEngine::visitCatchSwitchInst(CatchSwitchInst &CPI) {
-    MarkAnythingOverdefined(&CPI);
-    visitTerminatorInst(CPI);
-}
 
 void TaintEngine::MarkAnythingOverdefined(Value *V) {
   if (StructType *STy = dyn_cast<StructType>(V->getType()))
@@ -278,24 +279,25 @@ void TaintEngine::MarkAnythingOverdefined(Value *V) {
     MarkOverdefined(V);
 }
 
-void TaintEngine::MarkEdgeExecutable(BasicBlock *Source, BasicBlock *Dest) {
-  if (!knownFeasibleEdges.insert(Edge(Source, Dest)).second)
+void TaintEngine::MarkEdgeExecutable(BasicBlock *srcBlock, BasicBlock *dstBlock) {
+  if (!knownFeasibleEdges.insert(Edge(srcBlock, dstBlock)).second)
     return;  // This edge is already known to be executable!
 
-  if (!MarkBlockExecutable(Dest)) {
+  if (!MarkBlockExecutable(dstBlock)) {
     // If the destination is already executable, we just made an *edge*
     // feasible that wasn't before.  Revisit the PHI nodes in the block
     // because they have potentially new operands.
-    PHINode *PN;
-    for (BasicBlock::iterator I = Dest->begin(); (PN = dyn_cast<PHINode>(I)); ++I)
-      visitPHINode(*PN);
+    PHINode *pNode;
+    for (BasicBlock::iterator it = dstBlock->begin(); (pNode = dyn_cast<PHINode>(it)); ++it)
+      visitPHINode(*pNode);
   }
 }
 
 void TaintEngine::visitInstruction(Instruction &inst) {
   // If a new instruction is added to LLVM that we don't handle.
-  LOG(L_WARNING) << "TaintEngine: Don't know how to handle:";
+  LOG(L_WARNING) << "!!!!!!!!!!!!!!!!!!!!TaintEngine: Don't know how to handle:";
   inst.print(errs());
+  LOG(L_WARNING) << "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!";
   MarkAnythingOverdefined(&inst);   // Just in case
 }
 
@@ -342,7 +344,7 @@ LatticeVal& TaintEngine::GetValueState(Value *val) {
 bool TaintEngine::MarkBlockExecutable(BasicBlock *bb) {
     if (!bbExe.insert(bb).second) 
       return false;
-    LOG(L_DEBUG) << "Marking Block Executable: " << bb->getName().str();
+    LOG(L2_DEBUG) << "Marking Block Executable: " << bb->getName().str();
     bbWorkVec.push_back(bb);  // Add the block to the work list!
     return true;
 }
@@ -357,21 +359,26 @@ void TaintEngine::SetSource(Value *val) {
 }
 
 void TaintEngine::Propagate(){
-  LOG(L_DEBUG) << "Entering TaintEngine::Propagate...";
+  LOG(L2_DEBUG) << "Entering TaintEngine::Propagate...";
   while(!taintSourceVec.empty()||!instWorkVec.empty()||!bbWorkVec.empty()){
+    LOG(L1_DEBUG) << "++++++++++++++++ROUND++++++++++++++++++++";
     while(!taintSourceVec.empty()){
+      LOG(L2_DEBUG) << "TaintEngine is processing taintSourceVec...";
       Value *val = taintSourceVec.pop_back_val();
-      LOG(L_DEBUG) << val->getName().str();
       for (User *taintUser : val->users()){
         if (Instruction *inst = dyn_cast<Instruction>(taintUser)){
+          LOG(L2_DEBUG) << "================TAINTED INSTRUCTIONS=====================";
           inst->print(errs()); errs()<<"\n";
+          LOG(L2_DEBUG) << "=========================================================";
           VisitInst(inst);
         }
       }
     }
+    //TODO:
     while (!instWorkVec.empty()) {
+      LOG(L2_DEBUG) << "TaintEngine is processing instWorkVec...";
       Value *val = instWorkVec.pop_back_val();
-      LOG(L_DEBUG) <<val->getName().str();
+      LOG(L2_DEBUG) <<val->getName().str();
 
       // "val" got into the work list because it made the transition from undef to
       // constant.
@@ -391,9 +398,10 @@ void TaintEngine::Propagate(){
 
     // Process the basic block work list.
     while (!bbWorkVec.empty()) {
+      LOG(L2_DEBUG) << "TaintEngine is processing bbWorkVec...";
       BasicBlock *bb = bbWorkVec.back();
       bbWorkVec.pop_back();
-      bb->print(errs());
+      //bb->print(errs());
 
       // Notify all instructions in this basic block that they are newly
       // executable.
@@ -516,46 +524,56 @@ bool TaintEngine::IsEdgeFeasible(BasicBlock *From, BasicBlock *To) {
 }
 
 void TaintEngine::VisitInst(Instruction *inst) {
-  LOG(L_DEBUG) << "Entering VisitInst...";
+  LOG(L2_DEBUG) << "Entering VisitInst...";
   if (bbExe.count(inst->getParent())){   // Instruction is executable?
     visit(*inst);//Originally defined in native llvm/IR/InstVisitor.h
   }
 }
 
-void TaintEngine::visitStoreInst(StoreInst &inst) {
-  LOG(L_DEBUG) << "Entering TaintEngine::visitStoreInst...";
-  LOG(L_DEBUG) << "Operand(0):" << inst.getOperand(0) <<", Operand(1):" << inst.getOperand(1);
+void TaintEngine::visitCatchSwitchInst(CatchSwitchInst &cwInst) {
+  LOG(L2_DEBUG)<<"Entering visitCatchSwitchInst.......";
+  MarkAnythingOverdefined(&cwInst);
+  visitTerminatorInst(cwInst);
+}
+
+void TaintEngine::visitStoreInst(StoreInst &storeInst) {
+  LOG(L2_DEBUG) << "Entering TaintEngine::visitStoreInst...";
   // If this store is of a struct, ignore it. Why?
-  if (inst.getOperand(0)->getType()->isStructTy())
+  if (storeInst.getOperand(0)->getType()->isStructTy()){
+    LOG(L2_DEBUG) << "isStructTy(), return";
     return;
+  }
 
-  if (trackedGlobals.empty() || !isa<GlobalVariable>(inst.getOperand(1)))
+  if (trackedGlobals.empty() || !isa<GlobalVariable>(storeInst.getOperand(1))){
+    
+    LOG(L2_DEBUG) << "trackedGlobals.empty() || !isa<GlobalVariable>(storeInst.getOperand(1)), return";
     return;
+  }
 
-  GlobalVariable *globalVar = cast<GlobalVariable>(inst.getOperand(1));
+  GlobalVariable *globalVar = cast<GlobalVariable>(storeInst.getOperand(1));
   DenseMap<GlobalVariable*, LatticeVal>::iterator itGV = trackedGlobals.find(globalVar);
   if (itGV == trackedGlobals.end() || itGV->second.IsOverdefined()) 
     return;
-  LOG(L_DEBUG) << "---------------";
   // Get the value we are storing into the global, then merge it.
-  //MergeInValue(itGV->second, globalVar, GetValueState(inst.getOperand(0)));
+  MergeInValue(itGV->second, globalVar, GetValueState(storeInst.getOperand(0)));
   if (itGV->second.IsOverdefined())
     trackedGlobals.erase(itGV);      // No need to keep tracking this!
 }
 
-void TaintEngine::visitPHINode(PHINode &PN) {
+void TaintEngine::visitPHINode(PHINode &pNode) {
+  LOG(L2_DEBUG)<<"Entering visitPHINode.......";
   // If this PN returns a struct, just mark the result overdefined.
   // TODO: We could do a lot better than this if code actually uses this.
-  if (PN.getType()->isStructTy())
-    return MarkAnythingOverdefined(&PN);
+  if (pNode.getType()->isStructTy())
+    return MarkAnythingOverdefined(&pNode);
 
-  if (GetValueState(&PN).IsOverdefined())
+  if (GetValueState(&pNode).IsOverdefined())
     return;  // Quick exit
 
   // Super-extra-high-degree PHI nodes are unlikely to ever be marked constant,
   // and slow us down a lot.  Just mark them overdefined.
-  if (PN.getNumIncomingValues() > 64)
-    return MarkOverdefined(&PN);
+  if (pNode.getNumIncomingValues() > 64)
+    return MarkOverdefined(&pNode);
 
   // Look at all of the executable operands of the PHI node.  If any of them
   // are overdefined, the PHI becomes overdefined as well.  If they are all
@@ -563,19 +581,19 @@ void TaintEngine::visitPHINode(PHINode &PN) {
   // constant.  If they are constant and don't agree, the PHI is overdefined.
   // If there are no executable operands, the PHI remains unknown.
   //
-  Constant *OperandVal = nullptr;
-  for (unsigned i = 0, e = PN.getNumIncomingValues(); i != e; ++i) {
-    LatticeVal IV = GetValueState(PN.getIncomingValue(i));
-    if (IV.IsUnknown()) continue;  // Doesn't influence PHI node.
+  Constant *conOperandVal = nullptr;
+  for (unsigned i = 0, e = pNode.getNumIncomingValues(); i != e; ++i) {
+    LatticeVal latticeVal = GetValueState(pNode.getIncomingValue(i));
+    if (latticeVal.IsUnknown()) continue;  // Doesn't influence PHI node.
 
-    if (!IsEdgeFeasible(PN.getIncomingBlock(i), PN.getParent()))
+    if (!IsEdgeFeasible(pNode.getIncomingBlock(i), pNode.getParent()))
       continue;
 
-    if (IV.IsOverdefined())    // PHI node becomes overdefined!
-      return MarkOverdefined(&PN);
+    if (latticeVal.IsOverdefined())    // PHI node becomes overdefined!
+      return MarkOverdefined(&pNode);
 
-    if (!OperandVal) {   // Grab the first value.
-      OperandVal = IV.GetConstant();
+    if (!conOperandVal) {   // Grab the first value.
+      conOperandVal = latticeVal.GetConstant();
       continue;
     }
 
@@ -585,8 +603,8 @@ void TaintEngine::visitPHINode(PHINode &PN) {
 
     // Check to see if there are two different constants merging, if so, the PHI
     // node is overdefined.
-    if (IV.GetConstant() != OperandVal)
-      return MarkOverdefined(&PN);
+    if (latticeVal.GetConstant() != conOperandVal)
+      return MarkOverdefined(&pNode);
   }
 
   // If we exited the loop, this means that the PHI node only has constant
@@ -594,173 +612,181 @@ void TaintEngine::visitPHINode(PHINode &PN) {
   // OperandVal is null because there are no defined incoming arguments.  If
   // this is the case, the PHI remains unknown.
   //
-  if (OperandVal)
-    MarkConstant(&PN, OperandVal);      // Acquire operand value
+  if (conOperandVal)
+    MarkConstant(&pNode, conOperandVal);      // Acquire operand value
 }
 
-void TaintEngine::visitReturnInst(ReturnInst &I) {
-  if (I.getNumOperands() == 0) return;  // ret void
+void TaintEngine::visitReturnInst(ReturnInst &retInst) {
+  LOG(L2_DEBUG)<<"Entering visitReturnInst.......";
+  if (retInst.getNumOperands() == 0){
+     LOG(L2_DEBUG)<<"retInst.getNumOperands() = 0, return";
+     return;  // ret void
+  }
 
-  Function *F = I.getParent()->getParent();
-  Value *ResultOp = I.getOperand(0);
+  Function *F = retInst.getParent()->getParent();
+  Value *retVal = retInst.getOperand(0);
 
   // If we are tracking the return value of this function, merge it in.
-  if (!trackedRetVals.empty() && !ResultOp->getType()->isStructTy()) {
-    DenseMap<Function*, LatticeVal>::iterator TFRVI =
+  if (!trackedRetVals.empty() && !retVal->getType()->isStructTy()) {
+    DenseMap<Function*, LatticeVal>::iterator it =
       trackedRetVals.find(F);
-    if (TFRVI != trackedRetVals.end()) {
-      MergeInValue(TFRVI->second, F, GetValueState(ResultOp));
+    if (it != trackedRetVals.end()) {
+      MergeInValue(it->second, F, GetValueState(retVal));
       return;
     }
   }
 
   // Handle functions that return multiple values.
   if (!trackedMultipleRetVals.empty()) {
-    if (StructType *STy = dyn_cast<StructType>(ResultOp->getType()))
+    if (StructType *strType = dyn_cast<StructType>(retVal->getType()))
       if (mrvFunctionsTracked.count(F))
-        for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
+        for (unsigned i = 0, e = strType->getNumElements(); i != e; ++i)
           MergeInValue(trackedMultipleRetVals[std::make_pair(F, i)], F,
-                       GetStructValueState(ResultOp, i));
+                       GetStructValueState(retVal, i));
 
   }
 }
 
-void TaintEngine::visitTerminatorInst(TerminatorInst &TI) {
+void TaintEngine::visitTerminatorInst(TerminatorInst &termInst) {
+  LOG(L2_DEBUG)<<"Entering visitTerminatorInst.......";
   SmallVector<bool, 16> SuccFeasible;
-  GetFeasibleSuccessors(TI, SuccFeasible);
+  GetFeasibleSuccessors(termInst, SuccFeasible);
 
-  BasicBlock *BB = TI.getParent();
+  BasicBlock *BB = termInst.getParent();
 
   // Mark all feasible successors executable.
   for (unsigned i = 0, e = SuccFeasible.size(); i != e; ++i)
     if (SuccFeasible[i])
-      MarkEdgeExecutable(BB, TI.getSuccessor(i));
+      MarkEdgeExecutable(BB, termInst.getSuccessor(i));
 }
 
-void TaintEngine::visitCastInst(CastInst &I) {
-  LatticeVal OpSt = GetValueState(I.getOperand(0));
-/*
-  if (OpSt.IsOverdefined())          // Inherit overdefinedness of operand
-    MarkOverdefined(&I);
-  else if (OpSt.IsConstant()) {
+void TaintEngine::visitCastInst(CastInst &castInst) {
+  LOG(L2_DEBUG)<<"Entering visitCastInst.......";
+  LatticeVal latticeVal = GetValueState(castInst.getOperand(0));
+  if (latticeVal.IsOverdefined())          // Inherit overdefinedness of operand
+    MarkOverdefined(&castInst);
+  else if (latticeVal.IsConstant()) {
     // Fold the constant as we build.
-    Constant *C = ConstantFoldCastOperand(I.getOpcode(), OpSt.GetConstant(), I.getType(), DL);
+    Constant *C = ConstantFoldCastOperand(castInst.getOpcode(), latticeVal.GetConstant(), castInst.getType(), DL);
     if (isa<UndefValue>(C))
       return;
     // Propagate constant value
-    MarkConstant(&I, C);
+    MarkConstant(&castInst, C);
   }
-*/
 }
 
 
-void TaintEngine::visitExtractValueInst(ExtractValueInst &EVI) {
+void TaintEngine::visitExtractValueInst(ExtractValueInst &evInst) {
+  LOG(L2_DEBUG)<<"Entering visitExtractValueInst.......";
   // If this returns a struct, mark all elements over defined, we don't track
   // structs in structs.
-  if (EVI.getType()->isStructTy())
-    return MarkAnythingOverdefined(&EVI);
+  if (evInst.getType()->isStructTy())
+    return MarkAnythingOverdefined(&evInst);
 
   // If this is extracting from more than one level of struct, we don't know.
-  if (EVI.getNumIndices() != 1)
-    return MarkOverdefined(&EVI);
+  if (evInst.getNumIndices() != 1)
+    return MarkOverdefined(&evInst);
 
-  Value *AggVal = EVI.getAggregateOperand();
-  if (AggVal->getType()->isStructTy()) {
-    unsigned i = *EVI.idx_begin();
-    LatticeVal EltVal = GetStructValueState(AggVal, i);
-    MergeInValue(GetValueState(&EVI), &EVI, EltVal);
+  Value *val = evInst.getAggregateOperand();
+  if (val->getType()->isStructTy()) {
+    unsigned i = *evInst.idx_begin();
+    LatticeVal latticeVal = GetStructValueState(val, i);
+    MergeInValue(GetValueState(&evInst), &evInst, latticeVal);
   } else {
     // Otherwise, must be extracting from an array.
-    return MarkOverdefined(&EVI);
+    return MarkOverdefined(&evInst);
   }
 }
 
-void TaintEngine::visitInsertValueInst(InsertValueInst &IVI) {
-  StructType *STy = dyn_cast<StructType>(IVI.getType());
+void TaintEngine::visitInsertValueInst(InsertValueInst &ivInst) {
+  LOG(L2_DEBUG)<<"Entering visitInsertValueInst.......";
+  StructType *STy = dyn_cast<StructType>(ivInst.getType());
   if (!STy)
-    return MarkOverdefined(&IVI);
+    return MarkOverdefined(&ivInst);
 
   // If this has more than one index, we can't handle it, drive all results to
   // undef.
-  if (IVI.getNumIndices() != 1)
-    return MarkAnythingOverdefined(&IVI);
+  if (ivInst.getNumIndices() != 1)
+    return MarkAnythingOverdefined(&ivInst);
 
-  Value *Aggr = IVI.getAggregateOperand();
-  unsigned Idx = *IVI.idx_begin();
+  Value *val = ivInst.getAggregateOperand();
+  unsigned idx = *ivInst.idx_begin();
 
   // Compute the result based on what we're inserting.
   for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
     // This passes through all values that aren't the inserted element.
-    if (i != Idx) {
-      LatticeVal EltVal = GetStructValueState(Aggr, i);
-      MergeInValue(GetStructValueState(&IVI, i), &IVI, EltVal);
+    if (i != idx) {
+      LatticeVal latticeVal = GetStructValueState(val, i);
+      MergeInValue(GetStructValueState(&ivInst, i), &ivInst, latticeVal);
       continue;
     }
 
-    Value *Val = IVI.getInsertedValueOperand();
-    if (Val->getType()->isStructTy())
+    Value *val2 = ivInst.getInsertedValueOperand();
+    if (val2->getType()->isStructTy())
       // We don't track structs in structs.
-      MarkOverdefined(GetStructValueState(&IVI, i), &IVI);
+      MarkOverdefined(GetStructValueState(&ivInst, i), &ivInst);
     else {
-      LatticeVal InVal = GetValueState(Val);
-      MergeInValue(GetStructValueState(&IVI, i), &IVI, InVal);
+      LatticeVal latticeVal2 = GetValueState(val2);
+      MergeInValue(GetStructValueState(&ivInst, i), &ivInst, latticeVal2);
     }
   }
 }
 
-void TaintEngine::visitSelectInst(SelectInst &I) {
+void TaintEngine::visitSelectInst(SelectInst &selInst) {
+  LOG(L2_DEBUG)<<"Entering visitSelectInst.......";
   // If this select returns a struct, just mark the result overdefined.
   // TODO: We could do a lot better than this if code actually uses this.
-  if (I.getType()->isStructTy())
-    return MarkAnythingOverdefined(&I);
+  if (selInst.getType()->isStructTy())
+    return MarkAnythingOverdefined(&selInst);
 
-  LatticeVal CondValue = GetValueState(I.getCondition());
-  if (CondValue.IsUnknown())
+  LatticeVal condValue = GetValueState(selInst.getCondition());
+  if (condValue.IsUnknown())
     return;
 
-  if (ConstantInt *CondCB = CondValue.GetConstantInt()) {
-    Value *OpVal = CondCB->isZero() ? I.getFalseValue() : I.getTrueValue();
-    MergeInValue(&I, GetValueState(OpVal));
+  if (ConstantInt *condCB = condValue.GetConstantInt()) {
+    Value *opVal = condCB->isZero() ? selInst.getFalseValue() : selInst.getTrueValue();
+    MergeInValue(&selInst, GetValueState(opVal));
     return;
   }
 
   // Otherwise, the condition is overdefined or a constant we can't evaluate.
   // See if we can produce something better than overdefined based on the T/F
   // value.
-  LatticeVal TVal = GetValueState(I.getTrueValue());
-  LatticeVal FVal = GetValueState(I.getFalseValue());
+  LatticeVal tVal = GetValueState(selInst.getTrueValue());
+  LatticeVal fVal = GetValueState(selInst.getFalseValue());
 
   // select ?, C, C -> C.
-  if (TVal.IsConstant() && FVal.IsConstant() &&
-      TVal.GetConstant() == FVal.GetConstant())
-    return MarkConstant(&I, FVal.GetConstant());
+  if (tVal.IsConstant() && fVal.IsConstant() &&
+      tVal.GetConstant() == fVal.GetConstant())
+    return MarkConstant(&selInst, fVal.GetConstant());
 
-  if (TVal.IsUnknown())   // select ?, undef, X -> X.
-    return MergeInValue(&I, FVal);
-  if (FVal.IsUnknown())   // select ?, X, undef -> X.
-    return MergeInValue(&I, TVal);
-  MarkOverdefined(&I);
+  if (tVal.IsUnknown())   // select ?, undef, X -> X.
+    return MergeInValue(&selInst, fVal);
+  if (tVal.IsUnknown())   // select ?, X, undef -> X.
+    return MergeInValue(&selInst, tVal);
+  MarkOverdefined(&selInst);
 }
 
 // Handle Binary Operators.
-void TaintEngine::visitBinaryOperator(Instruction &I) {
-  LatticeVal V1State = GetValueState(I.getOperand(0));
-  LatticeVal V2State = GetValueState(I.getOperand(1));
+void TaintEngine::visitBinaryOperator(Instruction &bopInst) {
+  LOG(L2_DEBUG)<<"Entering BinaryOperator.......";
+  LatticeVal v1State = GetValueState(bopInst.getOperand(0));
+  LatticeVal v2State = GetValueState(bopInst.getOperand(1));
 
-  LatticeVal &IV = valueState[&I];
-  if (IV.IsOverdefined()) return;
+  LatticeVal &latticeVal = valueState[&bopInst];
+  if (latticeVal.IsOverdefined()) return;
 
-  if (V1State.IsConstant() && V2State.IsConstant()) {
-    Constant *C = ConstantExpr::get(I.getOpcode(), V1State.GetConstant(),
-                                    V2State.GetConstant());
+  if (v1State.IsConstant() && v2State.IsConstant()) {
+    Constant *con = ConstantExpr::get(bopInst.getOpcode(), v1State.GetConstant(),
+                                    v2State.GetConstant());
     // X op Y -> undef.
-    if (isa<UndefValue>(C))
+    if (isa<UndefValue>(con))
       return;
-    return MarkConstant(IV, &I, C);
+    return MarkConstant(latticeVal, &bopInst, con);
   }
 
   // If something is undef, wait for it to resolve.
-  if (!V1State.IsOverdefined() && !V2State.IsOverdefined())
+  if (!v1State.IsOverdefined() && !v2State.IsOverdefined())
     return;
 
   // Otherwise, one of our operands is overdefined.  Try to produce something
@@ -768,231 +794,234 @@ void TaintEngine::visitBinaryOperator(Instruction &I) {
 
   // If this is an AND or OR with 0 or -1, it doesn't matter that the other
   // operand is overdefined.
-  if (I.getOpcode() == Instruction::And || I.getOpcode() == Instruction::Or) {
-    LatticeVal *NonOverdefVal = nullptr;
-    if (!V1State.IsOverdefined())
-      NonOverdefVal = &V1State;
-    else if (!V2State.IsOverdefined())
-      NonOverdefVal = &V2State;
+  if (bopInst.getOpcode() == Instruction::And || bopInst.getOpcode() == Instruction::Or) {
+    LatticeVal *nonOverdefVal = nullptr;
+    if (!v1State.IsOverdefined())
+      nonOverdefVal = &v1State;
+    else if (!v2State.IsOverdefined())
+      nonOverdefVal = &v2State;
 
-    if (NonOverdefVal) {
-      if (NonOverdefVal->IsUnknown()) {
+    if (nonOverdefVal) {
+      if (nonOverdefVal->IsUnknown()) {
         // Could annihilate value.
-        if (I.getOpcode() == Instruction::And)
-          MarkConstant(IV, &I, Constant::getNullValue(I.getType()));
-        else if (VectorType *PT = dyn_cast<VectorType>(I.getType()))
-          MarkConstant(IV, &I, Constant::getAllOnesValue(PT));
+        if (bopInst.getOpcode() == Instruction::And)
+          MarkConstant(latticeVal, &bopInst, Constant::getNullValue(bopInst.getType()));
+        else if (VectorType *vector = dyn_cast<VectorType>(bopInst.getType()))
+          MarkConstant(latticeVal, &bopInst, Constant::getAllOnesValue(vector));
         else
-          MarkConstant(IV, &I,
-                       Constant::getAllOnesValue(I.getType()));
+          MarkConstant(latticeVal, &bopInst,
+                       Constant::getAllOnesValue(bopInst.getType()));
         return;
       }
 
-      if (I.getOpcode() == Instruction::And) {
+      if (bopInst.getOpcode() == Instruction::And) {
         // X and 0 = 0
-        if (NonOverdefVal->GetConstant()->isNullValue())
-          return MarkConstant(IV, &I, NonOverdefVal->GetConstant());
+        if (nonOverdefVal->GetConstant()->isNullValue())
+          return MarkConstant(latticeVal, &bopInst, nonOverdefVal->GetConstant());
       } else {
-        if (ConstantInt *CI = NonOverdefVal->GetConstantInt())
-          if (CI->isAllOnesValue())     // X or -1 = -1
-            return MarkConstant(IV, &I, NonOverdefVal->GetConstant());
+        if (ConstantInt *conInt = nonOverdefVal->GetConstantInt())
+          if (conInt->isAllOnesValue())     // X or -1 = -1
+            return MarkConstant(latticeVal, &bopInst, nonOverdefVal->GetConstant());
       }
     }
   }
 
 
-  MarkOverdefined(&I);
+  MarkOverdefined(&bopInst);
 }
 
 // Handle ICmpInst instruction.
-void TaintEngine::visitCmpInst(CmpInst &I) {
-  LatticeVal V1State = GetValueState(I.getOperand(0));
-  LatticeVal V2State = GetValueState(I.getOperand(1));
+void TaintEngine::visitCmpInst(CmpInst &cmpInst) {
+  LOG(L2_DEBUG)<<"Entering visitCmpInst.......";
+  LatticeVal v1State = GetValueState(cmpInst.getOperand(0));
+  LatticeVal v2State = GetValueState(cmpInst.getOperand(1));
 
-  LatticeVal &IV = valueState[&I];
-  if (IV.IsOverdefined()) return;
+  LatticeVal &latticeVal = valueState[&cmpInst];
+  if (latticeVal.IsOverdefined()) return;
 
-  if (V1State.IsConstant() && V2State.IsConstant()) {
-    Constant *C = ConstantExpr::getCompare(
-        I.getPredicate(), V1State.GetConstant(), V2State.GetConstant());
-    if (isa<UndefValue>(C))
+  if (v1State.IsConstant() && v2State.IsConstant()) {
+    Constant *con = ConstantExpr::getCompare(cmpInst.getPredicate(), v1State.GetConstant(), v2State.GetConstant());
+    if (isa<UndefValue>(con))
       return;
-    return MarkConstant(IV, &I, C);
+    return MarkConstant(latticeVal, &cmpInst, con);
   }
 
   // If operands are still unknown, wait for it to resolve.
-  if (!V1State.IsOverdefined() && !V2State.IsOverdefined())
+  if (!v1State.IsOverdefined() && !v2State.IsOverdefined())
     return;
 
-  MarkOverdefined(&I);
+  MarkOverdefined(&cmpInst);
 }
 
-void TaintEngine::visitExtractElementInst(ExtractElementInst &I) {
-  // TODO : SCCP does not handle vectors properly.
-  return MarkOverdefined(&I);
+void TaintEngine::visitExtractElementInst(ExtractElementInst &eeInst) {
+  LOG(L2_DEBUG)<<"Entering visitExtractInst.......";
+  // TODO : TaintEngine does not handle vectors properly.
+  return MarkOverdefined(&eeInst);
 }
 
-void TaintEngine::visitInsertElementInst(InsertElementInst &I) {
-  // TODO : SCCP does not handle vectors properly.
-  return MarkOverdefined(&I);
+void TaintEngine::visitInsertElementInst(InsertElementInst &ieInst) {
+  LOG(L2_DEBUG)<<"Entering visitInsertElementInst.......";
+  // TODO : TaintEngine does not handle vectors properly.
+  return MarkOverdefined(&ieInst);
 }
 
-void TaintEngine::visitShuffleVectorInst(ShuffleVectorInst &I) {
-  // TODO : SCCP does not handle vectors properly.
-  return MarkOverdefined(&I);
+void TaintEngine::visitShuffleVectorInst(ShuffleVectorInst &svInst) {
+  LOG(L2_DEBUG)<<"Entering visitShuffleVectorInst.......";
+  // TODO : TaintEngine does not handle vectors properly.
+  return MarkOverdefined(&svInst);
 }
 
 // Handle getelementptr instructions.  If all operands are constants then we
 // can turn this into a getelementptr ConstantExpr.
 //
-void TaintEngine::visitGetElementPtrInst(GetElementPtrInst &I) {
-  if (valueState[&I].IsOverdefined()) return;
+void TaintEngine::visitGetElementPtrInst(GetElementPtrInst &gepInst) {
+  LOG(L2_DEBUG)<<"Entering visitGetElementPtrInst.......";
+  if (valueState[&gepInst].IsOverdefined()) return;
 
-  SmallVector<Constant*, 8> Operands;
-  Operands.reserve(I.getNumOperands());
+  SmallVector<Constant*, 8> vecOperands;
+  vecOperands.reserve(gepInst.getNumOperands());
 
-  for (unsigned i = 0, e = I.getNumOperands(); i != e; ++i) {
-    LatticeVal State = GetValueState(I.getOperand(i));
-    if (State.IsUnknown())
+  for (unsigned i = 0, e = gepInst.getNumOperands(); i != e; ++i) {
+    LatticeVal latticeVal = GetValueState(gepInst.getOperand(i));
+    if (latticeVal.IsUnknown())
       return;  // Operands are not resolved yet.
 
-    if (State.IsOverdefined())
-      return MarkOverdefined(&I);
+    if (latticeVal.IsOverdefined())
+      return MarkOverdefined(&gepInst);
 
-    assert(State.IsConstant() && "Unknown state!");
-    Operands.push_back(State.GetConstant());
+    assert(latticeVal.IsConstant() && "Unknown state!");
+    vecOperands.push_back(latticeVal.GetConstant());
   }
 
-  Constant *Ptr = Operands[0];
-  auto Indices = makeArrayRef(Operands.begin() + 1, Operands.end());
-  Constant *C =
-      ConstantExpr::getGetElementPtr(I.getSourceElementType(), Ptr, Indices);
-  if (isa<UndefValue>(C))
+  Constant *conPtr = vecOperands[0];
+  auto indices = makeArrayRef(vecOperands.begin() + 1, vecOperands.end());
+  Constant *con =
+      ConstantExpr::getGetElementPtr(gepInst.getSourceElementType(), conPtr, indices);
+  if (isa<UndefValue>(con))
       return;
-  MarkConstant(&I, C);
+  MarkConstant(&gepInst, con);
 }
 
 
 // Handle load instructions.  If the operand is a constant pointer to a constant
 // global, we can replace the load with the loaded constant value!
-void TaintEngine::visitLoadInst(LoadInst &I) {
+void TaintEngine::visitLoadInst(LoadInst &loadInst) {
+  LOG(L2_DEBUG)<<"Entering visitGetLoadInst.......";
   // If this load is of a struct, just mark the result overdefined.
-/*
-  if (I.getType()->isStructTy())
-    return MarkAnythingOverdefined(&I);
+  if (loadInst.getType()->isStructTy())
+    return MarkAnythingOverdefined(&loadInst);
 
-  LatticeVal PtrVal = GetValueState(I.getOperand(0));
-  if (PtrVal.IsUnknown()) return;   // The pointer is not resolved yet!
+  LatticeVal ptrVal = GetValueState(loadInst.getOperand(0));
+  if (ptrVal.IsUnknown()) return;   // The pointer is not resolved yet!
 
-  LatticeVal &IV = valueState[&I];
-  if (IV.IsOverdefined()) return;
+  LatticeVal &latticeVal = valueState[&loadInst];
+  if (latticeVal.IsOverdefined()) return;
 
-  if (!PtrVal.IsConstant() || I.isVolatile())
-    return MarkOverdefined(IV, &I);
+  if (!ptrVal.IsConstant() || loadInst.isVolatile())
+    return MarkOverdefined(latticeVal, &loadInst);
 
-  Constant *Ptr = PtrVal.GetConstant();
+  Constant *conPtr = ptrVal.GetConstant();
 
   // load null is undefined.
-  if (isa<ConstantPointerNull>(Ptr) && I.getPointerAddressSpace() == 0)
+  if (isa<ConstantPointerNull>(conPtr) && loadInst.getPointerAddressSpace() == 0)
     return;
 
   // Transform load (constant global) into the value loaded.
-  if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Ptr)) {
+  if (GlobalVariable *globalVal = dyn_cast<GlobalVariable>(conPtr)) {
     if (!trackedGlobals.empty()) {
       // If we are tracking this global, merge in the known value for it.
-      DenseMap<GlobalVariable*, LatticeVal>::iterator It =
-        trackedGlobals.find(GV);
-      if (It != trackedGlobals.end()) {
-        MergeInValue(IV, &I, It->second);
+      DenseMap<GlobalVariable*, LatticeVal>::iterator it =
+        trackedGlobals.find(globalVal);
+      if (it != trackedGlobals.end()) {
+        MergeInValue(latticeVal, &loadInst, it->second);
         return;
       }
     }
   }
 
   // Transform load from a constant into a constant if possible.
-  if (Constant *C = ConstantFoldLoadFromConstPtr(Ptr, I.getType(), DL)) {
-    if (isa<UndefValue>(C))
+  if (Constant *con = ConstantFoldLoadFromConstPtr(conPtr, loadInst.getType(), DL)) {
+    if (isa<UndefValue>(con))
       return;
-    return MarkConstant(IV, &I, C);
+    return MarkConstant(latticeVal, &loadInst, con);
   }
 
   // Otherwise we cannot say for certain what value this load will produce.
   // Bail out.
-  MarkOverdefined(IV, &I);
-*/
+  MarkOverdefined(latticeVal, &loadInst);
 }
 
-void TaintEngine::visitCallSite(CallSite CS) {
-  Function *F = CS.getCalledFunction();
-  Instruction *I = CS.getInstruction();
-/*
+void TaintEngine::visitCallSite(CallSite callSite) {
+  LOG(L2_DEBUG)<<"Entering visitCallSite.......";
+  Function *F = callSite.getCalledFunction();
+  Instruction *inst = callSite.getInstruction();
   // The common case is that we aren't tracking the callee, either because we
   // are not doing interprocedural analysis or the callee is indirect, or is
   // external.  Handle these cases first.
   if (!F || F->isDeclaration()) {
 CallOverdefined:
     // Void return and not tracking callee, just bail.
-    if (I->getType()->isVoidTy()) return;
+    if (inst->getType()->isVoidTy()) return;
 
     // Otherwise, if we have a single return value case, and if the function is
     // a declaration, maybe we can constant fold it.
-    if (F && F->isDeclaration() && !I->getType()->isStructTy() &&
+    if (F && F->isDeclaration() && !inst->getType()->isStructTy() &&
         canConstantFoldCallTo(F)) {
 
-      SmallVector<Constant*, 8> Operands;
-      for (CallSite::arg_iterator AI = CS.arg_begin(), E = CS.arg_end();
-           AI != E; ++AI) {
-        LatticeVal State = GetValueState(*AI);
+      SmallVector<Constant*, 8> vecOperands;
+      for (CallSite::arg_iterator it = callSite.arg_begin(), E = callSite.arg_end();
+           it != E; ++it) {
+        LatticeVal latticeVal = GetValueState(*it);
 
-        if (State.IsUnknown())
+        if (latticeVal.IsUnknown())
           return;  // Operands are not resolved yet.
-        if (State.IsOverdefined())
-          return MarkOverdefined(I);
-        assert(State.IsConstant() && "Unknown state!");
-        Operands.push_back(State.GetConstant());
+        if (latticeVal.IsOverdefined())
+          return MarkOverdefined(inst);
+        assert(latticeVal.IsConstant() && "Unknown state!");
+        vecOperands.push_back(latticeVal.GetConstant());
       }
 
-      if (GetValueState(I).IsOverdefined())
+      if (GetValueState(inst).IsOverdefined())
         return;
 
       // If we can constant fold this, mark the result of the call as a
       // constant.
-      if (Constant *C = ConstantFoldCall(F, Operands, TLI)) {
+      if (Constant *con = ConstantFoldCall(F, vecOperands, TLI)) {
         // call -> undef.
-        if (isa<UndefValue>(C))
+        if (isa<UndefValue>(con))
           return;
-        return MarkConstant(I, C);
+        return MarkConstant(inst, con);
       }
     }
 
     // Otherwise, we don't know anything about this call, Mark it overdefined.
-    return MarkAnythingOverdefined(I);
+    return MarkAnythingOverdefined(inst);
   }
 
   // If this is a local function that doesn't have its address taken, mark its
   // entry block executable and merge in the actual arguments to the call into
   // the formal arguments of the function.
-  if (!TrackingIncomingArguments.empty() && TrackingIncomingArguments.count(F)){
+  if (!trackingIncomingArguments.empty() && trackingIncomingArguments.count(F)){
     MarkBlockExecutable(&F->front());
 
     // Propagate information from this call site into the callee.
-    CallSite::arg_iterator CAI = CS.arg_begin();
-    for (Function::arg_iterator AI = F->arg_begin(), E = F->arg_end();
-         AI != E; ++AI, ++CAI) {
+    CallSite::arg_iterator csArgIt = callSite.arg_begin();
+    for (Function::arg_iterator argIt = F->arg_begin(), E = F->arg_end();
+         argIt != E; ++argIt, ++csArgIt) {
       // If this argument is byval, and if the function is not readonly, there
       // will be an implicit copy formed of the input aggregate.
-      if (AI->hasByValAttr() && !F->onlyReadsMemory()) {
-        MarkOverdefined(&*AI);
+      if (argIt->hasByValAttr() && !F->onlyReadsMemory()) {
+        MarkOverdefined(&*argIt);
         continue;
       }
 
-      if (StructType *STy = dyn_cast<StructType>(AI->getType())) {
+      if (StructType *STy = dyn_cast<StructType>(argIt->getType())) {
         for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i) {
-          LatticeVal CallArg = GetStructValueState(*CAI, i);
-          MergeInValue(GetStructValueState(&*AI, i), &*AI, CallArg);
+          LatticeVal callArg = GetStructValueState(*csArgIt, i);
+          MergeInValue(GetStructValueState(&*argIt, i), &*argIt, callArg);
         }
       } else {
-        MergeInValue(&*AI, GetValueState(*CAI));
+        MergeInValue(&*argIt, GetValueState(*csArgIt));
       }
     }
   }
@@ -1005,7 +1034,7 @@ CallOverdefined:
     // If we are tracking this callee, propagate the result of the function
     // into this call site.
     for (unsigned i = 0, e = STy->getNumElements(); i != e; ++i)
-      MergeInValue(GetStructValueState(I, i), I,
+      MergeInValue(GetStructValueState(inst, i), inst,
                    trackedMultipleRetVals[std::make_pair(F, i)]);
   } else {
     DenseMap<Function*, LatticeVal>::iterator TFRVI = trackedRetVals.find(F);
@@ -1013,11 +1042,12 @@ CallOverdefined:
       goto CallOverdefined;  // Not tracking this callee.
 
     // If so, propagate the return value of the callee into this call result.
-    MergeInValue(I, TFRVI->second);
+    MergeInValue(inst, TFRVI->second);
   }
-*/
 }
+
 bool TaintEngine::ResolvedUndefsIn(Function &F) {
+  LOG(L2_DEBUG)<<"Entering ResolvedUndefsIn......";
   for (BasicBlock &BB : F) {
     if (!bbExe.count(&BB))
       continue;
@@ -1297,39 +1327,41 @@ struct TaintPass : public FunctionPass {
 
   //Main function
   virtual bool runOnFunction(Function &F){
-    LOG(L_DEBUG) << "Function: " << F.getName().str();
-    //const DataLayout &dataLayout = F.getParent()->getDataLayout();
+    LOG(L2_DEBUG) << "Entering runOnFunction...Function: " << F.getName().str();
+    const DataLayout &dataLayout = F.getParent()->getDataLayout();
     //const TargetLibraryInfo *targetLib = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
-    //TaintEngine taintEngine(dataLayout,targetLib);
-    TaintEngine taintEngine;
+    TaintEngine taintEngine(dataLayout);
 
     taintEngine.MarkBlockExecutable(&F.front());
     // Set taint source: all arguments
     for (Function::arg_iterator argIt = F.arg_begin(); argIt != F.arg_end(); ++argIt){
       Value *argValue = &*argIt;
-      LOG(L_DEBUG) << "Argument: " << argValue->getName().str();
+      LOG(L2_DEBUG) << "Argument: " << argValue->getName().str();
       taintEngine.SetSource(argValue);
     }
     
     bool resolvedUndefs = true;
+    int counter = 0;
     while (resolvedUndefs){
+      LOG(L1_DEBUG) << "+++++++++++++++++RESOLVE UNDEFS+++++++++++++++++: " << ++counter;
       taintEngine.Propagate();
       resolvedUndefs = taintEngine.ResolvedUndefsIn(F);
     }
-
     //=====================================
     //we print the whole IR for development
     //=====================================
-    std::list<BasicBlock *> basicBlocks;
-    for (Function::iterator i=F.begin();i!=F.end();++i) {
-      basicBlocks.push_back((BasicBlock *)i);
-    }
-    while(!basicBlocks.empty()){
-      BasicBlock* basicBlock = basicBlocks.front();
-      basicBlock->print(errs());
-      basicBlocks.pop_front();
+    if(loglevel >= L1_DEBUG){
+      std::list<BasicBlock *> basicBlocks;
+      for (Function::iterator i=F.begin();i!=F.end();++i) {
+        basicBlocks.push_back((BasicBlock *)i);
+      }
+      while(!basicBlocks.empty()){
+        BasicBlock* basicBlock = basicBlocks.front();
+        basicBlock->print(errs());
+        basicBlocks.pop_front();
     }
     return false;
+    }
   }
 };
 }
