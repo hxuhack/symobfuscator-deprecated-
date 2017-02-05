@@ -61,68 +61,78 @@ public:
   LatticeVal() : pipVal(nullptr, unknown) {}
 
   bool IsUnknown() const { return GetType() == unknown; }
-  bool IsConstant() const {
-    return GetType() == constant || GetType() == forcedconstant;
-  }
+  bool IsConstant() const { return GetType() == constant || GetType() == forcedconstant; }
   bool IsOverdefined() const { return GetType() == overdefined; }
 
-  Constant *GetConstant() const {
-    assert(IsConstant() && "Cannot get the constant of a non-constant!");
-    return pipVal.getPointer();
-  }
-
+  Constant *GetConstant() const; 
   /// MarkOverdefined - Return true if this is a change in status.
-  bool MarkOverdefined() {
-    if (IsOverdefined())
-      return false;
-
-    pipVal.setInt(overdefined);
-    return true;
-  }
-
+  bool MarkOverdefined(); 
   /// markConstant - Return true if this is a change in status.
-  bool MarkConstant(Constant *conVal) {
-    if (GetType() == constant) { // Constant but not forcedconstant.
-      assert(GetConstant() == conVal && "Marking constant with different value");
-      return false;
-    }
-
-    if (IsUnknown()) {
-      pipVal.setInt(constant);
-      assert(conVal && "Marking constant with NULL");
-      pipVal.setPointer(conVal);
-    } else {
-      assert(GetType() == forcedconstant &&
-             "Cannot move from overdefined to constant!");
-      // Stay at forcedconstant if the constant is the same.
-      if (conVal == GetConstant()) return false;
-
-      // Otherwise, we go to overdefined.  Assumptions made based on the
-      // forced value are possibly wrong.  Assuming this is another constant
-      // could expose a contradiction.
-      pipVal.setInt(overdefined);
-    }
-    return true;
-  }
-
+  bool MarkConstant(Constant *); 
   /// GetConstantInt - If this is a constant with a ConstantInt value, return it
   /// otherwise return null.
-  ConstantInt *GetConstantInt() const {
-    if (IsConstant())
-      return dyn_cast<ConstantInt>(GetConstant());
-    return nullptr;
+  ConstantInt *GetConstantInt() const;
+
+  void MarkForcedConstant(Constant *);
+};
+
+Constant* LatticeVal::GetConstant() const {
+  assert(IsConstant() && "Cannot get the constant of a non-constant!");
+  return pipVal.getPointer();
+}
+
+/// MarkOverdefined - Return true if this is a change in status.
+bool LatticeVal::MarkOverdefined() {
+  if (IsOverdefined()){
+    return false;
+  }
+  pipVal.setInt(overdefined);
+  return true;
+}
+
+  /// markConstant - Return true if this is a change in status.
+bool LatticeVal::MarkConstant(Constant *conVal) {
+  if (GetType() == constant) { // Constant but not forcedconstant.
+    assert(GetConstant() == conVal && "Marking constant with different value");
+    return false;
   }
 
-  void MarkForcedConstant(Constant *V) {
-    assert(IsUnknown() && "Can't force a defined value!");
-    pipVal.setInt(forcedconstant);
-    pipVal.setPointer(V);
+  if (IsUnknown()) {
+    pipVal.setInt(constant);
+    assert(conVal && "Marking constant with NULL");
+    pipVal.setPointer(conVal);
+  } else {
+    assert(GetType() == forcedconstant &&
+           "Cannot move from overdefined to constant!");
+    // Stay at forcedconstant if the constant is the same.
+    if (conVal == GetConstant()) return false;
+
+    // Otherwise, we go to overdefined.  Assumptions made based on the
+    // forced value are possibly wrong.  Assuming this is another constant
+    // could expose a contradiction.
+    pipVal.setInt(overdefined);
   }
-};
+  return true;
+}
+
+/// GetConstantInt - If this is a constant with a ConstantInt value, return it
+/// otherwise return null.
+ConstantInt* LatticeVal::GetConstantInt() const {
+  if (IsConstant())
+    return dyn_cast<ConstantInt>(GetConstant());
+  return nullptr;
+}
+
+void LatticeVal::MarkForcedConstant(Constant *V) {
+  assert(IsUnknown() && "Can't force a defined value!");
+  pipVal.setInt(forcedconstant);
+  pipVal.setPointer(V);
+}
 } // end anonymous namespace.
 
-namespace {
 
+
+namespace{
 class TaintEngine : public InstVisitor<TaintEngine>{
 
   //const DataLayout &dataLayout;
@@ -391,8 +401,7 @@ void TaintEngine::Propagate(){
   }
 }
 
-void TaintEngine::GetFeasibleSuccessors(TerminatorInst &TI,
-                                       SmallVectorImpl<bool> &Succs) {
+void TaintEngine::GetFeasibleSuccessors(TerminatorInst &TI, SmallVectorImpl<bool> &Succs) {
   Succs.resize(TI.getNumSuccessors());
   if (BranchInst *BI = dyn_cast<BranchInst>(&TI)) {
     if (BI->isUnconditional()) {
@@ -1279,10 +1288,8 @@ bool TaintEngine::ResolvedUndefsIn(Function &F) {
 }
 //End TaintEngine Implementation
 }
-//End TaingEngine Namespace
 
-namespace {
-
+namespace{
 struct TaintPass : public FunctionPass {
   static char ID; 
   TaintPass() : FunctionPass(ID) {}
@@ -1328,4 +1335,3 @@ struct TaintPass : public FunctionPass {
 
 char TaintPass::ID = 0;
 static RegisterPass<TaintPass> X("taint", "taint llvm instructions");
-
