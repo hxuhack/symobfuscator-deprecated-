@@ -24,7 +24,7 @@ using namespace llvm;
 using namespace std;
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
-loglevel_e loglevel = L1_DEBUG;
+loglevel_e loglevel = L3_DEBUG;
 
 //This is to set parameters passing to opt
 //const std::string default_symvar = "argv";
@@ -37,12 +37,12 @@ class TaintEngine : public InstVisitor<TaintEngine>{
   const DataLayout &DL;
   //const TargetLibraryInfo *TLI;
 
-  list<Value*> taintedValList;
   list<Value*> workList;
-  list<Instruction*> taintedInstList;
 
 
 public:
+  list<Instruction*> taintedInstList;
+  list<Value*> taintedValList;
   //TaintEngine(const DataLayout &dataLayout, const TargetLibraryInfo *targetLib): dataLayout(dataLayout), targetLib(targetLib) {}
   TaintEngine(const DataLayout &DL) : DL(DL) {}
   void SetSource(Value*);
@@ -235,7 +235,8 @@ namespace{
 struct TaintPass : public FunctionPass {
   static char ID; 
   TaintPass() : FunctionPass(ID) {}
-
+  void PrintIR(Function *);
+  void PrintTaintedIR(TaintEngine *);
   //Main function
   virtual bool runOnFunction(Function &F){
     LOG(L2_DEBUG) << "Entering runOnFunction...Function: " << F.getName().str();
@@ -253,23 +254,33 @@ struct TaintPass : public FunctionPass {
     
     taintEngine.Propagate();
     
-    //=====================================
-    //we print the whole IR for development
-    //=====================================
-    if(loglevel >= L1_DEBUG){
-      std::list<BasicBlock *> basicBlocks;
-      for (Function::iterator i=F.begin();i!=F.end();++i) {
-        basicBlocks.push_back((BasicBlock *)i);
-      }
-      while(!basicBlocks.empty()){
-        BasicBlock* basicBlock = basicBlocks.front();
-        basicBlock->print(errs());
-        basicBlocks.pop_front();
-    }
+    PrintTaintedIR(&taintEngine);
+    PrintIR(&F);
     return false;
-    }
   }
 };
+
+void TaintPass::PrintTaintedIR(TaintEngine* taintEngine){
+  LOG(L2_DEBUG) << "=====================Print Tainted IR==========================";
+  for(list<Instruction*>::iterator it = taintEngine->taintedInstList.begin(); it!=taintEngine->taintedInstList.end(); ++it){
+    Instruction *inst = *it;
+    inst->print(errs());
+  }
+}
+
+void TaintPass::PrintIR(Function* func){
+//we print the whole IR for development
+  LOG(L2_DEBUG) << "=====================Print IR==========================";
+  list<BasicBlock *> basicBlocks;
+  for (Function::iterator i=func->begin();i!=func->end();++i) {
+    basicBlocks.push_back((BasicBlock *)i);
+  }
+  while(!basicBlocks.empty()){
+    BasicBlock* basicBlock = basicBlocks.front();
+    basicBlock->print(errs());
+    basicBlocks.pop_front();
+  }
+}
 }
 
 char TaintPass::ID = 0;
