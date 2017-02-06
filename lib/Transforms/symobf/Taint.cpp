@@ -41,8 +41,10 @@ class TaintEngine : public InstVisitor<TaintEngine>{
 
 
 public:
+
   list<Instruction*> taintedInstList;
   list<Value*> taintedValList;
+
   //TaintEngine(const DataLayout &dataLayout, const TargetLibraryInfo *targetLib): dataLayout(dataLayout), targetLib(targetLib) {}
   TaintEngine(const DataLayout &DL) : DL(DL) {}
   void SetSource(Value*);
@@ -87,9 +89,22 @@ private:
 //End TaintEngine Definition
 
 void TaintEngine::MarkTainted(Value *val, Instruction *inst) {
+  for(list<Instruction*>::iterator it = taintedInstList.begin(); it!=taintedInstList.end(); ++it){
+    Instruction* tmpInst = *it;
+    if(tmpInst == inst){
+      LOG(L_WARNING) << "Instruction already tainted...";
+      return ;
+    }
+  }
+  LOG(L_WARNING) << "Taint a new instruction!!!";
+  taintedInstList.push_back(inst);
+  inst->print(errs()); errs()<<"\n";
+  if(val == nullptr){
+    return ;
+  }
+  LOG(L_WARNING) << "Taint a new value:" << val->getName().str(); 
   workList.push_back(val);
   taintedValList.push_back(val);
-  taintedInstList.push_back(inst);
 }
 
 void TaintEngine::visitInvokeInst (InvokeInst &invokeInst) {
@@ -109,25 +124,8 @@ void TaintEngine::SetSource(Value *val) {
   taintedValList.push_back(val);
 }
 
-/*Propagate the tainted value
-*
-*/
-void TaintEngine::Propagate(){
-  LOG(L2_DEBUG) << "Entering TaintEngine::Propagate...";
-  while(!workList.empty()){
-    Value *val = workList.front();
-    for (User *taintUser : val->users()){
-      if (Instruction *inst = dyn_cast<Instruction>(taintUser)){
-        inst->print(errs()); errs()<<"\n";
-        VisitInst(inst);
-      }
-    }
-    workList.pop_front();
-  }
-}
 
 void TaintEngine::VisitInst(Instruction *inst) {
-  LOG(L2_DEBUG) << "Entering VisitInst...";
   visit(*inst);//Originally defined in native llvm/IR/InstVisitor.h
 }
 
@@ -139,7 +137,15 @@ void TaintEngine::visitCatchSwitchInst(CatchSwitchInst &cwInst) {
 void TaintEngine::visitStoreInst(StoreInst &storeInst) {
   //TODO:
   LOG(L2_DEBUG) << "Entering TaintEngine::visitStoreInst...";
-  // If this store is of a struct, ignore it. Why?
+  Value* val = storeInst.getOperand(1);
+  MarkTainted(val, &storeInst);
+}
+
+void TaintEngine::visitLoadInst(LoadInst &loadInst) {
+  // TODO : 
+  LOG(L2_DEBUG)<<"Entering visitLoadInst.......";
+  Value* val = loadInst.getOperand(0);
+  MarkTainted(val, &loadInst);
 }
 
 void TaintEngine::visitPHINode(PHINode &pNode) {
@@ -191,8 +197,10 @@ void TaintEngine::visitCmpInst(CmpInst &cmpInst) {
 }
 
 void TaintEngine::visitExtractElementInst(ExtractElementInst &eeInst) {
-  LOG(L2_DEBUG)<<"Entering visitExtractInst.......";
   // TODO :
+  LOG(L2_DEBUG)<<"Entering visitExtractInst.......";
+  Value* val = eeInst.getIndexOperand();
+  MarkTainted(val, &eeInst);
 }
 
 void TaintEngine::visitInsertElementInst(InsertElementInst &ieInst) {
@@ -205,9 +213,6 @@ void TaintEngine::visitShuffleVectorInst(ShuffleVectorInst &svInst) {
   // TODO : 
 }
 
-// Handle getelementptr instructions.  If all operands are constants then we
-// can turn this into a getelementptr ConstantExpr.
-//
 void TaintEngine::visitGetElementPtrInst(GetElementPtrInst &gepInst) {
   // TODO : 
   LOG(L2_DEBUG)<<"Entering visitGetElementPtrInst.......";
@@ -216,12 +221,6 @@ void TaintEngine::visitGetElementPtrInst(GetElementPtrInst &gepInst) {
 
 // Handle load instructions.  If the operand is a constant pointer to a constant
 // global, we can replace the load with the loaded constant value!
-void TaintEngine::visitLoadInst(LoadInst &loadInst) {
-  // TODO : 
-  LOG(L2_DEBUG)<<"Entering visitGetLoadInst.......";
-  Value* val = loadInst.getOperand(0);
-  MarkTainted(val, &loadInst);
-}
 
 void TaintEngine::visitCallSite(CallSite callSite) {
   LOG(L2_DEBUG)<<"Entering visitCallSite.......";
@@ -229,6 +228,25 @@ void TaintEngine::visitCallSite(CallSite callSite) {
   Instruction *inst = callSite.getInstruction();
   // TODO : 
 }
+
+/*Propagate the tainted value
+*
+*/
+void TaintEngine::Propagate(){
+  LOG(L2_DEBUG) << "Entering TaintEngine::Propagate...";
+  while(!workList.empty()){
+    Value *val = workList.front();
+    for (User *taintUser : val->users()){
+      if (Instruction *inst = dyn_cast<Instruction>(taintUser)){
+        //inst->print(errs()); errs()<<"\n";
+        VisitInst(inst);
+      }
+    }
+    workList.pop_front();
+  }
+}
+
+//end namespace
 }
 
 namespace{
@@ -264,7 +282,7 @@ void TaintPass::PrintTaintedIR(TaintEngine* taintEngine){
   LOG(L2_DEBUG) << "=====================Print Tainted IR==========================";
   for(list<Instruction*>::iterator it = taintEngine->taintedInstList.begin(); it!=taintEngine->taintedInstList.end(); ++it){
     Instruction *inst = *it;
-    inst->print(errs());
+    inst->print(errs()); errs()<<"\n";
   }
 }
 
