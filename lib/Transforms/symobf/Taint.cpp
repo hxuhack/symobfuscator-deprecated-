@@ -30,6 +30,7 @@ loglevel_e loglevel = L3_DEBUG;
 //const std::string default_symvar = "argv";
 //static cl::opt<std::string> symvar("symvar", cl::desc("choose a symbolic variable to obfuscate"), cl::value_desc("variable name"), cl::init(default_symvar), cl::Optional);
 
+
 namespace{
 
 class TaintEngine : public InstVisitor<TaintEngine>{
@@ -58,7 +59,7 @@ private:
   void visitLoadInst      (LoadInst &);
   void visitPHINode(PHINode &);
   void visitReturnInst(ReturnInst &);
-  void visitTerminatorInst(TerminatorInst &);
+  void visitBranchInst(BranchInst &);
   void visitCastInst(CastInst &);
   void visitSelectInst(SelectInst &);
   void visitBinaryOperator(Instruction &);
@@ -114,7 +115,6 @@ void TaintEngine::MarkTainted(Value *val, Instruction *inst) {
 
 void TaintEngine::visitInvokeInst (InvokeInst &invokeInst) {
   visitCallSite(&invokeInst);
-  visitTerminatorInst(invokeInst);
 }
 
 void TaintEngine::visitInstruction(Instruction &inst) {
@@ -136,7 +136,6 @@ void TaintEngine::VisitInst(Instruction *inst) {
 
 void TaintEngine::visitCatchSwitchInst(CatchSwitchInst &cwInst) {
   LOG(L2_DEBUG)<<"Entering visitCatchSwitchInst.......";
-  visitTerminatorInst(cwInst);
 }
 
 void TaintEngine::visitStoreInst(StoreInst &storeInst) {
@@ -163,9 +162,9 @@ void TaintEngine::visitReturnInst(ReturnInst &retInst) {
   // TODO: 
 }
 
-void TaintEngine::visitTerminatorInst(TerminatorInst &termInst) {
-  // TODO: 
-  LOG(L2_DEBUG)<<"Entering visitTerminatorInst.......";
+void TaintEngine::visitBranchInst(BranchInst &branchInst) {
+  LOG(L2_DEBUG)<<"Entering visitBranchInst.......";
+  LOG(L2_DEBUG)<<"BranchInst is not our interest.......";
 }
 
 void TaintEngine::visitCastInst(CastInst &castInst) {
@@ -203,6 +202,8 @@ void TaintEngine::visitBinaryOperator(Instruction &bopInst) {
 void TaintEngine::visitCmpInst(CmpInst &cmpInst) {
   // TODO: 
   LOG(L2_DEBUG)<<"Entering visitCmpInst.......";
+  Value* val = &cmpInst;
+  MarkTainted(val, &cmpInst);
 }
 
 void TaintEngine::visitExtractElementInst(ExtractElementInst &eeInst) {
@@ -268,6 +269,18 @@ void TaintEngine::Propagate(){
 }
 
 namespace{
+class BooleanEngine : public InstVisitor<BooleanEngine>{
+
+public:
+  TaintEngine &taintEngine;
+  BooleanEngine (TaintEngine &taintEngine):taintEngine(taintEngine){}
+
+private:
+
+};
+}
+
+namespace{
 struct TaintPass : public FunctionPass {
   static char ID; 
   TaintPass() : FunctionPass(ID) {}
@@ -289,9 +302,10 @@ struct TaintPass : public FunctionPass {
     }
     
     taintEngine.Propagate();
-    
     PrintTaintedIR(&taintEngine);
-    PrintIR(&F);
+
+    BooleanEngine booleanEngine(taintEngine);
+    //PrintIR(&F);
     return false;
   }
 };
@@ -306,7 +320,7 @@ void TaintPass::PrintTaintedIR(TaintEngine* taintEngine){
 
 void TaintPass::PrintIR(Function* func){
 //we print the whole IR for development
-  LOG(L2_DEBUG) << "=====================Print IR==========================";
+  LOG(L2_DEBUG) << "=====================Print Full IR==========================";
   list<BasicBlock *> basicBlocks;
   for (Function::iterator i=func->begin();i!=func->end();++i) {
     basicBlocks.push_back((BasicBlock *)i);
