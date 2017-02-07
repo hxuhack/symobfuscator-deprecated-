@@ -72,7 +72,7 @@ private:
   void visitFuncletPadInst(FuncletPadInst &) { }
   void visitCatchSwitchInst(CatchSwitchInst &);
   void visitGetElementPtrInst(GetElementPtrInst &);
-  void visitCallInst      (CallInst &callInst) {visitCallSite(&callInst);}
+  void visitCallInst      (CallInst &);
   void visitInvokeInst    (InvokeInst &);
   void visitCallSite      (CallSite);
   void visitResumeInst    (TerminatorInst &) {  }
@@ -85,8 +85,13 @@ private:
   void visitInstruction(Instruction &); 
 
   void MarkTainted(Value *, Instruction *); 
+  void MarkTainted(Value *); 
 };
 //End TaintEngine Definition
+
+void TaintEngine::MarkTainted(Value *val) {
+
+}
 
 void TaintEngine::MarkTainted(Value *val, Instruction *inst) {
   for(list<Instruction*>::iterator it = taintedInstList.begin(); it!=taintedInstList.end(); ++it){
@@ -144,8 +149,8 @@ void TaintEngine::visitStoreInst(StoreInst &storeInst) {
 void TaintEngine::visitLoadInst(LoadInst &loadInst) {
   // TODO : 
   LOG(L2_DEBUG)<<"Entering visitLoadInst.......";
-  Value* val = loadInst.getOperand(0);
-  MarkTainted(val, &loadInst);
+  Value* val = &loadInst;
+  MarkTainted(val,&loadInst);
 }
 
 void TaintEngine::visitPHINode(PHINode &pNode) {
@@ -166,6 +171,8 @@ void TaintEngine::visitTerminatorInst(TerminatorInst &termInst) {
 void TaintEngine::visitCastInst(CastInst &castInst) {
   // TODO: 
   LOG(L2_DEBUG)<<"Entering visitCastInst.......";
+  Value* val = &castInst;
+  MarkTainted(val, &castInst);
 }
 
 
@@ -188,6 +195,8 @@ void TaintEngine::visitSelectInst(SelectInst &selInst) {
 void TaintEngine::visitBinaryOperator(Instruction &bopInst) {
   // TODO: 
   LOG(L2_DEBUG)<<"Entering BinaryOperator.......";
+  Value* val = &bopInst;
+  MarkTainted(val, &bopInst);
 }
 
 // Handle ICmpInst instruction.
@@ -199,8 +208,15 @@ void TaintEngine::visitCmpInst(CmpInst &cmpInst) {
 void TaintEngine::visitExtractElementInst(ExtractElementInst &eeInst) {
   // TODO :
   LOG(L2_DEBUG)<<"Entering visitExtractInst.......";
-  Value* val = eeInst.getIndexOperand();
+  Value* val = &eeInst;
   MarkTainted(val, &eeInst);
+}
+
+void TaintEngine::visitCallInst (CallInst &callInst) {
+  // TODO :
+  LOG(L2_DEBUG)<<"Entering visitCallInst.......";
+  Value* val = &callInst;
+  MarkTainted(val, &callInst);
 }
 
 void TaintEngine::visitInsertElementInst(InsertElementInst &ieInst) {
@@ -216,6 +232,8 @@ void TaintEngine::visitShuffleVectorInst(ShuffleVectorInst &svInst) {
 void TaintEngine::visitGetElementPtrInst(GetElementPtrInst &gepInst) {
   // TODO : 
   LOG(L2_DEBUG)<<"Entering visitGetElementPtrInst.......";
+  Value* val = &gepInst;
+  MarkTainted(val, &gepInst);
 }
 
 
