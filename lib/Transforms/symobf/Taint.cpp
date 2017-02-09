@@ -6,8 +6,13 @@ Format of instructions
 
 LoadInst
 %0 = load i8**, i8*** %argv.addr, align 8
-(Value*) = Opcode, Operand(0);
+(Value*) dest = Opcode (Type*) destType, Operand(0) (Type*) operandType, 
 
+CmpInst
+---------
+ICmpInst
+%cmp = icmp eq i32 %2, 123
+(Value*) dest = Opcode  Operand(0), Operand(1)
 =========================================================
 */
 #include "llvm/Analysis/ConstantFolding.h"
@@ -339,8 +344,26 @@ void Symobf::PrintIR(Function* func){
 }
 
 void Symobf::Convert2Bool(Instruction* inst){
+  if(isa<CmpInst> (*inst)){
+    if(isa<ICmpInst> (*inst)){
+      LOG(L2_DEBUG) << "Converting a ICmpInst";
+	  ICmpInst* icmpInst = (ICmpInst*) inst;
+	  Type* type = icmpInst->getType();
+	  Instruction::OtherOps opCode = icmpInst->getOpcode();
+	  CmpInst::Predicate predicate = icmpInst->getPredicate();
+	  Value* op0 = icmpInst->getOperand(0);
+	  Value* op1 = icmpInst->getOperand(1);
+	  Twine *twine = new Twine("newCmp");
+	  ICmpInst* newInst = new ICmpInst(predicate, op1, op0, *twine);
+	  newInst->print(errs()); errs()<<"\n";
+	}
+    if(isa<ICmpInst> (*inst)){
+      LOG(L2_DEBUG) << "Converting a FCmpInst";
+	}
+  }
+
   if(isa<LoadInst> (*inst)){
-    LOG(L2_DEBUG) << "Converting a loadInst";
+    LOG(L2_DEBUG) << "Converting a LoadInst";
 	Value* oriOprand = inst->getOperand(0);
 	Type* dstType = inst->getType();
 	if (dstType->isIntegerTy()){
