@@ -1,8 +1,14 @@
 /*
 Author: Hui Xu @ CUHK
 Feature: Taint LLVM IR instructions
+==========================================================
+Format of instructions
 
-The TaintEngine if referenced with llvm SCCP.cpp
+LoadInst
+%0 = load i8**, i8*** %argv.addr, align 8
+(Value*) = Opcode, Operand(0);
+
+=========================================================
 */
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/ADT/Statistic.h"
@@ -271,22 +277,11 @@ void TaintEngine::Propagate(){
 //end namespace
 }
 
-namespace{
-class BooleanEngine : public InstVisitor<BooleanEngine>{
-
-public:
-  TaintEngine &taintEngine;
-  BooleanEngine (TaintEngine &taintEngine):taintEngine(taintEngine){}
-
-private:
-
-};
-}
-
 namespace {
 struct Symobf : public FunctionPass {
   static char ID; 
   Symobf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
+  void Convert2Bool(Instruction *);
   void PrintIR(Function *);
   void PrintTaintedIR(TaintEngine *);
 
@@ -308,7 +303,10 @@ struct Symobf : public FunctionPass {
     taintEngine.Propagate();
     PrintTaintedIR(&taintEngine);
 
-    BooleanEngine booleanEngine(taintEngine);
+	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
+	  Instruction *inst = *it;
+	  Convert2Bool(inst);
+	}
     //PrintIR(&F);
     return false;
   }
@@ -337,6 +335,22 @@ void Symobf::PrintIR(Function* func){
     BasicBlock* basicBlock = basicBlocks.front();
     basicBlock->print(errs());
     basicBlocks.pop_front();
+  }
+}
+
+void Symobf::Convert2Bool(Instruction* inst){
+  if(isa<LoadInst> (*inst)){
+    LOG(L2_DEBUG) << "Converting a loadInst";
+	Value* oriOprand = inst->getOperand(0);
+	Type* dstType = inst->getType();
+	if (dstType->isIntegerTy()){
+	  int len = dstType->getIntegerBitWidth();
+      LOG(L2_DEBUG) << "Number of Bits:" << len;
+	}
+	if (dstType->isPointerTy()){
+      LOG(L2_DEBUG) << "Pointer Type:";
+	}
+	
   }
 }
 
