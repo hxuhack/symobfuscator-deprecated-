@@ -4,6 +4,7 @@ Feature: Taint LLVM IR instructions
 
 The TaintEngine if referenced with llvm SCCP.cpp
 */
+#include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/DenseSet.h"
 #include "llvm/IR/Function.h"
@@ -17,6 +18,8 @@ The TaintEngine if referenced with llvm SCCP.cpp
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Analysis/ConstantFolding.h"
+#include "llvm/Transforms/Scalar.h"
+#include "llvm/InitializePasses.h"
 #include "Logger.hpp"
 #include <list> 
 
@@ -280,12 +283,13 @@ private:
 };
 }
 
-namespace{
-struct TaintPass : public FunctionPass {
+namespace {
+struct Symobf : public FunctionPass {
   static char ID; 
-  TaintPass() : FunctionPass(ID) {}
+  Symobf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
   void PrintIR(Function *);
   void PrintTaintedIR(TaintEngine *);
+
   //Main function
   virtual bool runOnFunction(Function &F){
     LOG(L2_DEBUG) << "Entering runOnFunction...Function: " << F.getName().str();
@@ -308,9 +312,13 @@ struct TaintPass : public FunctionPass {
     //PrintIR(&F);
     return false;
   }
+
+  void getAnalysisUsage (AnalysisUsage& anaUsage) const override{
+    anaUsage.setPreservesCFG();
+  }
 };
 
-void TaintPass::PrintTaintedIR(TaintEngine* taintEngine){
+void Symobf::PrintTaintedIR(TaintEngine* taintEngine){
   LOG(L2_DEBUG) << "=====================Print Tainted IR==========================";
   for(list<Instruction*>::iterator it = taintEngine->taintedInstList.begin(); it!=taintEngine->taintedInstList.end(); ++it){
     Instruction *inst = *it;
@@ -318,7 +326,7 @@ void TaintPass::PrintTaintedIR(TaintEngine* taintEngine){
   }
 }
 
-void TaintPass::PrintIR(Function* func){
+void Symobf::PrintIR(Function* func){
 //we print the whole IR for development
   LOG(L2_DEBUG) << "=====================Print Full IR==========================";
   list<BasicBlock *> basicBlocks;
@@ -331,7 +339,9 @@ void TaintPass::PrintIR(Function* func){
     basicBlocks.pop_front();
   }
 }
+
 }
 
-char TaintPass::ID = 0;
-static RegisterPass<TaintPass> X("taint", "taint llvm instructions");
+char Symobf::ID = 0;
+//INITIALIZE_PASS(Symobf, "symobf", "An symbolic obfuscation pass", false, false)
+static RegisterPass<Symobf> X("symobf", "obfuscate llvm instructions");
