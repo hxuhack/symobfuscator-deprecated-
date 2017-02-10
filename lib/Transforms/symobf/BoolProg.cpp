@@ -43,29 +43,9 @@ list<Value*> ConvertVal2Bool(Value* val){
 BasicBlock* ConvertInst2Bool(Instruction* inst){
   if(isa<CmpInst> (*inst)){
     if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	/*
-      LOG(L2_DEBUG) << "Converting a ICmpInst";
-	  ICmpInst* icmpInst = (ICmpInst*) inst;
-	  Type* type = icmpInst->getType();
-	  Instruction::OtherOps opCode = icmpInst->getOpcode();
-	  CmpInst::Predicate predicate = icmpInst->getPredicate();
-	  Value* op0 = icmpInst->getOperand(0);
-	  Value* op1 = icmpInst->getOperand(1);
-//TODO
-	  ConvertVal2Bool(op0);
-	  if(isa<ConstantInt> (*op1)){
-		list<ConstantInt*> boolConstIntList = ConvertConstInt2Bool((ConstantInt*)op1);
-		while(!boolConstIntList.empty()){
-			ConstantInt* conInt = boolConstIntList.front();
-			conInt->getValue().print(errs(),false); errs()<<"\n";
-			boolConstIntList.pop_front();
-		}
-	  }
 	
-	  Twine *twine = new Twine("newCmp");
-	  ICmpInst* newInst = new ICmpInst(inst,predicate, op1, op0, *twine);
-	  newInst->print(errs()); errs()<<"\n";
-	  */
+      LOG(L2_DEBUG) << "Converting a ICmpInst";
+	  
 	}
 
 	if(isa<FCmpInst> (*inst)){

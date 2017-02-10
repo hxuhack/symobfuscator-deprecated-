@@ -33,8 +33,9 @@ ICmpInst
 #include "llvm/InitializePasses.h"
 #include "Logger.hpp"
 #include "Utils.hpp"
-#include "BranchProg.hpp"
 #include "BoolProg.hpp"
+#include "BranchProg.hpp"
+#include "MatrixBranchProg.hpp"
 #include <list> 
 
 using namespace llvm;
@@ -317,7 +318,7 @@ struct Symobf : public FunctionPass {
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	    ConvertIcmp2BranProg((ICmpInst*)inst);
+	    ConvertIcmp2Mbp((ICmpInst*)inst);
 	  }
 	}
     //PrintIR(&F);
