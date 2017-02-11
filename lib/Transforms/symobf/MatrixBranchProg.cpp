@@ -4,25 +4,76 @@ using namespace llvm;
 using namespace std;
 
 class BPMatrix{
+
+private:
+  const int width;
+  const int height;
 public:
+  ConstantInt** conIntMatrix;
 
-  BPMatrix(int dim, int idx_row, int idx_col, Type* type){
-	ConstantInt* conIntMatrix[dim][dim];
+  BPMatrix(const int width, const int height):width(width),height(height){
+	conIntMatrix = (ConstantInt**) malloc (sizeof(ConstantInt*)*height);
+	for(int i=0; i<height; i++){
+	  conIntMatrix[i] = (ConstantInt*) malloc (sizeof(ConstantInt)*width);
+	}
+  }
 
-	for(int i=0; i<dim; i++){
-	  for(int j=0; j<dim; j++){
+  BPMatrix(const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
+	conIntMatrix = (ConstantInt**) malloc (sizeof(ConstantInt*)*height);
+	for(int i=0; i<height; i++){
+	  conIntMatrix[i] = (ConstantInt*) malloc (sizeof(ConstantInt)*width);
+	  for(int j=0; j<width; j++){
 		if(i==idx_row && j == idx_col){
-		  ConstantInt* boolConst = (ConstantInt *) ConstantInt::get(type, 1);
+		  conIntMatrix[i][j].get(type, 1);
+		}else{
+		  conIntMatrix[i][j].get(type, 0);
 		}
-		ConstantInt* boolConst = (ConstantInt *) ConstantInt::get(type, 0);
 	  }
 	}
   }
 
+  int GetWidth(){
+	return width;
+  }
+
+  int GetHeight(){
+	return height;
+  }
+
   void Randomize(){}
   void GradEncode(){}
+
+  void Convert2IR(){
+  
+  }
+
+  ~BPMatrix(){
+	for(int i=0; i<height; i++){
+	  free(conIntMatrix[i]);
+	}
+	free(conIntMatrix);
+  }
+
 };
 
+//Generate the IR that multiplies two matrix
+//We cannot compute get the result directly.
+//We should let the IR computes the multiplication.
+//Choice: Constants, or With 2-d structure in IR?
+BasicBlock* MatrixMultiply(BPMatrix* bpMat1, BPMatrix* bpMat2){
+//Step 1: define a new matrix.
+//Step 2: load the original matrix, and compute each position 
+//Step 3:  load to the new matrix
+  BPMatrix* restMat = new BPMatrix(bpMat1->GetHeight(),bpMat2->GetWidth());  
+	for(int i=0; i<restMat->GetHeight();i++){
+  	  for(int i=0; i<restMat->GetWidth();i++){
+	    for(int i=0; i<restMat->GetWidth();i++){
+		  //Multiplication Instruction
+		}
+		//Add Instruction
+	  }
+	}
+}
 
 BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
 	LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
@@ -50,9 +101,9 @@ BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
 		int idx_row = i;
 		int idx_col1 = i+1;
 		int idx_col2 = len;
-		BPMatrix* mat1 = new BPMatrix(dim,idx_row,idx_col1,boolType); //bit
-		BPMatrix* mat2 = new BPMatrix(dim,idx_row,idx_col2,boolType); //~bit
-		//ConstantInt* boolConst = ConstantInt::get(boolType, bit);
+		BPMatrix* mat1 = new BPMatrix(dim,dim,idx_row,idx_col1,boolType); //bit
+		BPMatrix* mat2 = new BPMatrix(dim,dim,idx_row,idx_col2,boolType); //~bit
+		//TODO: Convert BPMatrix to IR
 	}
 /*
 	list<ConstantInt*> boolConstIntList = ConvertConstInt2Bool((ConstantInt*)op1);
