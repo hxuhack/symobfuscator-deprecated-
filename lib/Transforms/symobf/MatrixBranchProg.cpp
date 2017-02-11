@@ -4,8 +4,23 @@ using namespace llvm;
 using namespace std;
 
 class BPMatrix{
-	public:
-		BPMatrix(bool bit, int row, int col, int matrixWidth){};
+public:
+
+  BPMatrix(int dim, int idx_row, int idx_col, Type* type){
+	ConstantInt* conIntMatrix[dim][dim];
+
+	for(int i=0; i<dim; i++){
+	  for(int j=0; j<dim; j++){
+		if(i==idx_row && j == idx_col){
+		  ConstantInt* boolConst = (ConstantInt *) ConstantInt::get(type, 1);
+		}
+		ConstantInt* boolConst = (ConstantInt *) ConstantInt::get(type, 0);
+	  }
+	}
+  }
+
+  void Randomize(){}
+  void GradEncode(){}
 };
 
 
@@ -27,17 +42,16 @@ BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
 	else	
 		conInt = (ConstantInt*)op1;
 
-
 	int len = conInt->getBitWidth();
-	int matrixWidth = len + 1;
+	int dim = len + 1;
 	IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
 	for(int i=0; i<len; i++){
 		bool bit = conInt->getValue()[i];
-		int row = i;
-		int col1 = i+1;
-		int col2 = len;
-		BPMatrix* mat1 = new BPMatrix(bit,row,col1,matrixWidth);
-		BPMatrix* mat2 = new BPMatrix(~bit,row,col2,matrixWidth);
+		int idx_row = i;
+		int idx_col1 = i+1;
+		int idx_col2 = len;
+		BPMatrix* mat1 = new BPMatrix(dim,idx_row,idx_col1,boolType); //bit
+		BPMatrix* mat2 = new BPMatrix(dim,idx_row,idx_col2,boolType); //~bit
 		//ConstantInt* boolConst = ConstantInt::get(boolType, bit);
 	}
 /*
