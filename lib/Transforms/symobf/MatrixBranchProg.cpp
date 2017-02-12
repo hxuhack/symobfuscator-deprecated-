@@ -10,7 +10,7 @@ private:
   const int height;
 public:
   ConstantInt** conIntMatrix;
-
+//TODO: Impelemt array structure in IR.
   BPMatrix(const int width, const int height):width(width),height(height){
 	conIntMatrix = (ConstantInt**) malloc (sizeof(ConstantInt*)*height);
 	for(int i=0; i<height; i++){
@@ -57,22 +57,36 @@ public:
 };
 
 //Generate the IR that multiplies two matrix
-//We cannot compute get the result directly.
-//We should let the IR computes the multiplication.
-//Choice: Constants, or With 2-d structure in IR?
+//Choice that matters the program size: 
+//1). a list of constants multiplication. 
+//2). using loops in IR.
+//3). using function in IR.
+//The overhead 1>2>3. 
+//We should implement the last one, otherwise, the matrix program will collapse by constant propagation.
 BasicBlock* MatrixMultiply(BPMatrix* bpMat1, BPMatrix* bpMat2){
 //Step 1: define a new matrix.
 //Step 2: load the original matrix, and compute each position 
-//Step 3:  load to the new matrix
+//Step 3: load to the new matrix
+
+
+/*Implement the first approachi, should not be used.
   BPMatrix* restMat = new BPMatrix(bpMat1->GetHeight(),bpMat2->GetWidth());  
-	for(int i=0; i<restMat->GetHeight();i++){
-  	  for(int i=0; i<restMat->GetWidth();i++){
-	    for(int i=0; i<restMat->GetWidth();i++){
-		  //Multiplication Instruction
+  for(int i=0; i<restMat->GetHeight();i++){
+  	for(int j=0; j<restMat->GetWidth();j++){
+	  BinaryOperator* mulValue; 
+	  for(int k=0; k<restMat->GetWidth();k++){
+	    //Multiplication Instruction
+	    mulValue = BinaryOperator::CreateNSWMul(&bpMat1->conIntMatrix[i][k],&bpMat2->conIntMatrix[k][j]," "); 
+		if(k == 0){
+	      restMat->conIntMatrix[i][j] = BinaryOperator::CreateNSWMul(&bpMat1->conIntMatrix[i][k],&bpMat2->conIntMatrix[k][j]," "); 
 		}
-		//Add Instruction
+		else{
+	      restMat->conIntMatrix[i][j] = BinaryOperator::CreateNSWAdd(mulValue,conIntMatrix[i][j]);
+		}
 	  }
 	}
+  }
+  */
 }
 
 BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
