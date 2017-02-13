@@ -21,6 +21,7 @@
 #include <list>
 
 
+llvm::Function* GenMatMulFunc(llvm::LLVMContext &);
 llvm::BasicBlock* ConvertIcmp2Mbp(llvm::ICmpInst *);
 
 #endif

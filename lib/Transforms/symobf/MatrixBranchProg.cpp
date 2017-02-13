@@ -3,6 +3,7 @@
 using namespace llvm;
 using namespace std;
 
+
 class BPMatrix{
 
 private:
@@ -239,11 +240,33 @@ cleanup:                                          ; preds = %for.end35, %if.then
 }
 
 */
-BasicBlock* MatrixMultiply(BPMatrix* bpMat1, BPMatrix* bpMat2){
+Function* GenMatMulFunc(LLVMContext& context){
+  //We construct a type of 2-level int array as the type for the matrix. 
+  PointerType* l2Pt = PointerType::getUnqual(Type::getInt32Ty(context));
+  PointerType* l1Pt = PointerType::getUnqual(l2Pt);
+
+  //We declare the parameters of the function
+  vector<Type*> paramVec;
+  paramVec.push_back(l1Pt);
+  paramVec.push_back(l1Pt);
+  ArrayRef<Type*> paramArrayType(paramVec);
+
+  //We wrap the type of the function
+  //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
+  FunctionType* funcType = FunctionType::get(l1Pt,paramArrayType,false);
+
+  //We define the function name as "MatrixMult"
+  const Twine* funcName = new Twine("MatrixMult");
+  //Params: (FunctionType *Ty, LinkageTypes Linkage, const Twine &N="", Module *M=nullptr)
+  Function* func = Function::Create(funcType, GlobalValue::CommonLinkage, *funcName, nullptr);
+
+  return func;
+}
+
+void* MatrixMultiply(BPMatrix* bpMat1, BPMatrix* bpMat2){
 //Step 1: define a new matrix.
 //Step 2: load the original matrix, and compute each position 
 //Step 3: load to the new matrix
-
 
 /*Implement the first approachi, should not be used.
   BPMatrix* restMat = new BPMatrix(bpMat1->GetHeight(),bpMat2->GetWidth());  

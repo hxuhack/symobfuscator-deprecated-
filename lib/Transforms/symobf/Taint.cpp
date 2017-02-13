@@ -310,6 +310,9 @@ struct Symobf : public FunctionPass {
     taintEngine.Propagate();
     PrintIR(taintEngine.taintedInstList);
 
+    //Generate the function for matrix multiplication
+    Function* funcMatMul = GenMatMulFunc(F.getContext());
+
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
 	  Instruction *inst = *it;
 	  ConvertInst2Bool(inst);
