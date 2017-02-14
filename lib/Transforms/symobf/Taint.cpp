@@ -352,7 +352,7 @@ struct Symobf : public FunctionPass {
 }
 
 char Symobf::ID = 0;
-static RegisterPass<Symobf> X("symobf", "obfuscate llvm instructions");
+static RegisterPass<Symobf> X("sym", "obfuscate llvm instructions");
 
 char mat::ID = 1;
 static RegisterPass<mat> Y("mat", "obfuscate llvm instructions");

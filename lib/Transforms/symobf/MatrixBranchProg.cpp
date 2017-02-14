@@ -324,18 +324,20 @@ cleanup:                                          ; preds = %for.end35, %if.then
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LOG(L2_DEBUG) << "GenMatMulFunc...";
   //We construct a type of 2-level int array as the type for the matrix. 
-  PointerType* l2Pt = PointerType::getUnqual(Type::getInt64Ty(context));
-  PointerType* l1Pt = PointerType::getUnqual(l2Pt);
+  Type* i64Type = IntegerType::getInt64Ty(context);
+  ArrayType* l2ArrayType = ArrayType::get(i64Type, 2);
+  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, 2);
+  PointerType* l1Ptr = PointerType::getUnqual(l1ArrayType);
 
   //We declare the parameters of the function
   vector<Type*> paramVec;
-  paramVec.push_back(l1Pt);
-  paramVec.push_back(l1Pt);
+  paramVec.push_back((Type *) l1Ptr);
+  paramVec.push_back((Type *) l1Ptr);
   ArrayRef<Type*> paramArrayType(paramVec);
 
   //We wrap the type of the function
   //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-  FunctionType* funcType = FunctionType::get(l1Pt,paramArrayType,false);
+  FunctionType* funcType = FunctionType::get((Type *) l1Ptr,paramArrayType,false);
 
   //We define the function name as "MatrixMult"
   const Twine* funcName = new Twine("MatrixMult");
@@ -345,9 +347,6 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   BasicBlock* bb = BasicBlock::Create(context, "entry", func);
   IRBuilder<> builder(bb);
 
-  Type* i64Type = IntegerType::getInt64Ty(context);
-  ArrayType* l2ArrayType = ArrayType::get(i64Type, 2);
-  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, 2);
   AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", bb);
   ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
 
