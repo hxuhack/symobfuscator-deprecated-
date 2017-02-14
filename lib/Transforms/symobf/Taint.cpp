@@ -25,6 +25,7 @@ ICmpInst
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
@@ -288,11 +289,27 @@ void TaintEngine::Propagate(){
 
 
 namespace {
+struct mat : public ModulePass {
+  static char ID; 
+  mat() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
+
+  //Entry function
+  virtual bool runOnModule(Module &m){
+    LOG(L2_DEBUG) << "Entering runOnModule...: " << m.getName().str();
+    //Generate the function for matrix multiplication
+    Function* funcMatMul = GenMatMulFunc(m.getContext(),m);
+	
+  }
+
+};
+}
+
+namespace {
 struct Symobf : public FunctionPass {
   static char ID; 
   Symobf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
 
-  //Main function
+  //Entry function
   virtual bool runOnFunction(Function &F){
     LOG(L2_DEBUG) << "Entering runOnFunction...Function: " << F.getName().str();
     const DataLayout &dataLayout = F.getParent()->getDataLayout();
@@ -310,8 +327,6 @@ struct Symobf : public FunctionPass {
     taintEngine.Propagate();
     PrintIR(taintEngine.taintedInstList);
 
-    //Generate the function for matrix multiplication
-    Function* funcMatMul = GenMatMulFunc(F.getContext());
 
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
 	  Instruction *inst = *it;
@@ -325,17 +340,19 @@ struct Symobf : public FunctionPass {
 	  }
 	}
     //PrintIR(&F);
-    return false;
+    return true;
   }
-
+/*
   void getAnalysisUsage (AnalysisUsage& anaUsage) const override{
-    anaUsage.setPreservesCFG();
+    //anaUsage.setPreservesCFG();
   }
+  */
 };
-
 
 }
 
 char Symobf::ID = 0;
-//INITIALIZE_PASS(Symobf, "symobf", "An symbolic obfuscation pass", false, false)
 static RegisterPass<Symobf> X("symobf", "obfuscate llvm instructions");
+
+char mat::ID = 1;
+static RegisterPass<mat> Y("mat", "obfuscate llvm instructions");

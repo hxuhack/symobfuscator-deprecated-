@@ -10,27 +10,108 @@ private:
   const int width;
   const int height;
 public:
-  ConstantInt** conIntMatrix;
+  ConstantInt*** conIntMatrix;
 //TODO: Impelemt array structure in IR.
-  BPMatrix(const int width, const int height):width(width),height(height){
-	conIntMatrix = (ConstantInt**) malloc (sizeof(ConstantInt*)*height);
+/*
+  %mat = alloca [2 x [2 x i32]], align 16
+  %arrayidx = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 0
+  %arrayidx1 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx, i64 0, i64 0
+  store i32 0, i32* %arrayidx1, align 16
+  %arrayidx2 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 0
+  %arrayidx3 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx2, i64 0, i64 1
+  store i32 1, i32* %arrayidx3, align 4
+  %arrayidx4 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 1
+  %arrayidx5 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx4, i64 0, i64 0
+  store i32 0, i32* %arrayidx5, align 8
+  %arrayidx6 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 1
+  %arrayidx7 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx6, i64 0, i64 1
+  store i32 1, i32* %arrayidx7, align 4
+  ret void
+*/
+
+  BPMatrix(ICmpInst* icmpInst, const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
+
+	conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
+
+	//Construct an allocaInst:
+	//AllocaInst (Type *Ty, const Twine &Name="", Instruction *InsertBefore=nullptr)
+	Type* i32Type = IntegerType::getInt32Ty(icmpInst->getContext());
+	Type* i64Type = IntegerType::getInt64Ty(icmpInst->getContext());
+	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
+	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
+
+	AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
+
+
 	for(int i=0; i<height; i++){
-	  conIntMatrix[i] = (ConstantInt*) malloc (sizeof(ConstantInt)*width);
+	  conIntMatrix[i] = (ConstantInt**) malloc (sizeof(ConstantInt*) * width);
+
+	  //Construct an GetElementPtrInst;
+	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
+	  //http://llvm.org/docs/GetElementPtr.html
+
+      ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+      ConstantInt* idx1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+	  vector<Value*> idxVec;
+	  idxVec.push_back(idx0);
+	  idxVec.push_back(idx1);
+	  ArrayRef<Value*> idxArrayRef(idxVec);
+	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) allocaInst, idxArrayRef,"", icmpInst);
+
+	  for(int j=0; j<width; j++){
+        ConstantInt* idx2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
+	    vector<Value*> l2IdxVec;
+	    l2IdxVec.push_back(idx0);
+	    l2IdxVec.push_back(idx2);
+	    ArrayRef<Value*> idxArrayRef(idxVec);
+	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, idxArrayRef,"", icmpInst);
+		ConstantInt* tmpConstInt;
+		if(i==idx_row && j == idx_col){
+          tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
+		}else{
+          tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+		}
+		conIntMatrix[i][j] = tmpConstInt;
+		StoreInst* storeInst = new StoreInst((Value *) tmpConstInt, (Value *) l2GetPEInst, icmpInst);
+	  }
 	}
   }
 
-  BPMatrix(const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
-	conIntMatrix = (ConstantInt**) malloc (sizeof(ConstantInt*)*height);
+  BPMatrix(ICmpInst* icmpInst, const int width, const int height):width(width),height(height){
+	Type* i64Type = IntegerType::getInt64Ty(icmpInst->getContext());
+	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
+	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
+
+	AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
+
+
 	for(int i=0; i<height; i++){
-	  conIntMatrix[i] = (ConstantInt*) malloc (sizeof(ConstantInt)*width);
+	  conIntMatrix[i] = (ConstantInt**) malloc (sizeof(ConstantInt*) * width);
+
+      ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+      ConstantInt* idx1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+	  vector<Value*> idxVec;
+	  idxVec.push_back(idx0);
+	  idxVec.push_back(idx1);
+	  ArrayRef<Value*> idxArrayRef(idxVec);
+	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) allocaInst, idxArrayRef,"", icmpInst);
+
 	  for(int j=0; j<width; j++){
-		if(i==idx_row && j == idx_col){
-		  conIntMatrix[i][j].get(type, 1);
-		}else{
-		  conIntMatrix[i][j].get(type, 0);
-		}
+        ConstantInt* idx2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
+	    vector<Value*> l2IdxVec;
+	    l2IdxVec.push_back(idx0);
+	    l2IdxVec.push_back(idx2);
+	    ArrayRef<Value*> idxArrayRef(idxVec);
+	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, idxArrayRef,"", icmpInst);
+		ConstantInt* tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+		conIntMatrix[i][j] = tmpConstInt;
+		StoreInst* storeInst = new StoreInst((Value *) tmpConstInt, (Value *) l2GetPEInst, icmpInst);
 	  }
 	}
+  }
+
+  //Constant has to be loaded
+  void CreateLoadInst(){
   }
 
   int GetWidth(){
@@ -240,9 +321,10 @@ cleanup:                                          ; preds = %for.end35, %if.then
 }
 
 */
-Function* GenMatMulFunc(LLVMContext& context){
+Function* GenMatMulFunc(LLVMContext& context, Module& module){
+  LOG(L2_DEBUG) << "GenMatMulFunc...";
   //We construct a type of 2-level int array as the type for the matrix. 
-  PointerType* l2Pt = PointerType::getUnqual(Type::getInt32Ty(context));
+  PointerType* l2Pt = PointerType::getUnqual(Type::getInt64Ty(context));
   PointerType* l1Pt = PointerType::getUnqual(l2Pt);
 
   //We declare the parameters of the function
@@ -258,7 +340,16 @@ Function* GenMatMulFunc(LLVMContext& context){
   //We define the function name as "MatrixMult"
   const Twine* funcName = new Twine("MatrixMult");
   //Params: (FunctionType *Ty, LinkageTypes Linkage, const Twine &N="", Module *M=nullptr)
-  Function* func = Function::Create(funcType, GlobalValue::CommonLinkage, *funcName, nullptr);
+  Function* func = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
+
+  BasicBlock* bb = BasicBlock::Create(context, "entry", func);
+  IRBuilder<> builder(bb);
+
+  Type* i64Type = IntegerType::getInt64Ty(context);
+  ArrayType* l2ArrayType = ArrayType::get(i64Type, 2);
+  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, 2);
+  AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", bb);
+  ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
 
   return func;
 }
@@ -314,8 +405,8 @@ BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
 		int idx_row = i;
 		int idx_col1 = i+1;
 		int idx_col2 = len;
-		BPMatrix* mat1 = new BPMatrix(dim,dim,idx_row,idx_col1,boolType); //bit
-		BPMatrix* mat2 = new BPMatrix(dim,dim,idx_row,idx_col2,boolType); //~bit
+		BPMatrix* mat1 = new BPMatrix(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
+		BPMatrix* mat2 = new BPMatrix(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
 		//TODO: Convert BPMatrix to IR
 	}
 /*

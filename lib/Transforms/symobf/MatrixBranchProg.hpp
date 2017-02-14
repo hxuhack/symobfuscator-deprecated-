@@ -14,6 +14,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
@@ -21,7 +22,7 @@
 #include <list>
 
 
-llvm::Function* GenMatMulFunc(llvm::LLVMContext &);
+llvm::Function* GenMatMulFunc(llvm::LLVMContext &, llvm::Module &);
 llvm::BasicBlock* ConvertIcmp2Mbp(llvm::ICmpInst *);
 
 #endif
