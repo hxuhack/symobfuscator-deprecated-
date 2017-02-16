@@ -7,8 +7,8 @@ using namespace std;
 class MatrixInIR{
 
 private:
-  const int width;
-  const int height;
+  int width = 0;
+  int height = 0;
 public:
   ConstantInt*** conIntMatrix;
 //TODO: Impelemt array structure in IR.
@@ -110,6 +110,14 @@ public:
 	}
   }
 
+  MatrixInIR(Value* matValue, BasicBlock* bb){
+	Type* i64Type = IntegerType::getInt64Ty(bb->getContext());
+	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
+	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
+
+	AllocaInst* allocaInst = new AllocaInst(l1ArrayType, "" , bb);
+  }
+
   //Constant has to be loaded
   void CreateLoadInst(){
   }
@@ -193,189 +201,7 @@ public:
     GenerateMMLogic();//Matrix multiplication logic
   }
 };
-//Generate the IR that multiplies two matrix
-//Choice that matters the program size: 
-//1). a list of constants multiplication. 
-//2). using loops in IR.
-//3). using function in IR.
-//The overhead 1>2>3. 
-//We should implement the last one, otherwise, the matrix program will collapse by constant propagation.
 
-/*
-define i32** @MM(i32** %mat1, i32** %mat2) #0 {
-entry:
-  %retval = alloca i32**, align 8
-  %mat1.addr = alloca i32**, align 8
-  %mat2.addr = alloca i32**, align 8
-  %m1height = alloca i32, align 4
-  %m2height = alloca i32, align 4
-  %m1width = alloca i32, align 4
-  %m2width = alloca i32, align 4
-  %saved_stack = alloca i8*, align 8
-  %cleanup.dest.slot = alloca i32
-  %i = alloca i32, align 4
-  %j = alloca i32, align 4
-  %ele = alloca i32, align 4
-  %k = alloca i32, align 4
-  store i32** %mat1, i32*** %mat1.addr, align 8
-  store i32** %mat2, i32*** %mat2.addr, align 8
-  store i32 1, i32* %m1height, align 4
-  store i32 1, i32* %m2height, align 4
-  store i32 2, i32* %m1width, align 4
-  store i32 2, i32* %m2width, align 4
-  %0 = load i32, i32* %m1height, align 4
-  %1 = zext i32 %0 to i64
-  %2 = load i32, i32* %m2width, align 4
-  %3 = zext i32 %2 to i64
-  %4 = call i8* @llvm.stacksave()
-  store i8* %4, i8** %saved_stack, align 8
-  %5 = mul nuw i64 %1, %3
-  %vla = alloca i32, i64 %5, align 16
-  %6 = load i32, i32* %m1width, align 4
-  %7 = load i32, i32* %m2height, align 4
-  %cmp = icmp ne i32 %6, %7
-  br i1 %cmp, label %if.then, label %if.end
-
-if.then:                                          ; preds = %entry
-  %8 = bitcast i32* %vla to i32**
-  store i32** %8, i32*** %retval, align 8
-  store i32 1, i32* %cleanup.dest.slot, align 4
-  br label %cleanup
-
-if.end:                                           ; preds = %entry
-  store i32 0, i32* %i, align 4
-  br label %for.cond
-
-for.cond:                                         ; preds = %for.inc33, %if.end
-  %9 = load i32, i32* %i, align 4
-  %10 = load i32, i32* %m1height, align 4
-  %cmp1 = icmp slt i32 %9, %10
-  br i1 %cmp1, label %for.body, label %for.end35
-
-for.body:                                         ; preds = %for.cond
-  store i32 0, i32* %j, align 4
-  br label %for.cond2
-
-for.cond2:                                        ; preds = %for.inc30, %for.body
-  %11 = load i32, i32* %j, align 4
-  %12 = load i32, i32* %m2width, align 4
-  %cmp3 = icmp slt i32 %11, %12
-  br i1 %cmp3, label %for.body4, label %for.end32
-
-for.body4:                                        ; preds = %for.cond2
-  store i32 0, i32* %ele, align 4
-  store i32 0, i32* %k, align 4
-  br label %for.cond5
-
-for.cond5:                                        ; preds = %for.inc, %for.body4
-  %13 = load i32, i32* %k, align 4
-  %14 = load i32, i32* %m1width, align 4
-  %cmp6 = icmp slt i32 %13, %14
-  br i1 %cmp6, label %for.body7, label %for.end
-
-for.body7:                                        ; preds = %for.cond5
-  %15 = load i32, i32* %k, align 4
-  %cmp8 = icmp eq i32 %15, 0
-  br i1 %cmp8, label %if.then9, label %if.else
-
-if.then9:                                         ; preds = %for.body7
-  %16 = load i32, i32* %k, align 4
-  %idxprom = sext i32 %16 to i64
-  %17 = load i32, i32* %i, align 4
-  %idxprom10 = sext i32 %17 to i64
-  %18 = load i32**, i32*** %mat1.addr, align 8
-  %arrayidx = getelementptr inbounds i32*, i32** %18, i64 %idxprom10
-  %19 = load i32*, i32** %arrayidx, align 8
-  %arrayidx11 = getelementptr inbounds i32, i32* %19, i64 %idxprom
-  %20 = load i32, i32* %arrayidx11, align 4
-  %21 = load i32, i32* %j, align 4
-  %idxprom12 = sext i32 %21 to i64
-  %22 = load i32, i32* %k, align 4
-  %idxprom13 = sext i32 %22 to i64
-  %23 = load i32**, i32*** %mat2.addr, align 8
-  %arrayidx14 = getelementptr inbounds i32*, i32** %23, i64 %idxprom13
-  %24 = load i32*, i32** %arrayidx14, align 8
-  %arrayidx15 = getelementptr inbounds i32, i32* %24, i64 %idxprom12
-  %25 = load i32, i32* %arrayidx15, align 4
-  %mul = mul nsw i32 %20, %25
-  store i32 %mul, i32* %ele, align 4
-  br label %if.end25
-
-if.else:                                          ; preds = %for.body7
-  %26 = load i32, i32* %ele, align 4
-  %27 = load i32, i32* %k, align 4
-  %idxprom16 = sext i32 %27 to i64
-  %28 = load i32, i32* %i, align 4
-  %idxprom17 = sext i32 %28 to i64
-  %29 = load i32**, i32*** %mat1.addr, align 8
-  %arrayidx18 = getelementptr inbounds i32*, i32** %29, i64 %idxprom17
-  %30 = load i32*, i32** %arrayidx18, align 8
-  %arrayidx19 = getelementptr inbounds i32, i32* %30, i64 %idxprom16
-  %31 = load i32, i32* %arrayidx19, align 4
-  %32 = load i32, i32* %j, align 4
-  %idxprom20 = sext i32 %32 to i64
-  %33 = load i32, i32* %k, align 4
-  %idxprom21 = sext i32 %33 to i64
-  %34 = load i32**, i32*** %mat2.addr, align 8
-  %arrayidx22 = getelementptr inbounds i32*, i32** %34, i64 %idxprom21
-  %35 = load i32*, i32** %arrayidx22, align 8
-  %arrayidx23 = getelementptr inbounds i32, i32* %35, i64 %idxprom20
-  %36 = load i32, i32* %arrayidx23, align 4
-  %mul24 = mul nsw i32 %31, %36
-  %add = add nsw i32 %26, %mul24
-  store i32 %add, i32* %ele, align 4
-  br label %if.end25
-
-if.end25:                                         ; preds = %if.else, %if.then9
-  br label %for.inc
-
-for.inc:                                          ; preds = %if.end25
-  %37 = load i32, i32* %j, align 4
-  %inc = add nsw i32 %37, 1
-  store i32 %inc, i32* %j, align 4
-  br label %for.cond5
-
-for.end:                                          ; preds = %for.cond5
-  %38 = load i32, i32* %ele, align 4
-  %39 = load i32, i32* %j, align 4
-  %idxprom26 = sext i32 %39 to i64
-  %40 = load i32, i32* %i, align 4
-  %idxprom27 = sext i32 %40 to i64
-  %41 = mul nsw i64 %idxprom27, %3
-  %arrayidx28 = getelementptr inbounds i32, i32* %vla, i64 %41
-  %arrayidx29 = getelementptr inbounds i32, i32* %arrayidx28, i64 %idxprom26
-  store i32 %38, i32* %arrayidx29, align 4
-  br label %for.inc30
-
-for.inc30:                                        ; preds = %for.end
-  %42 = load i32, i32* %j, align 4
-  %inc31 = add nsw i32 %42, 1
-  store i32 %inc31, i32* %j, align 4
-  br label %for.cond2
-
-for.end32:                                        ; preds = %for.cond2
-  br label %for.inc33
-
-for.inc33:                                        ; preds = %for.end32
-  %43 = load i32, i32* %i, align 4
-  %inc34 = add nsw i32 %43, 1
-  store i32 %inc34, i32* %i, align 4
-  br label %for.cond
-
-for.end35:                                        ; preds = %for.cond
-  %44 = bitcast i32* %vla to i32**
-  store i32** %44, i32*** %retval, align 8
-  store i32 1, i32* %cleanup.dest.slot, align 4
-  br label %cleanup
-
-cleanup:                                          ; preds = %for.end35, %if.then
-  %45 = load i8*, i8** %saved_stack, align 8
-  call void @llvm.stackrestore(i8* %45)
-  %46 = load i32**, i32*** %retval, align 8
-  ret i32** %46
-}
-
-*/
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LOG(L2_DEBUG) << "GenMatMulFunc...";
   //We construct a type of 2-level int array as the type for the matrix. 
@@ -405,9 +231,17 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", bb);
 
   //Get the two matrix from arguments
+  MatrixInIR* mat1;
+  MatrixInIR* mat2;
   int argNumChecker = 0;
   for (Function::arg_iterator arg = func->arg_begin(); arg!=func->arg_end(); ++arg){
-    argNumChecker++;
+    ++argNumChecker;
+	if(argNumChecker == 1){
+	  *mat1 = MatrixInIR((Value*) &*arg, bb);
+	}
+	if(argNumChecker == 2){
+	  *mat2 = MatrixInIR((Value*) &*arg, bb);
+	}
 	if(argNumChecker>2){
 	  //We return an empty matrix;
 	  //TODO:Throw an alert;
