@@ -4,7 +4,7 @@ using namespace llvm;
 using namespace std;
 
 
-class BPMatrix{
+class MatrixInIR{
 
 private:
   const int width;
@@ -29,7 +29,7 @@ public:
   ret void
 */
 
-  BPMatrix(ICmpInst* icmpInst, const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
+  MatrixInIR(ICmpInst* icmpInst, const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
 
 	conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
 
@@ -63,10 +63,10 @@ public:
 	    vector<Value*> l2IdxVec;
 	    l2IdxVec.push_back(idx0);
 	    l2IdxVec.push_back(idx2);
-	    ArrayRef<Value*> idxArrayRef(idxVec);
+	    ArrayRef<Value*> idxArrayRef(l2IdxVec);
 	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, idxArrayRef,"", icmpInst);
 		ConstantInt* tmpConstInt;
-		if(i==idx_row && j == idx_col){
+		if((i==j) || (i==idx_row && j == idx_col)){
           tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
 		}else{
           tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
@@ -77,7 +77,7 @@ public:
 	}
   }
 
-  BPMatrix(ICmpInst* icmpInst, const int width, const int height):width(width),height(height){
+  MatrixInIR(ICmpInst* icmpInst, const int width, const int height):width(width),height(height){
 	Type* i64Type = IntegerType::getInt64Ty(icmpInst->getContext());
 	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
 	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
@@ -101,7 +101,7 @@ public:
 	    vector<Value*> l2IdxVec;
 	    l2IdxVec.push_back(idx0);
 	    l2IdxVec.push_back(idx2);
-	    ArrayRef<Value*> idxArrayRef(idxVec);
+	    ArrayRef<Value*> idxArrayRef(l2IdxVec);
 	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, idxArrayRef,"", icmpInst);
 		ConstantInt* tmpConstInt = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
 		conIntMatrix[i][j] = tmpConstInt;
@@ -122,14 +122,14 @@ public:
 	return height;
   }
 
-  void Randomize(){}
-  void GradEncode(){}
-
-  void Convert2IR(){
-  
+  void Randomize(){
+    //TODO: to be implement
+  }
+  void GradEncode(){
+    //TODO: to be implement
   }
 
-  ~BPMatrix(){
+  ~MatrixInIR(){
 	for(int i=0; i<height; i++){
 	  free(conIntMatrix[i]);
 	}
@@ -138,6 +138,61 @@ public:
 
 };
 
+class MBP{
+
+private:
+  MatrixInIR* headMat;
+  MatrixInIR* tailMat;
+  list<MatrixInIR*> matListInp0;
+  list<MatrixInIR*> matListInp1;
+
+  void GenerateMatrix(ICmpInst *icmpInst){
+	LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
+	Type* type = icmpInst->getType();
+	Instruction::OtherOps opCode = icmpInst->getOpcode();
+	CmpInst::Predicate predicate = icmpInst->getPredicate();
+	Value* op0 = icmpInst->getOperand(0);
+	Value* op1 = icmpInst->getOperand(1);
+    if(!(isa<ConstantInt> (*op0) || isa<ConstantInt>(*op1))){
+		LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
+	}
+
+	ConstantInt* conInt;
+    if(isa<ConstantInt> (*op0))
+		conInt = (ConstantInt*)op0;
+	else	
+		conInt = (ConstantInt*)op1;
+
+	int len = conInt->getBitWidth();
+	int dim = len + 1;
+	IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
+	for(int i=0; i<len; i++){
+		bool bit = conInt->getValue()[i];
+		int idx_row = i;
+		int idx_col1 = i+1;
+		int idx_col2 = len;
+		MatrixInIR* mat1 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
+		MatrixInIR* mat0 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
+		matListInp0.push_back(mat0);
+		matListInp1.push_back(mat1);
+	}
+	headMat = new MatrixInIR(icmpInst,1,dim,0,0,boolType); //bit
+	tailMat = new MatrixInIR(icmpInst,dim,1,dim-1,0,boolType); //~bit
+  }
+
+  void GenerateMMLogic(){
+	int numMatrix = matListInp0.size(); 
+    for(int i=0; i<numMatrix; i++){
+      //Create a CallInst
+    }
+  }
+
+public:
+  MBP(ICmpInst *icmpInst){
+    GenerateMatrix(icmpInst);
+    GenerateMMLogic();//Matrix multiplication logic
+  }
+};
 //Generate the IR that multiplies two matrix
 //Choice that matters the program size: 
 //1). a list of constants multiplication. 
@@ -348,73 +403,27 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   IRBuilder<> builder(bb);
 
   AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", bb);
+
+  //Get the two matrix from arguments
+  int argNumChecker = 0;
+  for (Function::arg_iterator arg = func->arg_begin(); arg!=func->arg_end(); ++arg){
+    argNumChecker++;
+	if(argNumChecker>2){
+	  //We return an empty matrix;
+	  //TODO:Throw an alert;
+      ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
+	}
+	//TODO:Get the argument
+  }
+  //TODO: Muliply the arg
+
+  //TODO:
   ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
 
   return func;
 }
 
-void* MatrixMultiply(BPMatrix* bpMat1, BPMatrix* bpMat2){
-//Step 1: define a new matrix.
-//Step 2: load the original matrix, and compute each position 
-//Step 3: load to the new matrix
-
-/*Implement the first approachi, should not be used.
-  BPMatrix* restMat = new BPMatrix(bpMat1->GetHeight(),bpMat2->GetWidth());  
-  for(int i=0; i<restMat->GetHeight();i++){
-  	for(int j=0; j<restMat->GetWidth();j++){
-	  BinaryOperator* mulValue; 
-	  for(int k=0; k<restMat->GetWidth();k++){
-	    //Multiplication Instruction
-	    mulValue = BinaryOperator::CreateNSWMul(&bpMat1->conIntMatrix[i][k],&bpMat2->conIntMatrix[k][j]," "); 
-		if(k == 0){
-	      restMat->conIntMatrix[i][j] = BinaryOperator::CreateNSWMul(&bpMat1->conIntMatrix[i][k],&bpMat2->conIntMatrix[k][j]," "); 
-		}
-		else{
-	      restMat->conIntMatrix[i][j] = BinaryOperator::CreateNSWAdd(mulValue,conIntMatrix[i][j]);
-		}
-	  }
-	}
-  }
-  */
-}
-
-BasicBlock*	ConvertIcmp2Mbp(ICmpInst *icmpInst){
-	LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
-	BasicBlock* bb;
-	Type* type = icmpInst->getType();
-	Instruction::OtherOps opCode = icmpInst->getOpcode();
-	CmpInst::Predicate predicate = icmpInst->getPredicate();
-	Value* op0 = icmpInst->getOperand(0);
-	Value* op1 = icmpInst->getOperand(1);
-    if(!(isa<ConstantInt> (*op0) || isa<ConstantInt>(*op1))){
-		LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
-	}
-
-	ConstantInt* conInt;
-    if(isa<ConstantInt> (*op0))
-		conInt = (ConstantInt*)op0;
-	else	
-		conInt = (ConstantInt*)op1;
-
-	int len = conInt->getBitWidth();
-	int dim = len + 1;
-	IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
-	for(int i=0; i<len; i++){
-		bool bit = conInt->getValue()[i];
-		int idx_row = i;
-		int idx_col1 = i+1;
-		int idx_col2 = len;
-		BPMatrix* mat1 = new BPMatrix(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
-		BPMatrix* mat2 = new BPMatrix(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
-		//TODO: Convert BPMatrix to IR
-	}
-/*
-	list<ConstantInt*> boolConstIntList = ConvertConstInt2Bool((ConstantInt*)op1);
-		while(!boolConstIntList.empty()){
-			ConstantInt* conInt = boolConstIntList.front();
-			conInt->getValue().print(errs(),false); errs()<<"\n";
-			boolConstIntList.pop_front();
-		}
-	}
-	*/
+void ConvertIcmp2Mbp(ICmpInst *icmpInst){
+  LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
+  MBP* mbp = new MBP(icmpInst);
 }

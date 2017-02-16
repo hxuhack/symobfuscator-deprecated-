@@ -114,7 +114,7 @@ void TaintEngine::MarkTainted(Value *val) {
 }
 
 void TaintEngine::MarkTainted(Value *val, Instruction *inst) {
-  for(list<Instruction*>::iterator it = taintedInstList.begin(); it!=taintedInstList.end(); ++it){
+  for(list<Instruction*>::iterator it = taintedInstList.begin(); it!=taintedInstList.end();it++){
     Instruction* tmpInst = *it;
     if(tmpInst == inst){
       LOG(L_WARNING) << "Instruction already tainted...";
@@ -325,15 +325,15 @@ struct Symobf : public FunctionPass {
     }
     
     taintEngine.Propagate();
-    PrintIR(taintEngine.taintedInstList);
+    //PrintIR(taintEngine.taintedInstList);
 
-
+/*
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
 	  Instruction *inst = *it;
 	  ConvertInst2Bool(inst);
 	}
-
-	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
+*/
+	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
 	    ConvertIcmp2Mbp((ICmpInst*)inst);
