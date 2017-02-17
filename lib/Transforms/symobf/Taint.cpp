@@ -289,9 +289,9 @@ void TaintEngine::Propagate(){
 
 
 namespace {
-struct mat : public ModulePass {
+struct ModuObf : public ModulePass {
   static char ID; 
-  mat() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
+  ModuObf() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
 
   //Entry function
   virtual bool runOnModule(Module &m){
@@ -305,9 +305,9 @@ struct mat : public ModulePass {
 }
 
 namespace {
-struct Symobf : public FunctionPass {
+struct FuncObf : public FunctionPass {
   static char ID; 
-  Symobf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
+  FuncObf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
 
   //Entry function
   virtual bool runOnFunction(Function &F){
@@ -351,8 +351,8 @@ struct Symobf : public FunctionPass {
 
 }
 
-char Symobf::ID = 0;
-static RegisterPass<Symobf> X("sym", "obfuscate llvm instructions");
+char FuncObf::ID = 0;
+static RegisterPass<FuncObf> X("fobf", "obfuscate llvm instructions");
 
-char mat::ID = 1;
-static RegisterPass<mat> Y("mat", "obfuscate llvm instructions");
+char ModuObf::ID = 1;
+static RegisterPass<ModuObf> Y("mobf", "module level modification, add functions");

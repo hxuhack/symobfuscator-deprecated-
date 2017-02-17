@@ -29,6 +29,11 @@ public:
   ret void
 */
 
+  MatrixInIR(){
+  
+  }
+  
+
   MatrixInIR(ICmpInst* icmpInst, const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
 
 	conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
@@ -112,10 +117,12 @@ public:
 
   MatrixInIR(Value* matValue, BasicBlock* bb){
 	Type* i64Type = IntegerType::getInt64Ty(bb->getContext());
+	/*
 	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
 	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
 
 	AllocaInst* allocaInst = new AllocaInst(l1ArrayType, "" , bb);
+	*/
   }
 
   //Constant has to be loaded
@@ -138,10 +145,14 @@ public:
   }
 
   ~MatrixInIR(){
+	/*
 	for(int i=0; i<height; i++){
 	  free(conIntMatrix[i]);
 	}
-	free(conIntMatrix);
+	if(conIntMatrix != nullptr){
+	  free(conIntMatrix);
+	}
+	*/
   }
 
 };
@@ -202,23 +213,35 @@ public:
   }
 };
 
+/*
+ *Function Define:
+ *i32** @MM(i32** %mat1, i32** %mat2, i32 %m1Height, i32 %m1Width, i32 %m2Height, i32 %m2Width)
+*/
+
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LOG(L2_DEBUG) << "GenMatMulFunc...";
   //We construct a type of 2-level int array as the type for the matrix. 
   Type* i64Type = IntegerType::getInt64Ty(context);
-  ArrayType* l2ArrayType = ArrayType::get(i64Type, 2);
-  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, 2);
-  PointerType* l1Ptr = PointerType::getUnqual(l1ArrayType);
+  Type* i32Type = IntegerType::getInt32Ty(context);
+
+  PointerType* l2PtrType = PointerType::getUnqual(i64Type);
+  PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+
 
   //We declare the parameters of the function
   vector<Type*> paramVec;
-  paramVec.push_back((Type *) l1Ptr);
-  paramVec.push_back((Type *) l1Ptr);
+  paramVec.push_back((Type *) l1PtrType);
+  paramVec.push_back((Type *) l1PtrType);
+  paramVec.push_back(i32Type);
+  paramVec.push_back(i32Type);
+  paramVec.push_back(i32Type);
+  paramVec.push_back(i32Type);
   ArrayRef<Type*> paramArrayType(paramVec);
+
 
   //We wrap the type of the function
   //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-  FunctionType* funcType = FunctionType::get((Type *) l1Ptr,paramArrayType,false);
+  FunctionType* funcType = FunctionType::get((Type *) l1PtrType, paramArrayType, false);
 
   //We define the function name as "MatrixMult"
   const Twine* funcName = new Twine("MatrixMult");
@@ -228,31 +251,84 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   BasicBlock* bb = BasicBlock::Create(context, "entry", func);
   IRBuilder<> builder(bb);
 
-  AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", bb);
-
   //Get the two matrix from arguments
-  MatrixInIR* mat1;
-  MatrixInIR* mat2;
-  int argNumChecker = 0;
+  MatrixInIR mat1;
+  MatrixInIR mat2;
+  ConstantInt* mat1Height;
+  ConstantInt* mat1Width;
+  ConstantInt* mat2Height;
+  ConstantInt* mat2Width;
+  int argId = 0;
   for (Function::arg_iterator arg = func->arg_begin(); arg!=func->arg_end(); ++arg){
-    ++argNumChecker;
-	if(argNumChecker == 1){
-	  *mat1 = MatrixInIR((Value*) &*arg, bb);
-	}
-	if(argNumChecker == 2){
-	  *mat2 = MatrixInIR((Value*) &*arg, bb);
-	}
-	if(argNumChecker>2){
+    ++argId;
+	switch (argId)
+	{
+	  case 1:
+	  {
+		LOG(L2_DEBUG)<<"argId:" << argId;
+	    mat1 = MatrixInIR((Value*) &*arg, bb);
+		break;
+	  }
+	  case 2:
+	  {
+		LOG(L2_DEBUG)<<"argId:" << argId;
+		mat2 = MatrixInIR((Value*) &*arg, bb);
+		break;
+	  }
+	  case 3:
+	  {
+		if(arg->getType()->isIntegerTy()){
+	      mat1Height = (ConstantInt*) &*arg;
+		}
+		else{
+		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
+		}
+		break;
+	  }
+	  case 4:
+	  {
+		if(arg->getType()->isIntegerTy()){
+	      mat1Width = (ConstantInt*) &*arg;
+		}
+		else{
+		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
+		}
+		break;
+	  }
+	  case 5:
+	  {
+		if(arg->getType()->isIntegerTy()){
+	      mat2Height = (ConstantInt*) &*arg;
+		}
+		else{
+		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
+		}
+		break;
+	  }
+	  case 6:
+	  {
+		if(arg->getType()->isIntegerTy()){
+	      mat2Width = (ConstantInt*) &*arg;
+		}
+		else{
+		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
+		}
+		break;
+	  }
+	  default:
+	    break;
+	  //TODO:
 	  //We return an empty matrix;
 	  //TODO:Throw an alert;
-      ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
 	}
 	//TODO:Get the argument
   }
   //TODO: Muliply the arg
 
   //TODO:
-  ReturnInst* retInst = ReturnInst::Create(context, allocaInst, bb);
+  AllocaInst* allocaInst = new AllocaInst(l1PtrType,"", bb);
+  LoadInst* loadInst= new LoadInst((Value*) allocaInst,"",bb); 
+  ReturnInst* retInst = ReturnInst::Create(context, loadInst, bb);
 
   return func;
 }
