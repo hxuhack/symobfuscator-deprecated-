@@ -251,12 +251,18 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   BasicBlock* entryBB = BasicBlock::Create(context, "entry", func);
   BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", func);
   BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", func);
-  BasicBlock* forCondBB = BasicBlock::Create(context, "for_cond", func);
-  BasicBlock* forBodyBB = BasicBlock::Create(context, "for_body", func);
+  BasicBlock* forCond1BB = BasicBlock::Create(context, "for_cond1", func);
+  BasicBlock* forBody1BB = BasicBlock::Create(context, "for_body1", func);
   BasicBlock* forCond2BB = BasicBlock::Create(context, "for_cond2", func);
   BasicBlock* forBody2BB = BasicBlock::Create(context, "for_body2", func);
   BasicBlock* forCond3BB = BasicBlock::Create(context, "for_cond3", func);
   BasicBlock* forBody3BB = BasicBlock::Create(context, "for_body3", func);
+  BasicBlock* forInc1BB = BasicBlock::Create(context, "for_inc1", func);
+  BasicBlock* forEnd1BB = BasicBlock::Create(context, "for_end1", func);
+  BasicBlock* forInc2BB = BasicBlock::Create(context, "for_inc2", func);
+  BasicBlock* forEnd2BB = BasicBlock::Create(context, "for_end2", func);
+  BasicBlock* forInc3BB = BasicBlock::Create(context, "for_inc3", func);
+  BasicBlock* forEnd3BB = BasicBlock::Create(context, "for_end3", func);
   BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", func);
   IRBuilder<> builder(entryBB);
 
@@ -348,7 +354,7 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   AllocaInst* m2HeightAddrAllocaInst = new AllocaInst(i64Type,"m2Heigh.addr", entryBB);
   AllocaInst* m2WidthAddrAllocaInst = new AllocaInst(i64Type,"m2Width.addr", entryBB);
   AllocaInst* iAllocaInst = new AllocaInst(i64Type,"i", entryBB);
-  AllocaInst* jAllocaAllocaInst = new AllocaInst(i64Type,"j", entryBB);
+  AllocaInst* jAllocaInst = new AllocaInst(i64Type,"j", entryBB);
   AllocaInst* eleAllocaInst = new AllocaInst(i64Type,"ele", entryBB);
   AllocaInst* kAllocaInst = new AllocaInst(i64Type,"k", entryBB);
 
@@ -378,11 +384,53 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   //BasicBlock* if_dimCheckEnd
 
   ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0); 
-  StoreInst* tmpStoreInst111 = new StoreInst((Value*) conInt0, (Value*) iAllocaInst, ifDimCheckBB);
-  BranchInst::Create(forCondBB,ifDimCheckBB);
+  StoreInst* iStoreInst = new StoreInst((Value*) conInt0, (Value*) iAllocaInst, ifDimCheckBB);
+  BranchInst::Create(forCond1BB,ifDimCheckBB);
 
-  //BasicBlock* for_cond
+  //BasicBlock* for_cond1
+  LoadInst* iLoadInst = new LoadInst((Value*) iAllocaInst, "", forCond1BB);
+  //LoadInst* m1HeightAddrLoadInst = new LoadInst((Value*) m1HeightAddrAllocaInst, "", forCond1BB);
+  ICmpInst* icmpInst1 = new ICmpInst(*forCond1BB,CmpInst::ICMP_SLT,(Value*) iLoadInst, (Value*) m1HeightLoadInst, "");
+  BranchInst::Create(forBody1BB,forEnd3BB,icmpInst1, forCond1BB);
+  
+  //BasicBlock* for_body1
+  StoreInst* jStoreInst = new StoreInst((Value*) conInt0, (Value*) jAllocaInst, forBody1BB);
+  BranchInst::Create(forCond2BB,forBody1BB);
+  
+  //BasicBlock* for_cond2
+  LoadInst* jLoadInst = new LoadInst((Value*) jAllocaInst, "", forCond2BB);
+  ICmpInst* icmpInst2 = new ICmpInst(*forCond2BB,CmpInst::ICMP_SLT,(Value*) iLoadInst, (Value*) m2WidthLoadInst, "");
+  BranchInst::Create(forBody2BB, forEnd2BB, icmpInst2, forCond2BB);
+  
+  //BasicBlock* for_body2
+  StoreInst* kStoreInst = new StoreInst((Value*) conInt0, (Value*) kAllocaInst, forBody2BB);
+  StoreInst* eleStoreInst = new StoreInst((Value*) conInt0, (Value*) eleAllocaInst, forBody2BB);
+  BranchInst::Create(forCond3BB,forBody2BB);
+  
+  //BasicBlock* for_cond3
+  LoadInst* kLoadInst = new LoadInst((Value*) kAllocaInst, "", forCond3BB);
+  ICmpInst* icmpInst3 = new ICmpInst(*forCond3BB,CmpInst::ICMP_SLT,(Value*) kLoadInst, (Value*) m1WidthLoadInst, "");
+  BranchInst::Create(forBody3BB, forEnd1BB, icmpInst3, forCond3BB);
+  
+  //BasicBlock* for_body3
+  LoadInst* eleLoadInst = new LoadInst((Value*) eleAllocaInst, "", forBody3BB);
+  LoadInst* mat1AddrLoadInst = new LoadInst((Value*) mat1AddrAllocaInst, "", forBody3BB);
+  BitCastInst* bitCastInst2 = new BitCastInst((Value*) mat1AddrLoadInst, l1PtrType, "", forBody3BB);
+  LoadInst* iLoadInst2 = new LoadInst((Value*) iAllocaInst, "", forBody3BB);
+  BinaryOperator* bopMul1 = BinaryOperator::CreateNUWMul((Value*) m1WidthLoadInst, (Value*) iLoadInst2, "", forBody3BB);
 
+  //BasicBlock* for_inc1
+  
+  //BasicBlock* for_end1
+  
+  //BasicBlock* for_inc2
+  
+  //BasicBlock* for_end2
+  
+  //BasicBlock* for_inc3
+  
+  //BasicBlock* for_end3
+  
   //BasicBlock* cleanup
   LoadInst* retLoadInst= new LoadInst((Value*) retAllocaInst,"",cleanupBB); 
   ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
