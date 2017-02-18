@@ -10,12 +10,7 @@ int** MM(const int** mat1, const int** mat2, int m1Height, int m1Width, int m2He
     for(int j=0; j < m2Width; j++){
  	  int ele = 0;
       for(int k=0; k < m1Width; k++){
-		if(k==0){
-		  ele = *((int*)mat1 + i*m1Width + k) * *((int*)mat2+ k*m2Width + j);
-		}
-		else{
-		  ele = ele + *((int*)mat1 + i*m1Width + k) * *((int*)mat2+ k*m2Width + j);
-		}
+		ele = ele + *((int*)mat1 + i*m1Width + k) * *((int*)mat2+ k*m2Width + j);
 	  }
 	  restMat[i][j] = ele;
 	  //printf("%d\n",ele);

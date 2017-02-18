@@ -249,6 +249,15 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   Function* func = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
 
   BasicBlock* entryBB = BasicBlock::Create(context, "entry", func);
+  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", func);
+  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", func);
+  BasicBlock* forCondBB = BasicBlock::Create(context, "for_cond", func);
+  BasicBlock* forBodyBB = BasicBlock::Create(context, "for_body", func);
+  BasicBlock* forCond2BB = BasicBlock::Create(context, "for_cond2", func);
+  BasicBlock* forBody2BB = BasicBlock::Create(context, "for_body2", func);
+  BasicBlock* forCond3BB = BasicBlock::Create(context, "for_cond3", func);
+  BasicBlock* forBody3BB = BasicBlock::Create(context, "for_body3", func);
+  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", func);
   IRBuilder<> builder(entryBB);
 
   //Get the two matrix from arguments
@@ -330,7 +339,8 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   //TODO: Muliply the arg
 
   //TODO:
-  AllocaInst* allocaInst = new AllocaInst(l1PtrType,"retval", entryBB);
+  AllocaInst* retAllocaInst = new AllocaInst(l1PtrType,"retval", entryBB);
+
   AllocaInst* mat1AddrAllocaInst = new AllocaInst(l1PtrType,"mat1.addr", entryBB);
   AllocaInst* mat2AddrAllocaInst = new AllocaInst(l1PtrType,"mat2.addr", entryBB);
   AllocaInst* m1HeightAddrAllocaInst = new AllocaInst(i64Type,"m1Heigh.addr", entryBB);
@@ -358,14 +368,24 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 
   AllocaInst* vlaAllocaInst = new AllocaInst(i64Type,(Value *) getMatSizeMul,"vla", entryBB);
   ICmpInst* icmpInst = new ICmpInst(*entryBB,CmpInst::ICMP_NE,(Value*) m1WidthLoadInst, (Value*) m2HeightLoadInst,"dimCheck");
-  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", func);
-  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", func);
+  BranchInst::Create(ifDimCheckBB,ifDimCheckEndBB,icmpInst, entryBB);
 
-  BranchInst* dimCheckBranchInst = BranchInst::Create(ifDimCheckBB,ifDimCheckEndBB,icmpInst, entryBB);
+  //BasicBlock* if_dimCheck
+  BitCastInst* bitCastInst = new BitCastInst((Value*) vlaAllocaInst, l1PtrType, "", ifDimCheckBB);
+  StoreInst* retStoreInst = new StoreInst((Value*) bitCastInst, (Value*) retAllocaInst, ifDimCheckBB);
+  BranchInst::Create(cleanupBB,ifDimCheckBB);
 
-  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", func);
-  LoadInst* loadInst= new LoadInst((Value*) allocaInst,"",entryBB); 
-  ReturnInst* retInst = ReturnInst::Create(context, loadInst, entryBB);
+  //BasicBlock* if_dimCheckEnd
+
+  ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0); 
+  StoreInst* tmpStoreInst111 = new StoreInst((Value*) conInt0, (Value*) iAllocaInst, ifDimCheckBB);
+  BranchInst::Create(forCondBB,ifDimCheckBB);
+
+  //BasicBlock* for_cond
+
+  //BasicBlock* cleanup
+  LoadInst* retLoadInst= new LoadInst((Value*) retAllocaInst,"",cleanupBB); 
+  ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
 
   return func;
 }

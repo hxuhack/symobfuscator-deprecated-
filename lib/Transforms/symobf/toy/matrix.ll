@@ -48,21 +48,21 @@ if.end:                                           ; preds = %entry
   store i32 0, i32* %i, align 4
   br label %for.cond
 
-for.cond:                                         ; preds = %for.inc35, %if.end
+for.cond:                                         ; preds = %for.inc21, %if.end
   %9 = load i32, i32* %i, align 4
   %10 = load i32, i32* %m1Height.addr, align 4
   %cmp1 = icmp slt i32 %9, %10
-  br i1 %cmp1, label %for.body, label %for.end37
+  br i1 %cmp1, label %for.body, label %for.end23
 
 for.body:                                         ; preds = %for.cond
   store i32 0, i32* %j, align 4
   br label %for.cond2
 
-for.cond2:                                        ; preds = %for.inc32, %for.body
+for.cond2:                                        ; preds = %for.inc18, %for.body
   %11 = load i32, i32* %j, align 4
   %12 = load i32, i32* %m2Width.addr, align 4
   %cmp3 = icmp slt i32 %11, %12
-  br i1 %cmp3, label %for.body4, label %for.end34
+  br i1 %cmp3, label %for.body4, label %for.end20
 
 for.body4:                                        ; preds = %for.cond2
   store i32 0, i32* %ele, align 4
@@ -76,11 +76,7 @@ for.cond5:                                        ; preds = %for.inc, %for.body4
   br i1 %cmp6, label %for.body7, label %for.end
 
 for.body7:                                        ; preds = %for.cond5
-  %15 = load i32, i32* %k, align 4
-  %cmp8 = icmp eq i32 %15, 0
-  br i1 %cmp8, label %if.then9, label %if.else
-
-if.then9:                                         ; preds = %for.body7
+  %15 = load i32, i32* %ele, align 4
   %16 = load i32**, i32*** %mat1.addr, align 8
   %17 = bitcast i32** %16 to i32*
   %18 = load i32, i32* %i, align 4
@@ -89,100 +85,69 @@ if.then9:                                         ; preds = %for.body7
   %idx.ext = sext i32 %mul to i64
   %add.ptr = getelementptr inbounds i32, i32* %17, i64 %idx.ext
   %20 = load i32, i32* %k, align 4
-  %idx.ext10 = sext i32 %20 to i64
-  %add.ptr11 = getelementptr inbounds i32, i32* %add.ptr, i64 %idx.ext10
-  %21 = load i32, i32* %add.ptr11, align 4
+  %idx.ext8 = sext i32 %20 to i64
+  %add.ptr9 = getelementptr inbounds i32, i32* %add.ptr, i64 %idx.ext8
+  %21 = load i32, i32* %add.ptr9, align 4
   %22 = load i32**, i32*** %mat2.addr, align 8
   %23 = bitcast i32** %22 to i32*
   %24 = load i32, i32* %k, align 4
   %25 = load i32, i32* %m2Width.addr, align 4
-  %mul12 = mul nsw i32 %24, %25
-  %idx.ext13 = sext i32 %mul12 to i64
-  %add.ptr14 = getelementptr inbounds i32, i32* %23, i64 %idx.ext13
+  %mul10 = mul nsw i32 %24, %25
+  %idx.ext11 = sext i32 %mul10 to i64
+  %add.ptr12 = getelementptr inbounds i32, i32* %23, i64 %idx.ext11
   %26 = load i32, i32* %j, align 4
-  %idx.ext15 = sext i32 %26 to i64
-  %add.ptr16 = getelementptr inbounds i32, i32* %add.ptr14, i64 %idx.ext15
-  %27 = load i32, i32* %add.ptr16, align 4
-  %mul17 = mul nsw i32 %21, %27
-  store i32 %mul17, i32* %ele, align 4
-  br label %if.end29
-
-if.else:                                          ; preds = %for.body7
-  %28 = load i32, i32* %ele, align 4
-  %29 = load i32**, i32*** %mat1.addr, align 8
-  %30 = bitcast i32** %29 to i32*
-  %31 = load i32, i32* %i, align 4
-  %32 = load i32, i32* %m1Width.addr, align 4
-  %mul18 = mul nsw i32 %31, %32
-  %idx.ext19 = sext i32 %mul18 to i64
-  %add.ptr20 = getelementptr inbounds i32, i32* %30, i64 %idx.ext19
-  %33 = load i32, i32* %k, align 4
-  %idx.ext21 = sext i32 %33 to i64
-  %add.ptr22 = getelementptr inbounds i32, i32* %add.ptr20, i64 %idx.ext21
-  %34 = load i32, i32* %add.ptr22, align 4
-  %35 = load i32**, i32*** %mat2.addr, align 8
-  %36 = bitcast i32** %35 to i32*
-  %37 = load i32, i32* %k, align 4
-  %38 = load i32, i32* %m2Width.addr, align 4
-  %mul23 = mul nsw i32 %37, %38
-  %idx.ext24 = sext i32 %mul23 to i64
-  %add.ptr25 = getelementptr inbounds i32, i32* %36, i64 %idx.ext24
-  %39 = load i32, i32* %j, align 4
-  %idx.ext26 = sext i32 %39 to i64
-  %add.ptr27 = getelementptr inbounds i32, i32* %add.ptr25, i64 %idx.ext26
-  %40 = load i32, i32* %add.ptr27, align 4
-  %mul28 = mul nsw i32 %34, %40
-  %add = add nsw i32 %28, %mul28
+  %idx.ext13 = sext i32 %26 to i64
+  %add.ptr14 = getelementptr inbounds i32, i32* %add.ptr12, i64 %idx.ext13
+  %27 = load i32, i32* %add.ptr14, align 4
+  %mul15 = mul nsw i32 %21, %27
+  %add = add nsw i32 %15, %mul15
   store i32 %add, i32* %ele, align 4
-  br label %if.end29
-
-if.end29:                                         ; preds = %if.else, %if.then9
   br label %for.inc
 
-for.inc:                                          ; preds = %if.end29
-  %41 = load i32, i32* %k, align 4
-  %inc = add nsw i32 %41, 1
+for.inc:                                          ; preds = %for.body7
+  %28 = load i32, i32* %k, align 4
+  %inc = add nsw i32 %28, 1
   store i32 %inc, i32* %k, align 4
   br label %for.cond5
 
 for.end:                                          ; preds = %for.cond5
-  %42 = load i32, i32* %ele, align 4
-  %43 = load i32, i32* %j, align 4
-  %idxprom = sext i32 %43 to i64
-  %44 = load i32, i32* %i, align 4
-  %idxprom30 = sext i32 %44 to i64
-  %45 = mul nsw i64 %idxprom30, %3
-  %arrayidx = getelementptr inbounds i32, i32* %vla, i64 %45
-  %arrayidx31 = getelementptr inbounds i32, i32* %arrayidx, i64 %idxprom
-  store i32 %42, i32* %arrayidx31, align 4
-  br label %for.inc32
+  %29 = load i32, i32* %ele, align 4
+  %30 = load i32, i32* %j, align 4
+  %idxprom = sext i32 %30 to i64
+  %31 = load i32, i32* %i, align 4
+  %idxprom16 = sext i32 %31 to i64
+  %32 = mul nsw i64 %idxprom16, %3
+  %arrayidx = getelementptr inbounds i32, i32* %vla, i64 %32
+  %arrayidx17 = getelementptr inbounds i32, i32* %arrayidx, i64 %idxprom
+  store i32 %29, i32* %arrayidx17, align 4
+  br label %for.inc18
 
-for.inc32:                                        ; preds = %for.end
-  %46 = load i32, i32* %j, align 4
-  %inc33 = add nsw i32 %46, 1
-  store i32 %inc33, i32* %j, align 4
+for.inc18:                                        ; preds = %for.end
+  %33 = load i32, i32* %j, align 4
+  %inc19 = add nsw i32 %33, 1
+  store i32 %inc19, i32* %j, align 4
   br label %for.cond2
 
-for.end34:                                        ; preds = %for.cond2
-  br label %for.inc35
+for.end20:                                        ; preds = %for.cond2
+  br label %for.inc21
 
-for.inc35:                                        ; preds = %for.end34
-  %47 = load i32, i32* %i, align 4
-  %inc36 = add nsw i32 %47, 1
-  store i32 %inc36, i32* %i, align 4
+for.inc21:                                        ; preds = %for.end20
+  %34 = load i32, i32* %i, align 4
+  %inc22 = add nsw i32 %34, 1
+  store i32 %inc22, i32* %i, align 4
   br label %for.cond
 
-for.end37:                                        ; preds = %for.cond
-  %48 = bitcast i32* %vla to i32**
-  store i32** %48, i32*** %retval, align 8
+for.end23:                                        ; preds = %for.cond
+  %35 = bitcast i32* %vla to i32**
+  store i32** %35, i32*** %retval, align 8
   store i32 1, i32* %cleanup.dest.slot, align 4
   br label %cleanup
 
-cleanup:                                          ; preds = %for.end37, %if.then
-  %49 = load i8*, i8** %saved_stack, align 8
-  call void @llvm.stackrestore(i8* %49)
-  %50 = load i32**, i32*** %retval, align 8
-  ret i32** %50
+cleanup:                                          ; preds = %for.end23, %if.then
+  %36 = load i8*, i8** %saved_stack, align 8
+  call void @llvm.stackrestore(i8* %36)
+  %37 = load i32**, i32*** %retval, align 8
+  ret i32** %37
 }
 
 ; Function Attrs: nounwind
