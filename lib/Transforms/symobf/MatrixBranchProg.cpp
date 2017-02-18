@@ -115,13 +115,13 @@ public:
 	}
   }
 
-  MatrixInIR(Value* matValue, BasicBlock* bb){
-	Type* i64Type = IntegerType::getInt64Ty(bb->getContext());
+  MatrixInIR(Value* matValue, BasicBlock* entryBB){
+	Type* i64Type = IntegerType::getInt64Ty(entryBB->getContext());
 	/*
 	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
 	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
 
-	AllocaInst* allocaInst = new AllocaInst(l1ArrayType, "" , bb);
+	AllocaInst* allocaInst = new AllocaInst(l1ArrayType, "" , entryBB);
 	*/
   }
 
@@ -232,10 +232,10 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   vector<Type*> paramVec;
   paramVec.push_back((Type *) l1PtrType);
   paramVec.push_back((Type *) l1PtrType);
-  paramVec.push_back(i32Type);
-  paramVec.push_back(i32Type);
-  paramVec.push_back(i32Type);
-  paramVec.push_back(i32Type);
+  paramVec.push_back(i64Type);
+  paramVec.push_back(i64Type);
+  paramVec.push_back(i64Type);
+  paramVec.push_back(i64Type);
   ArrayRef<Type*> paramArrayType(paramVec);
 
 
@@ -248,16 +248,16 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   //Params: (FunctionType *Ty, LinkageTypes Linkage, const Twine &N="", Module *M=nullptr)
   Function* func = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
 
-  BasicBlock* bb = BasicBlock::Create(context, "entry", func);
-  IRBuilder<> builder(bb);
+  BasicBlock* entryBB = BasicBlock::Create(context, "entry", func);
+  IRBuilder<> builder(entryBB);
 
   //Get the two matrix from arguments
-  MatrixInIR mat1;
-  MatrixInIR mat2;
-  ConstantInt* mat1Height;
-  ConstantInt* mat1Width;
-  ConstantInt* mat2Height;
-  ConstantInt* mat2Width;
+  Value* mat1;
+  Value* mat2;
+  Value* mat1Height;
+  Value* mat1Width;
+  Value* mat2Height;
+  Value* mat2Width;
   int argId = 0;
   for (Function::arg_iterator arg = func->arg_begin(); arg!=func->arg_end(); ++arg){
     ++argId;
@@ -266,19 +266,20 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 	  case 1:
 	  {
 		LOG(L2_DEBUG)<<"argId:" << argId;
-	    mat1 = MatrixInIR((Value*) &*arg, bb);
+	    mat1 = (Value*) &*arg;
 		break;
 	  }
 	  case 2:
 	  {
 		LOG(L2_DEBUG)<<"argId:" << argId;
-		mat2 = MatrixInIR((Value*) &*arg, bb);
+		mat2 = (Value*) &*arg;
 		break;
 	  }
 	  case 3:
 	  {
 		if(arg->getType()->isIntegerTy()){
-	      mat1Height = (ConstantInt*) &*arg;
+		  LOG(L2_DEBUG)<<"argId:" << argId;
+	      mat1Height = (Value*) &*arg;
 		}
 		else{
 		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
@@ -288,7 +289,8 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 	  case 4:
 	  {
 		if(arg->getType()->isIntegerTy()){
-	      mat1Width = (ConstantInt*) &*arg;
+		  LOG(L2_DEBUG)<<"argId:" << argId;
+	      mat1Width = (Value*) &*arg;
 		}
 		else{
 		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
@@ -298,7 +300,8 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 	  case 5:
 	  {
 		if(arg->getType()->isIntegerTy()){
-	      mat2Height = (ConstantInt*) &*arg;
+		  LOG(L2_DEBUG)<<"argId:" << argId;
+	      mat2Height = (Value*) &*arg;
 		}
 		else{
 		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
@@ -308,7 +311,8 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 	  case 6:
 	  {
 		if(arg->getType()->isIntegerTy()){
-	      mat2Width = (ConstantInt*) &*arg;
+		  LOG(L2_DEBUG)<<"argId:" << argId;
+	      mat2Width = (Value*) &*arg;
 		}
 		else{
 		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
@@ -326,9 +330,42 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   //TODO: Muliply the arg
 
   //TODO:
-  AllocaInst* allocaInst = new AllocaInst(l1PtrType,"", bb);
-  LoadInst* loadInst= new LoadInst((Value*) allocaInst,"",bb); 
-  ReturnInst* retInst = ReturnInst::Create(context, loadInst, bb);
+  AllocaInst* allocaInst = new AllocaInst(l1PtrType,"retval", entryBB);
+  AllocaInst* mat1AddrAllocaInst = new AllocaInst(l1PtrType,"mat1.addr", entryBB);
+  AllocaInst* mat2AddrAllocaInst = new AllocaInst(l1PtrType,"mat2.addr", entryBB);
+  AllocaInst* m1HeightAddrAllocaInst = new AllocaInst(i64Type,"m1Heigh.addr", entryBB);
+  AllocaInst* m1WidthAddrAllocaInst = new AllocaInst(i64Type,"m1Width.addr", entryBB);
+  AllocaInst* m2HeightAddrAllocaInst = new AllocaInst(i64Type,"m2Heigh.addr", entryBB);
+  AllocaInst* m2WidthAddrAllocaInst = new AllocaInst(i64Type,"m2Width.addr", entryBB);
+  AllocaInst* iAllocaInst = new AllocaInst(i64Type,"i", entryBB);
+  AllocaInst* jAllocaAllocaInst = new AllocaInst(i64Type,"j", entryBB);
+  AllocaInst* eleAllocaInst = new AllocaInst(i64Type,"ele", entryBB);
+  AllocaInst* kAllocaInst = new AllocaInst(i64Type,"k", entryBB);
+
+  StoreInst* mat1StoreInst = new StoreInst(mat1, (Value *) mat1AddrAllocaInst, entryBB);
+  StoreInst* mat2StoreInst = new StoreInst(mat2, (Value *) mat2AddrAllocaInst, entryBB);
+  StoreInst* m1HeightStoreInst = new StoreInst(mat1Height, (Value *) m1HeightAddrAllocaInst, entryBB);
+  StoreInst* m1WidthStoreInst = new StoreInst(mat1Width, (Value *) m1WidthAddrAllocaInst, entryBB);
+  StoreInst* m2HeightStoreInst = new StoreInst(mat2Height, (Value *) m2HeightAddrAllocaInst, entryBB);
+  StoreInst* m2WidthStoreInst = new StoreInst(mat2Width, (Value *) m2WidthAddrAllocaInst, entryBB);
+  
+  LoadInst* m1HeightLoadInst = new LoadInst((Value*) m1HeightAddrAllocaInst, "", entryBB);
+  LoadInst* m1WidthLoadInst = new LoadInst((Value*) m1WidthAddrAllocaInst, "", entryBB);
+  LoadInst* m2HeightLoadInst = new LoadInst((Value*) m2HeightAddrAllocaInst, "", entryBB);
+  LoadInst* m2WidthLoadInst = new LoadInst((Value*) m2WidthAddrAllocaInst, "", entryBB);
+
+  BinaryOperator* getMatSizeMul = BinaryOperator::CreateNUWMul((Value*) m1HeightLoadInst,(Value*) m2WidthLoadInst, "retMatSize", entryBB);
+
+  AllocaInst* vlaAllocaInst = new AllocaInst(i64Type,(Value *) getMatSizeMul,"vla", entryBB);
+  ICmpInst* icmpInst = new ICmpInst(*entryBB,CmpInst::ICMP_NE,(Value*) m1WidthLoadInst, (Value*) m2HeightLoadInst,"dimCheck");
+  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", func);
+  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", func);
+
+  BranchInst* dimCheckBranchInst = BranchInst::Create(ifDimCheckBB,ifDimCheckEndBB,icmpInst, entryBB);
+
+  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", func);
+  LoadInst* loadInst= new LoadInst((Value*) allocaInst,"",entryBB); 
+  ReturnInst* retInst = ReturnInst::Create(context, loadInst, entryBB);
 
   return func;
 }
