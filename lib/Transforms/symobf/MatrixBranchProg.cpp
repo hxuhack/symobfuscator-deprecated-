@@ -221,8 +221,12 @@ public:
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LOG(L2_DEBUG) << "GenMatMulFunc...";
   //We construct a type of 2-level int array as the type for the matrix. 
+
   Type* i64Type = IntegerType::getInt64Ty(context);
   Type* i32Type = IntegerType::getInt32Ty(context);
+
+  ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0); 
+  ConstantInt* conInt1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1); 
 
   PointerType* l2PtrType = PointerType::getUnqual(i64Type);
   PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
@@ -383,7 +387,6 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 
   //BasicBlock* if_dimCheckEnd
 
-  ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0); 
   StoreInst* iStoreInst = new StoreInst((Value*) conInt0, (Value*) iAllocaInst, ifDimCheckBB);
   BranchInst::Create(forCond1BB,ifDimCheckBB);
 
@@ -414,23 +417,66 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   
   //BasicBlock* for_body3
   LoadInst* eleLoadInst = new LoadInst((Value*) eleAllocaInst, "", forBody3BB);
+  //load an element from the first matrix
   LoadInst* mat1AddrLoadInst = new LoadInst((Value*) mat1AddrAllocaInst, "", forBody3BB);
-  BitCastInst* bitCastInst2 = new BitCastInst((Value*) mat1AddrLoadInst, l1PtrType, "", forBody3BB);
+  BitCastInst* bitCastInst2 = new BitCastInst((Value*) mat1AddrLoadInst, l2PtrType, "", forBody3BB);
   LoadInst* iLoadInst2 = new LoadInst((Value*) iAllocaInst, "", forBody3BB);
   BinaryOperator* bopMul1 = BinaryOperator::CreateNUWMul((Value*) m1WidthLoadInst, (Value*) iLoadInst2, "", forBody3BB);
+  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(i64Type, (Value*) bitCastInst2, bopMul1,"", forBody3BB);
+  LoadInst* kLoadInst2 = new LoadInst((Value*) kAllocaInst, "", forBody3BB);
+  GetElementPtrInst* getEPInst2 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInst, kLoadInst2,"", forBody3BB);
+  LoadInst* eLoadInst31 = new LoadInst((Value*) getEPInst2, "", forBody3BB);
 
+  //load an element from the first matrix
+  LoadInst* mat2AddrLoadInst = new LoadInst((Value*) mat2AddrAllocaInst, "", forBody3BB);
+  BitCastInst* bitCastInst3 = new BitCastInst((Value*) mat2AddrLoadInst, l2PtrType, "", forBody3BB);
+  LoadInst* kLoadInst3 = new LoadInst((Value*) kAllocaInst, "", forBody3BB);
+  BinaryOperator* bopMul3 = BinaryOperator::CreateNUWMul((Value*) m2WidthLoadInst, (Value*) kLoadInst2, "", forBody3BB);
+  GetElementPtrInst* getEPInst31 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) bitCastInst3, bopMul3,"", forBody3BB);
+  LoadInst* jLoadInst3 = new LoadInst((Value*) jAllocaInst, "", forBody3BB);
+  GetElementPtrInst* getEPInst32 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInst31, jLoadInst3,"", forBody3BB);
+  LoadInst* eLoadInst32 = new LoadInst((Value*) getEPInst32, "", forBody3BB);
+  BinaryOperator* bopMul32 = BinaryOperator::CreateNSWMul((Value*) eLoadInst31, (Value*) eLoadInst32, "", forBody3BB);
+  BinaryOperator* bopAdd31 = BinaryOperator::CreateNSWAdd((Value*) bopMul32, (Value*) eleLoadInst, "", forBody3BB);
+  StoreInst* eleStoreInst3 = new StoreInst((Value*) bopAdd31, (Value*) eleAllocaInst, forBody3BB);
+  BranchInst::Create(forInc1BB,forBody3BB);
+  
   //BasicBlock* for_inc1
+  LoadInst* kLoadInstInc1 = new LoadInst((Value*) kAllocaInst, "", forInc1BB);
+  BinaryOperator* bopAddInc1 = BinaryOperator::CreateNSWAdd((Value*) kLoadInstInc1, (Value*) conInt1, "", forInc1BB);
+  StoreInst* kStoreInstInc1 = new StoreInst((Value*) bopAddInc1, (Value*) kAllocaInst, forInc1BB);
+  BranchInst::Create(forCond3BB,forInc1BB);
   
   //BasicBlock* for_end1
+  LoadInst* eleLoadInstEnd1 = new LoadInst((Value*) eleAllocaInst, "", forEnd1BB);
+  LoadInst* jLoadInstEnd1 = new LoadInst((Value*) jAllocaInst, "", forEnd1BB);
+  LoadInst* iLoadInstEnd1 = new LoadInst((Value*) iAllocaInst, "", forEnd1BB);
+  BinaryOperator* bopMulEnd1 = BinaryOperator::CreateNSWMul((Value*) iLoadInstEnd1, (Value*) m2WidthLoadInst, "", forEnd1BB);
+  GetElementPtrInst* getEPInstEnd1 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) vlaAllocaInst, bopMulEnd1,"", forEnd1BB);
+  GetElementPtrInst* getEPInstEnd2 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInstEnd1, jLoadInstEnd1,"", forEnd1BB);
+  StoreInst* eleStoreInstEnd1 = new StoreInst((Value*) eleLoadInstEnd1, (Value*) getEPInstEnd2, forEnd1BB);
+  BranchInst::Create(forInc2BB,forEnd1BB);
   
   //BasicBlock* for_inc2
+  LoadInst* jLoadInstInc2 = new LoadInst((Value*) jAllocaInst, "", forInc2BB);
+  BinaryOperator* bopAddInc2 = BinaryOperator::CreateNSWAdd((Value*) jLoadInstInc2, (Value*) conInt1, "", forInc2BB);
+  StoreInst* jStoreInstInc2 = new StoreInst((Value*) bopAddInc2, (Value*) jAllocaInst, forInc2BB);
+  BranchInst::Create(forCond2BB,forInc2BB);
   
   //BasicBlock* for_end2
+  BranchInst::Create(forInc3BB,forEnd2BB);
   
   //BasicBlock* for_inc3
+  LoadInst* iLoadInstInc3 = new LoadInst((Value*) iAllocaInst, "", forInc3BB);
+  BinaryOperator* bopAddInc3 = BinaryOperator::CreateNSWAdd((Value*) iLoadInstInc3, (Value*) conInt1, "", forInc3BB);
+  StoreInst* iStoreInstInc3 = new StoreInst((Value*) bopAddInc3, (Value*) iAllocaInst, forInc3BB);
+  BranchInst::Create(forCond1BB,forInc3BB);
   
   //BasicBlock* for_end3
-  
+  BitCastInst* bitCastInstEnd3 = new BitCastInst((Value*) vlaAllocaInst, l1PtrType, "", forEnd3BB);
+  StoreInst* storeInstEnd3 = new StoreInst((Value*) bitCastInstEnd3, (Value*) retAllocaInst, forEnd3BB);
+  BranchInst::Create(cleanupBB,forEnd3BB);
+
   //BasicBlock* cleanup
   LoadInst* retLoadInst= new LoadInst((Value*) retAllocaInst,"",cleanupBB); 
   ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
