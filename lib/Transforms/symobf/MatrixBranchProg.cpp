@@ -55,6 +55,7 @@ public:
 	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
 	  //http://llvm.org/docs/GetElementPtr.html
 
+		  /* We should uncomment this section in the final version
       ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
       ConstantInt* idx1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
 	  vector<Value*> idxVec;
@@ -79,6 +80,7 @@ public:
 		conIntMatrix[i][j] = tmpConstInt;
 		StoreInst* storeInst = new StoreInst((Value *) tmpConstInt, (Value *) l2GetPEInst, icmpInst);
 	  }
+*/
 	}
   }
 
@@ -199,17 +201,22 @@ private:
 	tailMat = new MatrixInIR(icmpInst,dim,1,dim-1,0,boolType); //~bit
   }
 
-  void GenerateMMLogic(){
-	int numMatrix = matListInp0.size(); 
-    for(int i=0; i<numMatrix; i++){
-      //Create a CallInst
-    }
+  void GenerateMMLogic(ICmpInst* icmpInst){
+	LLVMContext& context = icmpInst->getContext();
+	Function* parentFunc = icmpInst->getFunction();
+	BasicBlock* parentBB = icmpInst->getParent();
+
+	BasicBlock* splitBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+
+    Type* i64Type = IntegerType::getInt64Ty(context);
+    ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,matListInp0.size()); 
+	//CallInst callInst = CallInst::Create("MatrixMult", ,"",icmpInst);
   }
 
 public:
   MBP(ICmpInst *icmpInst){
     GenerateMatrix(icmpInst);
-    GenerateMMLogic();//Matrix multiplication logic
+    GenerateMMLogic(icmpInst);//Matrix multiplication logic
   }
 };
 

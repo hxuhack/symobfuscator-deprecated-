@@ -18,6 +18,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
+#include "llvm/IR/SymbolTableListTraits.h"
 #include "Logger.hpp"
 #include <list>
 
