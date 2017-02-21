@@ -159,65 +159,74 @@ public:
 
 };
 
-class MBP{
 
-private:
+void ConvertIcmp2Mbp(ICmpInst *icmpInst){
+  LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
+  LLVMContext& context = icmpInst->getContext();
+  Function* parentFunc = icmpInst->getFunction();
+  BasicBlock* parentBB = icmpInst->getParent();
+
   MatrixInIR* headMat;
   MatrixInIR* tailMat;
-  MatrixInIR[2][] matListInp0;
+  list<MatrixInIR*> matListInp0;
+  list<MatrixInIR*> matListInp1;
 
-  void GenerateMatrix(ICmpInst *icmpInst){
-	LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
-	Type* type = icmpInst->getType();
-	Instruction::OtherOps opCode = icmpInst->getOpcode();
-	CmpInst::Predicate predicate = icmpInst->getPredicate();
-	Value* op0 = icmpInst->getOperand(0);
-	Value* op1 = icmpInst->getOperand(1);
-    if(!(isa<ConstantInt> (*op0) || isa<ConstantInt>(*op1))){
-		LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
-	}
 
-	ConstantInt* conInt;
-    if(isa<ConstantInt> (*op0))
-		conInt = (ConstantInt*)op0;
-	else	
-		conInt = (ConstantInt*)op1;
 
-	int len = conInt->getBitWidth();
-	int dim = len + 1;
-	IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
-	for(int i=0; i<len; i++){
-		bool bit = conInt->getValue()[i];
-		int idx_row = i;
-		int idx_col1 = i+1;
-		int idx_col2 = len;
-		MatrixInIR* mat1 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
-		MatrixInIR* mat0 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
-		matListInp0.push_back(mat0);
-		matListInp1.push_back(mat1);
-	}
-	headMat = new MatrixInIR(icmpInst,1,dim,0,0,boolType); //bit
-	tailMat = new MatrixInIR(icmpInst,dim,1,dim-1,0,boolType); //~bit
+  Type* type = icmpInst->getType();
+  Instruction::OtherOps opCode = icmpInst->getOpcode();
+  CmpInst::Predicate predicate = icmpInst->getPredicate();
+  Value* op0 = icmpInst->getOperand(0);
+  Value* op1 = icmpInst->getOperand(1);
+  if(!(isa<ConstantInt> (*op0) || isa<ConstantInt>(*op1))){
+	LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
   }
 
-  void GenerateMMLogic(ICmpInst* icmpInst){
-	LLVMContext& context = icmpInst->getContext();
-	Function* parentFunc = icmpInst->getFunction();
-	BasicBlock* parentBB = icmpInst->getParent();
+  ConstantInt* conInt;
+  if(isa<ConstantInt> (*op0))
+	conInt = (ConstantInt*)op0;
+  else	
+	conInt = (ConstantInt*)op1;
 
-	BasicBlock* forBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+  int len = conInt->getBitWidth();
+  int dim = len + 1;
+  IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
 
-    Type* i64Type = IntegerType::getInt64Ty(context);
-    ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,matListInp0.size()); 
-	//CallInst callInst = CallInst::Create("MatrixMult", ,"",icmpInst);
+  Type* i64Type = IntegerType::getInt64Ty(context);
+  Type* i32Type = IntegerType::getInt32Ty(context);
+
+  //We create an level-2 array that points to matrix 
+  PointerType* l2PtrType = PointerType::getUnqual(i64Type);
+  PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+  ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
+  ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
+
+  ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+  vector<Value*> idxVec;
+  idxVec.push_back(idx0);
+  idxVec.push_back(idx0);
+  ArrayRef<Value*> idxArrayRef(idxVec);
+  AllocaInst* matAllocaInst = new AllocaInst(l1MatArrayType,"matrix", icmpInst);
+  GetElementPtrInst* getEPl10Inst = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAllocaInst, idxArrayRef,"", icmpInst);
+
+  for(int i=0; i<len; i++){
+	bool bit = conInt->getValue()[i];
+	int idx_row = i;
+	int idx_col1 = i+1;
+	int idx_col2 = len;
+	MatrixInIR* mat1 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
+	MatrixInIR* mat0 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
+	matListInp0.push_back(mat0);
+	matListInp1.push_back(mat1);
   }
+  headMat = new MatrixInIR(icmpInst,1,dim,0,0,boolType); //bit
+  tailMat = new MatrixInIR(icmpInst,dim,1,dim-1,0,boolType); //~bit
 
-public:
-  MBP(ICmpInst *icmpInst){
-    GenerateMatrix(icmpInst);
-    GenerateMMLogic(icmpInst);//Matrix multiplication logic
-  }
-};
+
+  BasicBlock* forBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+
+  //CallInst callInst = CallInst::Create("MatrixMult", ,"",icmpInst);
+}
 
 /*
  *Function Define:
@@ -488,9 +497,4 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
 
   return func;
-}
-
-void ConvertIcmp2Mbp(ICmpInst *icmpInst){
-  LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
-  MBP* mbp = new MBP(icmpInst);
 }
