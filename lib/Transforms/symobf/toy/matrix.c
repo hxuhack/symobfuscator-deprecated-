@@ -25,35 +25,35 @@ int main(int argc, char** argv){
   inp[1] = argv[1][1]%2;
   int len = 2;
 
-  int mat[2][2][2][2]; 
 
-  mat[0][1][0][0] = 0;
-  mat[0][1][0][1] = 1;
-  mat[0][1][1][1] = 1;
-  mat[0][1][1][0] = 0;
+  int mat01[2][2], mat00[2][2], mat11[2][2], mat10[2][2];
+  mat01[0][0] = 0;
+  mat01[0][1] = 1;
+  mat01[1][1] = 1;
+  mat01[1][0] = 0;
   
 
-  mat[0][0][0][0] = 0;
-  mat[0][0][0][1] = 1;
-  mat[0][0][1][1] = 0;
-  mat[0][0][1][0] = 0;
+  mat00[0][0] = 0;
+  mat00[0][1] = 0;
+  mat00[1][1] = 0;
+  mat00[1][0] = 0;
 
-  mat[1][1][0][0] = 0;
-  mat[1][1][0][1] = 1;
-  mat[1][1][1][1] = 1;
-  mat[1][1][1][0] = 0;
+  mat11[0][0] = 0;
+  mat11[0][1] = 1;
+  mat11[1][1] = 1;
+  mat11[1][0] = 0;
   
 
-  mat[1][0][0][0] = 0;
-  mat[1][0][0][1] = 1;
-  mat[1][0][1][0] = 0;
-  mat[1][0][1][1] = 0;
+  mat10[0][0] = 0;
+  mat10[0][1] = 1;
+  mat10[1][0] = 0;
+  mat10[1][1] = 0;
 
-  int** selMat1;
-  int** selMat2;
+  int** mat[2][2] = {{mat00, mat01}, {mat10,  mat11}}; 
+
   int initMat[1][2] = {1,0};
-  int** interMat = MM(initMat, mat[0][inp[0]], 1,2,2,2);
+  int** interMat = MM(initMat, mat[inp[0]][0], 1,2,2,2);
   for(int i = 1; i<len;i++){
-      interMat = MM(interMat, mat[i][inp[i]], 1,2,2,2);
+      interMat = MM(interMat, mat[inp[i]][i], 1,2,2,2);
   }
 }

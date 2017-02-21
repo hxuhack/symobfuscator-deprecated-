@@ -171,9 +171,11 @@ entry:
   %argv.addr = alloca i8**, align 8
   %inp = alloca [2 x i32], align 4
   %len = alloca i32, align 4
-  %mat = alloca [2 x [2 x [2 x [2 x i32]]]], align 16
-  %selMat1 = alloca i32**, align 8
-  %selMat2 = alloca i32**, align 8
+  %mat01 = alloca [2 x [2 x i32]], align 16
+  %mat00 = alloca [2 x [2 x i32]], align 16
+  %mat11 = alloca [2 x [2 x i32]], align 16
+  %mat10 = alloca [2 x [2 x i32]], align 16
+  %mat = alloca [2 x [2 x i32**]], align 16
   %initMat = alloca [1 x [2 x i32]], align 4
   %interMat = alloca i32**, align 8
   %i = alloca i32, align 4
@@ -199,134 +201,118 @@ entry:
   %arrayidx7 = getelementptr inbounds [2 x i32], [2 x i32]* %inp, i64 0, i64 1
   store i32 %rem6, i32* %arrayidx7, align 4
   store i32 2, i32* %len, align 4
-  %arrayidx8 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx9 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx8, i64 0, i64 1
-  %arrayidx10 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx9, i64 0, i64 0
-  %arrayidx11 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx10, i64 0, i64 0
-  store i32 0, i32* %arrayidx11, align 16
-  %arrayidx12 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx13 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx12, i64 0, i64 1
-  %arrayidx14 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx13, i64 0, i64 0
-  %arrayidx15 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx14, i64 0, i64 1
-  store i32 1, i32* %arrayidx15, align 4
-  %arrayidx16 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx17 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx16, i64 0, i64 1
-  %arrayidx18 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx17, i64 0, i64 1
+  %arrayidx8 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat01, i64 0, i64 0
+  %arrayidx9 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx8, i64 0, i64 0
+  store i32 0, i32* %arrayidx9, align 16
+  %arrayidx10 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat01, i64 0, i64 0
+  %arrayidx11 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx10, i64 0, i64 1
+  store i32 1, i32* %arrayidx11, align 4
+  %arrayidx12 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat01, i64 0, i64 1
+  %arrayidx13 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx12, i64 0, i64 1
+  store i32 1, i32* %arrayidx13, align 4
+  %arrayidx14 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat01, i64 0, i64 1
+  %arrayidx15 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx14, i64 0, i64 0
+  store i32 0, i32* %arrayidx15, align 8
+  %arrayidx16 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 0
+  %arrayidx17 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx16, i64 0, i64 0
+  store i32 0, i32* %arrayidx17, align 16
+  %arrayidx18 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 0
   %arrayidx19 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx18, i64 0, i64 1
-  store i32 1, i32* %arrayidx19, align 4
-  %arrayidx20 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx21 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx20, i64 0, i64 1
-  %arrayidx22 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx21, i64 0, i64 1
+  store i32 0, i32* %arrayidx19, align 4
+  %arrayidx20 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 1
+  %arrayidx21 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx20, i64 0, i64 1
+  store i32 0, i32* %arrayidx21, align 4
+  %arrayidx22 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 1
   %arrayidx23 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx22, i64 0, i64 0
   store i32 0, i32* %arrayidx23, align 8
-  %arrayidx24 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx25 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx24, i64 0, i64 0
-  %arrayidx26 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx25, i64 0, i64 0
-  %arrayidx27 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx26, i64 0, i64 0
-  store i32 0, i32* %arrayidx27, align 16
-  %arrayidx28 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx29 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx28, i64 0, i64 0
-  %arrayidx30 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx29, i64 0, i64 0
-  %arrayidx31 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx30, i64 0, i64 1
-  store i32 1, i32* %arrayidx31, align 4
-  %arrayidx32 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx33 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx32, i64 0, i64 0
-  %arrayidx34 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx33, i64 0, i64 1
+  %arrayidx24 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat11, i64 0, i64 0
+  %arrayidx25 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx24, i64 0, i64 0
+  store i32 0, i32* %arrayidx25, align 16
+  %arrayidx26 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat11, i64 0, i64 0
+  %arrayidx27 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx26, i64 0, i64 1
+  store i32 1, i32* %arrayidx27, align 4
+  %arrayidx28 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat11, i64 0, i64 1
+  %arrayidx29 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx28, i64 0, i64 1
+  store i32 1, i32* %arrayidx29, align 4
+  %arrayidx30 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat11, i64 0, i64 1
+  %arrayidx31 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx30, i64 0, i64 0
+  store i32 0, i32* %arrayidx31, align 8
+  %arrayidx32 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i64 0, i64 0
+  %arrayidx33 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx32, i64 0, i64 0
+  store i32 0, i32* %arrayidx33, align 16
+  %arrayidx34 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i64 0, i64 0
   %arrayidx35 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx34, i64 0, i64 1
-  store i32 0, i32* %arrayidx35, align 4
-  %arrayidx36 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx37 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx36, i64 0, i64 0
-  %arrayidx38 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx37, i64 0, i64 1
-  %arrayidx39 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx38, i64 0, i64 0
-  store i32 0, i32* %arrayidx39, align 8
-  %arrayidx40 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx41 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx40, i64 0, i64 1
-  %arrayidx42 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx41, i64 0, i64 0
-  %arrayidx43 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx42, i64 0, i64 0
-  store i32 0, i32* %arrayidx43, align 16
-  %arrayidx44 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx45 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx44, i64 0, i64 1
-  %arrayidx46 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx45, i64 0, i64 0
-  %arrayidx47 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx46, i64 0, i64 1
-  store i32 1, i32* %arrayidx47, align 4
-  %arrayidx48 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx49 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx48, i64 0, i64 1
-  %arrayidx50 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx49, i64 0, i64 1
-  %arrayidx51 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx50, i64 0, i64 1
-  store i32 1, i32* %arrayidx51, align 4
-  %arrayidx52 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx53 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx52, i64 0, i64 1
-  %arrayidx54 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx53, i64 0, i64 1
-  %arrayidx55 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx54, i64 0, i64 0
-  store i32 0, i32* %arrayidx55, align 8
-  %arrayidx56 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx57 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx56, i64 0, i64 0
-  %arrayidx58 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx57, i64 0, i64 0
-  %arrayidx59 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx58, i64 0, i64 0
-  store i32 0, i32* %arrayidx59, align 16
-  %arrayidx60 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx61 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx60, i64 0, i64 0
-  %arrayidx62 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx61, i64 0, i64 0
-  %arrayidx63 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx62, i64 0, i64 1
-  store i32 1, i32* %arrayidx63, align 4
-  %arrayidx64 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx65 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx64, i64 0, i64 0
-  %arrayidx66 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx65, i64 0, i64 1
-  %arrayidx67 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx66, i64 0, i64 0
-  store i32 0, i32* %arrayidx67, align 8
-  %arrayidx68 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 1
-  %arrayidx69 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx68, i64 0, i64 0
-  %arrayidx70 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx69, i64 0, i64 1
-  %arrayidx71 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx70, i64 0, i64 1
-  store i32 0, i32* %arrayidx71, align 4
-  %6 = bitcast [1 x [2 x i32]]* %initMat to i8*
-  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %6, i8* bitcast ([1 x [2 x i32]]* @main.initMat to i8*), i64 8, i32 4, i1 false)
-  %arraydecay = getelementptr inbounds [1 x [2 x i32]], [1 x [2 x i32]]* %initMat, i32 0, i32 0
-  %7 = bitcast [2 x i32]* %arraydecay to i32**
-  %arrayidx72 = getelementptr inbounds [2 x i32], [2 x i32]* %inp, i64 0, i64 0
-  %8 = load i32, i32* %arrayidx72, align 4
-  %idxprom = sext i32 %8 to i64
-  %arrayidx73 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 0
-  %arrayidx74 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx73, i64 0, i64 %idxprom
-  %arraydecay75 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx74, i32 0, i32 0
-  %9 = bitcast [2 x i32]* %arraydecay75 to i32**
-  %call = call i32** @MM(i32** %7, i32** %9, i32 1, i32 2, i32 2, i32 2)
+  store i32 1, i32* %arrayidx35, align 4
+  %arrayidx36 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i64 0, i64 1
+  %arrayidx37 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx36, i64 0, i64 0
+  store i32 0, i32* %arrayidx37, align 8
+  %arrayidx38 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i64 0, i64 1
+  %arrayidx39 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx38, i64 0, i64 1
+  store i32 0, i32* %arrayidx39, align 4
+  %arrayinit.begin = getelementptr inbounds [2 x [2 x i32**]], [2 x [2 x i32**]]* %mat, i64 0, i64 0
+  %arrayinit.begin40 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayinit.begin, i64 0, i64 0
+  %arraydecay = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i32 0, i32 0
+  %6 = bitcast [2 x i32]* %arraydecay to i32**
+  store i32** %6, i32*** %arrayinit.begin40, align 8
+  %arrayinit.element = getelementptr inbounds i32**, i32*** %arrayinit.begin40, i64 1
+  %arraydecay41 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat01, i32 0, i32 0
+  %7 = bitcast [2 x i32]* %arraydecay41 to i32**
+  store i32** %7, i32*** %arrayinit.element, align 8
+  %arrayinit.element42 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayinit.begin, i64 1
+  %arrayinit.begin43 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayinit.element42, i64 0, i64 0
+  %arraydecay44 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i32 0, i32 0
+  %8 = bitcast [2 x i32]* %arraydecay44 to i32**
+  store i32** %8, i32*** %arrayinit.begin43, align 8
+  %arrayinit.element45 = getelementptr inbounds i32**, i32*** %arrayinit.begin43, i64 1
+  %arraydecay46 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat11, i32 0, i32 0
+  %9 = bitcast [2 x i32]* %arraydecay46 to i32**
+  store i32** %9, i32*** %arrayinit.element45, align 8
+  %10 = bitcast [1 x [2 x i32]]* %initMat to i8*
+  call void @llvm.memcpy.p0i8.p0i8.i64(i8* %10, i8* bitcast ([1 x [2 x i32]]* @main.initMat to i8*), i64 8, i32 4, i1 false)
+  %arraydecay47 = getelementptr inbounds [1 x [2 x i32]], [1 x [2 x i32]]* %initMat, i32 0, i32 0
+  %11 = bitcast [2 x i32]* %arraydecay47 to i32**
+  %arrayidx48 = getelementptr inbounds [2 x i32], [2 x i32]* %inp, i64 0, i64 0
+  %12 = load i32, i32* %arrayidx48, align 4
+  %idxprom = sext i32 %12 to i64
+  %arrayidx49 = getelementptr inbounds [2 x [2 x i32**]], [2 x [2 x i32**]]* %mat, i64 0, i64 %idxprom
+  %arrayidx50 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayidx49, i64 0, i64 0
+  %13 = load i32**, i32*** %arrayidx50, align 16
+  %call = call i32** @MM(i32** %11, i32** %13, i32 1, i32 2, i32 2, i32 2)
   store i32** %call, i32*** %interMat, align 8
   store i32 1, i32* %i, align 4
   br label %for.cond
 
 for.cond:                                         ; preds = %for.inc, %entry
-  %10 = load i32, i32* %i, align 4
-  %11 = load i32, i32* %len, align 4
-  %cmp = icmp slt i32 %10, %11
+  %14 = load i32, i32* %i, align 4
+  %15 = load i32, i32* %len, align 4
+  %cmp = icmp slt i32 %14, %15
   br i1 %cmp, label %for.body, label %for.end
 
 for.body:                                         ; preds = %for.cond
-  %12 = load i32**, i32*** %interMat, align 8
-  %13 = load i32, i32* %i, align 4
-  %idxprom77 = sext i32 %13 to i64
-  %arrayidx78 = getelementptr inbounds [2 x i32], [2 x i32]* %inp, i64 0, i64 %idxprom77
-  %14 = load i32, i32* %arrayidx78, align 4
-  %idxprom79 = sext i32 %14 to i64
-  %15 = load i32, i32* %i, align 4
-  %idxprom80 = sext i32 %15 to i64
-  %arrayidx81 = getelementptr inbounds [2 x [2 x [2 x [2 x i32]]]], [2 x [2 x [2 x [2 x i32]]]]* %mat, i64 0, i64 %idxprom80
-  %arrayidx82 = getelementptr inbounds [2 x [2 x [2 x i32]]], [2 x [2 x [2 x i32]]]* %arrayidx81, i64 0, i64 %idxprom79
-  %arraydecay83 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %arrayidx82, i32 0, i32 0
-  %16 = bitcast [2 x i32]* %arraydecay83 to i32**
-  %call84 = call i32** @MM(i32** %12, i32** %16, i32 1, i32 2, i32 2, i32 2)
-  store i32** %call84, i32*** %interMat, align 8
+  %16 = load i32**, i32*** %interMat, align 8
+  %17 = load i32, i32* %i, align 4
+  %idxprom52 = sext i32 %17 to i64
+  %18 = load i32, i32* %i, align 4
+  %idxprom53 = sext i32 %18 to i64
+  %arrayidx54 = getelementptr inbounds [2 x i32], [2 x i32]* %inp, i64 0, i64 %idxprom53
+  %19 = load i32, i32* %arrayidx54, align 4
+  %idxprom55 = sext i32 %19 to i64
+  %arrayidx56 = getelementptr inbounds [2 x [2 x i32**]], [2 x [2 x i32**]]* %mat, i64 0, i64 %idxprom55
+  %arrayidx57 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayidx56, i64 0, i64 %idxprom52
+  %20 = load i32**, i32*** %arrayidx57, align 8
+  %call58 = call i32** @MM(i32** %16, i32** %20, i32 1, i32 2, i32 2, i32 2)
+  store i32** %call58, i32*** %interMat, align 8
   br label %for.inc
 
 for.inc:                                          ; preds = %for.body
-  %17 = load i32, i32* %i, align 4
-  %inc = add nsw i32 %17, 1
+  %21 = load i32, i32* %i, align 4
+  %inc = add nsw i32 %21, 1
   store i32 %inc, i32* %i, align 4
   br label %for.cond
 
 for.end:                                          ; preds = %for.cond
-  %18 = load i32, i32* %retval, align 4
-  ret i32 %18
+  %22 = load i32, i32* %retval, align 4
+  ret i32 %22
 }
 
 ; Function Attrs: argmemonly nounwind

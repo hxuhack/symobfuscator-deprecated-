@@ -164,8 +164,7 @@ class MBP{
 private:
   MatrixInIR* headMat;
   MatrixInIR* tailMat;
-  list<MatrixInIR*> matListInp0;
-  list<MatrixInIR*> matListInp1;
+  MatrixInIR[2][] matListInp0;
 
   void GenerateMatrix(ICmpInst *icmpInst){
 	LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
@@ -206,7 +205,7 @@ private:
 	Function* parentFunc = icmpInst->getFunction();
 	BasicBlock* parentBB = icmpInst->getParent();
 
-	BasicBlock* splitBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+	BasicBlock* forBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
 
     Type* i64Type = IntegerType::getInt64Ty(context);
     ConstantInt* conInt0 = (ConstantInt*) ConstantInt::getSigned(i64Type,matListInp0.size()); 
