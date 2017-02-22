@@ -20,9 +20,6 @@ int** MM(const int** mat1, const int** mat2, int m1Height, int m1Width, int m2He
 }
 
 int main(int argc, char** argv){
-  int inp[2];
-  inp[0] = argv[1][0]%2;
-  inp[1] = argv[1][1]%2;
   int len = 2;
 
 
@@ -52,8 +49,12 @@ int main(int argc, char** argv){
   int** mat[2][2] = {{mat00, mat01}, {mat10,  mat11}}; 
 
   int initMat[1][2] = {1,0};
-  int** interMat = MM(initMat, mat[inp[0]][0], 1,2,2,2);
+  int inp = (argc & 1);
+
+  int** interMat = MM(initMat, mat[inp][0], 1,2,2,2);
   for(int i = 1; i<len;i++){
-      interMat = MM(interMat, mat[inp[i]][i], 1,2,2,2);
+	  //To get the k-th bit of n: (n & ( 1 << k )) >> k;
+	  inp = (argc & (1<<i)) >> i;
+      interMat = MM(interMat, mat[inp][i], 1,2,2,2);
   }
 }

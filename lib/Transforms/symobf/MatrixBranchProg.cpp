@@ -9,8 +9,9 @@ class MatrixInIR{
 private:
   int width = 0;
   int height = 0;
+  AllocaInst* matAllocaInst;
+
 public:
-  ConstantInt*** conIntMatrix;
 //TODO: Impelemt array structure in IR.
 /*
   %mat = alloca [2 x [2 x i32]], align 16
@@ -36,7 +37,7 @@ public:
 
   MatrixInIR(ICmpInst* icmpInst, const int width, const int height, int idx_row, int idx_col, Type* type):width(width),height(height){
 
-	conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
+    ConstantInt*** conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
 
 	//Construct an allocaInst:
 	//AllocaInst (Type *Ty, const Twine &Name="", Instruction *InsertBefore=nullptr)
@@ -45,7 +46,7 @@ public:
 	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
 	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
 
-	AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
+	matAllocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
 
 
 	for(int i=0; i<height; i++){
@@ -54,15 +55,14 @@ public:
 	  //Construct an GetElementPtrInst;
 	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
 	  //http://llvm.org/docs/GetElementPtr.html
-
-		  /* We should uncomment this section in the final version
+		  /*
       ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
       ConstantInt* idx1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
 	  vector<Value*> idxVec;
 	  idxVec.push_back(idx0);
 	  idxVec.push_back(idx1);
 	  ArrayRef<Value*> idxArrayRef(idxVec);
-	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) allocaInst, idxArrayRef,"", icmpInst);
+	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAllocaInst, idxArrayRef,"", icmpInst);
 
 	  for(int j=0; j<width; j++){
         ConstantInt* idx2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
@@ -80,16 +80,17 @@ public:
 		conIntMatrix[i][j] = tmpConstInt;
 		StoreInst* storeInst = new StoreInst((Value *) tmpConstInt, (Value *) l2GetPEInst, icmpInst);
 	  }
-*/
+	  */
 	}
   }
 
   MatrixInIR(ICmpInst* icmpInst, const int width, const int height):width(width),height(height){
+    ConstantInt*** conIntMatrix = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
 	Type* i64Type = IntegerType::getInt64Ty(icmpInst->getContext());
 	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
 	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
 
-	AllocaInst* allocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
+	matAllocaInst = new AllocaInst(l1ArrayType,"", icmpInst);
 
 
 	for(int i=0; i<height; i++){
@@ -101,7 +102,7 @@ public:
 	  idxVec.push_back(idx0);
 	  idxVec.push_back(idx1);
 	  ArrayRef<Value*> idxArrayRef(idxVec);
-	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) allocaInst, idxArrayRef,"", icmpInst);
+	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAllocaInst, idxArrayRef,"", icmpInst);
 
 	  for(int j=0; j<width; j++){
         ConstantInt* idx2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
@@ -129,6 +130,10 @@ public:
 
   //Constant has to be loaded
   void CreateLoadInst(){
+  }
+
+  AllocaInst* getMatAllocaInst(){
+	return matAllocaInst; 
   }
 
   int GetWidth(){
@@ -183,10 +188,15 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
   }
 
   ConstantInt* conInt;
-  if(isa<ConstantInt> (*op0))
+  IntegerType* inp;
+  if(isa<ConstantInt> (*op0)){
 	conInt = (ConstantInt*)op0;
-  else	
+	inp = (IntegerType*) op1;
+  }
+  else{	
+	inp = (IntegerType*) op0;
 	conInt = (ConstantInt*)op1;
+  }
 
   int len = conInt->getBitWidth();
   int dim = len + 1;
@@ -194,6 +204,8 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
 
   Type* i64Type = IntegerType::getInt64Ty(context);
   Type* i32Type = IntegerType::getInt32Ty(context);
+  ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
+  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
 
   //We create an level-2 array that points to matrix 
   PointerType* l2PtrType = PointerType::getUnqual(i64Type);
@@ -201,13 +213,19 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
   ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
   ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
 
-  ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-  vector<Value*> idxVec;
-  idxVec.push_back(idx0);
-  idxVec.push_back(idx0);
-  ArrayRef<Value*> idxArrayRef(idxVec);
   AllocaInst* matAllocaInst = new AllocaInst(l1MatArrayType,"matrix", icmpInst);
-  GetElementPtrInst* getEPl10Inst = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAllocaInst, idxArrayRef,"", icmpInst);
+
+  ConstantInt* idx0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+  ConstantInt* idx1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
+  vector<Value*> idxVec0,idxVec1;
+  idxVec0.push_back(idx0);
+  idxVec0.push_back(idx0);
+  ArrayRef<Value*> idxArrayRef0(idxVec0);
+  idxVec1.push_back(idx0);
+  idxVec1.push_back(idx1);
+  ArrayRef<Value*> idxArrayRef1(idxVec1);
+  GetElementPtrInst* getEPl10Inst = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAllocaInst, idxArrayRef0,"", icmpInst);
+  GetElementPtrInst* getEPl11Inst = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAllocaInst, idxArrayRef1,"", icmpInst);
 
   for(int i=0; i<len; i++){
 	bool bit = conInt->getValue()[i];
@@ -216,16 +234,62 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
 	int idx_col2 = len;
 	MatrixInIR* mat1 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col1,boolType); //bit
 	MatrixInIR* mat0 = new MatrixInIR(icmpInst,dim,dim,idx_row,idx_col2,boolType); //~bit
+    ConstantInt* idxi = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+    vector<Value*> idxVeci;
+    idxVeci.push_back(idx0);
+    idxVeci.push_back(idxi);
+    ArrayRef<Value*> idxArrayRefi(idxVeci);
+    GetElementPtrInst* getEPl20Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getEPl10Inst, idxArrayRefi,"", icmpInst);
+    GetElementPtrInst* getEPl21Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getEPl11Inst, idxArrayRefi,"", icmpInst);
+
+
+    GetElementPtrInst* getEPMat0Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAllocaInst(), idxArrayRef0,"", icmpInst);
+    GetElementPtrInst* getEPMat1Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat1->getMatAllocaInst(), idxArrayRef0,"", icmpInst);
+
+    BitCastInst* mat0BCI = new BitCastInst((Value*) getEPMat0Inst, l1PtrType, "", icmpInst);
+    BitCastInst* mat1BCI = new BitCastInst((Value*) getEPMat1Inst, l1PtrType, "", icmpInst);
+
+    StoreInst* mat0StoreInst = new StoreInst(mat0BCI, (Value *) getEPl20Inst, icmpInst);
+    StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) getEPl21Inst, icmpInst);
+
 	matListInp0.push_back(mat0);
 	matListInp1.push_back(mat1);
   }
   headMat = new MatrixInIR(icmpInst,1,dim,0,0,boolType); //bit
   tailMat = new MatrixInIR(icmpInst,dim,1,dim-1,0,boolType); //~bit
 
+  //Init the parameter for the for loop; 
+  AllocaInst* iAllocaInst = new AllocaInst(i64Type,"", icmpInst);
+  StoreInst* iStoreInst = new StoreInst(idx1, (Value *) iAllocaInst, icmpInst);
+  AllocaInst* lenAllocaInst = new AllocaInst(i64Type,"", icmpInst);
+  ConstantInt* lenCI = (ConstantInt*) ConstantInt::getSigned(i64Type,len);
+  StoreInst* lenStoreInst = new StoreInst(lenCI, (Value *) lenAllocaInst, icmpInst);
 
-  BasicBlock* forBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+  inp 
+  AllocaInst* interMatAI = new AllocaInst(l1PtrType,"interMat",icmpInst);
 
-  //CallInst callInst = CallInst::Create("MatrixMult", ,"",icmpInst);
+  CallInst callInst = CallInst::Create("MatrixMult", headMat->getMatAllocaInst(),"",icmpInst);
+/*
+  std::list<BasicBlock *> basicBlocks;
+  for (Function::iterator bbIt=parentFunc.begin();bbIt!=parentFunc.end();++bbIt) {
+	basicBlocks.push_back((BasicBlock *) bbIt);
+  }
+*/
+  BasicBlock* forCondBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
+  BasicBlock* forBodyBB = forCondBB->splitBasicBlock(icmpInst, "for_body_loop");
+  forCondBB->getTerminator()->eraseFromParent();
+  
+  BasicBlock* forIncBB = forBodyBB->splitBasicBlock(icmpInst, "for_inc_loop");
+  BasicBlock* forEndBB = forIncBB->splitBasicBlock(icmpInst, "for_end_loop");
+  forIncBB->getTerminator()->eraseFromParent();
+
+  BasicBlock* contBB = forEndBB->splitBasicBlock(icmpInst, "entry_continue");
+
+  LoadInst* iLoadInst = new LoadInst((Value*) iAllocaInst, "", forCondBB);
+  LoadInst* lenLoadInst = new LoadInst((Value*) lenAllocaInst, "", forCondBB);
+  ICmpInst* forII = new ICmpInst(*forCondBB,CmpInst::ICMP_SLT,(Value*) iLoadInst, (Value*) lenLoadInst,"");
+  BranchInst::Create(forBodyBB,forEndBB, forII, forCondBB);
+
 }
 
 /*
