@@ -324,6 +324,7 @@ struct ModuObf : public ModulePass {
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
 	    ConvertIcmp2Mbp((ICmpInst*)inst, funcMM);
+		inst->eraseFromParent();
 	  }
 	}
     //PrintIR(&F);
