@@ -3,7 +3,6 @@
 using namespace llvm;
 using namespace std;
 
-
 class MatrixInIR{
 
 private:
@@ -132,7 +131,7 @@ public:
   void CreateLoadInst(){
   }
 
-  AllocaInst* getMatAllocaInst(){
+  AllocaInst* getMatAI(){
 	return matAI; 
   }
 
@@ -165,7 +164,7 @@ public:
 };
 
 
-void ConvertIcmp2Mbp(ICmpInst *icmpInst){
+void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
   LLVMContext& context = icmpInst->getContext();
   Function* parentFunc = icmpInst->getFunction();
@@ -248,8 +247,8 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
     GetElementPtrInst* getEPl21Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getEPl11Inst, ar0i,"", icmpInst);
 
 
-    GetElementPtrInst* getEPMat0Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAllocaInst(), ar00,"", icmpInst);
-    GetElementPtrInst* getEPMat1Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat1->getMatAllocaInst(), ar00,"", icmpInst);
+    GetElementPtrInst* getEPMat0Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", icmpInst);
+    GetElementPtrInst* getEPMat1Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat1->getMatAI(), ar00,"", icmpInst);
 
     BitCastInst* mat0BCI = new BitCastInst((Value*) getEPMat0Inst, l1PtrType, "", icmpInst);
     BitCastInst* mat1BCI = new BitCastInst((Value*) getEPMat1Inst, l1PtrType, "", icmpInst);
@@ -282,19 +281,24 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst){
   ArrayRef<Value*> ar0li(vec0li);
   GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, ar0li,"", icmpInst);
   GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getBinEPI, ar00,"", icmpInst);
+  LoadInst* ldMatLI = new LoadInst(getLenEPI,"",icmpInst);
+
+  BitCastInst* headMatBI = new BitCastInst((Value*) headMat->getMatAI(), l1PtrType, "", icmpInst);
+
   AllocaInst* interMatAI = new AllocaInst(l1PtrType,"interMat",icmpInst);
   
   vector<Value*> vecMM;
-  vecMM.push_back(headMat->getMatAllocaInst());
-  vecMM.push_back(getLenEPI);
+  vecMM.push_back(headMatBI);
+  vecMM.push_back(ldMatLI);
   vecMM.push_back(ci1);
   vecMM.push_back(ciDim);
   vecMM.push_back(ciDim);
   vecMM.push_back(ciDim);
   ArrayRef<Value*> arMM(vecMM);
-  //TODO:
-  //CallInst mmCI = CallInst::Create(mmFunc, arMM,"",icmpInst);
+  CallInst* mmCI = CallInst::Create(calleeMM, arMM, "", icmpInst);
   //StoreInst* matSI = new StoreInst((Value *) mmCI, interMatAI, icmpInst);
+
+  StoreInst* interMatSI = new StoreInst((Value*) mmCI, interMatAI, "", icmpInst);
 
   BasicBlock* forCondBB = parentBB->splitBasicBlock(icmpInst, "for_cond_loop");
   BasicBlock* forBodyBB = forCondBB->splitBasicBlock(icmpInst, "for_body_loop");
@@ -349,24 +353,24 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   //We define the function name as "MatrixMult"
   const Twine* funcName = new Twine("MatrixMult");
   //Params: (FunctionType *Ty, LinkageTypes Linkage, const Twine &N="", Module *M=nullptr)
-  Function* func = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
+  Function* funcMM = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
 
-  BasicBlock* entryBB = BasicBlock::Create(context, "entry", func);
-  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", func);
-  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", func);
-  BasicBlock* forCond1BB = BasicBlock::Create(context, "for_cond1", func);
-  BasicBlock* forBody1BB = BasicBlock::Create(context, "for_body1", func);
-  BasicBlock* forCond2BB = BasicBlock::Create(context, "for_cond2", func);
-  BasicBlock* forBody2BB = BasicBlock::Create(context, "for_body2", func);
-  BasicBlock* forCond3BB = BasicBlock::Create(context, "for_cond3", func);
-  BasicBlock* forBody3BB = BasicBlock::Create(context, "for_body3", func);
-  BasicBlock* forInc1BB = BasicBlock::Create(context, "for_inc1", func);
-  BasicBlock* forEnd1BB = BasicBlock::Create(context, "for_end1", func);
-  BasicBlock* forInc2BB = BasicBlock::Create(context, "for_inc2", func);
-  BasicBlock* forEnd2BB = BasicBlock::Create(context, "for_end2", func);
-  BasicBlock* forInc3BB = BasicBlock::Create(context, "for_inc3", func);
-  BasicBlock* forEnd3BB = BasicBlock::Create(context, "for_end3", func);
-  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", func);
+  BasicBlock* entryBB = BasicBlock::Create(context, "entry", funcMM);
+  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", funcMM);
+  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", funcMM);
+  BasicBlock* forCond1BB = BasicBlock::Create(context, "for_cond1", funcMM);
+  BasicBlock* forBody1BB = BasicBlock::Create(context, "for_body1", funcMM);
+  BasicBlock* forCond2BB = BasicBlock::Create(context, "for_cond2", funcMM);
+  BasicBlock* forBody2BB = BasicBlock::Create(context, "for_body2", funcMM);
+  BasicBlock* forCond3BB = BasicBlock::Create(context, "for_cond3", funcMM);
+  BasicBlock* forBody3BB = BasicBlock::Create(context, "for_body3", funcMM);
+  BasicBlock* forInc1BB = BasicBlock::Create(context, "for_inc1", funcMM);
+  BasicBlock* forEnd1BB = BasicBlock::Create(context, "for_end1", funcMM);
+  BasicBlock* forInc2BB = BasicBlock::Create(context, "for_inc2", funcMM);
+  BasicBlock* forEnd2BB = BasicBlock::Create(context, "for_end2", funcMM);
+  BasicBlock* forInc3BB = BasicBlock::Create(context, "for_inc3", funcMM);
+  BasicBlock* forEnd3BB = BasicBlock::Create(context, "for_end3", funcMM);
+  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", funcMM);
   IRBuilder<> builder(entryBB);
 
   //Get the two matrix from arguments
@@ -377,7 +381,7 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   Value* mat2Height;
   Value* mat2Width;
   int argId = 0;
-  for (Function::arg_iterator arg = func->arg_begin(); arg!=func->arg_end(); ++arg){
+  for (Function::arg_iterator arg = funcMM->arg_begin(); arg!=funcMM->arg_end(); ++arg){
     ++argId;
 	switch (argId)
 	{
@@ -580,5 +584,5 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LoadInst* retLoadInst= new LoadInst((Value*) retAllocaInst,"",cleanupBB); 
   ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
 
-  return func;
+  return funcMM;
 }

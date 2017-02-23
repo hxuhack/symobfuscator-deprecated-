@@ -294,38 +294,25 @@ struct ModuObf : public ModulePass {
   ModuObf() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
 
   //Entry function
-  virtual bool runOnModule(Module &m){
-    LOG(L2_DEBUG) << "Entering runOnModule...: " << m.getName().str();
+  virtual bool runOnModule(Module &module){
+    LOG(L2_DEBUG) << "Entering runOnModule...: " << module.getName().str();
     //Generate the function for matrix multiplication
-    Function* funcMatMul = GenMatMulFunc(m.getContext(),m);
-	
-  }
-
-};
-}
-
-namespace {
-struct FuncObf : public FunctionPass {
-  static char ID; 
-  FuncObf() : FunctionPass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
-
-  //Entry function
-  virtual bool runOnFunction(Function &F){
-    LOG(L2_DEBUG) << "Entering runOnFunction...Function: " << F.getName().str();
-    const DataLayout &dataLayout = F.getParent()->getDataLayout();
-    //const TargetLibraryInfo *targetLib = &getAnalysis<TargetLibraryInfoWrapperPass>().getTLI();
+    const DataLayout &dataLayout = module.getDataLayout();
     TaintEngine taintEngine(dataLayout);
-
-    //taintEngine.MarkBlockExecutable(&F.front());
+	
+    for(Module::iterator mIt = module.begin(); mIt != module.end(); ++mIt){
+	  Function*  func = (Function*) mIt;
     // Set taint source: all arguments
-    for (Function::arg_iterator argIt = F.arg_begin(); argIt != F.arg_end(); ++argIt){
-      Value *argValue = &*argIt;
-      LOG(L2_DEBUG) << "Argument: " << argValue->getName().str();
-      taintEngine.SetSource(argValue);
-    }
+      for (Function::arg_iterator argIt = func->arg_begin(); argIt != func->arg_end(); ++argIt){
+        Value *argValue = &*argIt;
+        LOG(L2_DEBUG) << "Argument: " << argValue->getName().str();
+        taintEngine.SetSource(argValue);
+      }
+	}
     
     taintEngine.Propagate();
     //PrintIR(taintEngine.taintedInstList);
+    Function* funcMM = GenMatMulFunc(module.getContext(),module);
 
 /*
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
@@ -336,7 +323,7 @@ struct FuncObf : public FunctionPass {
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	    ConvertIcmp2Mbp((ICmpInst*)inst);
+	    ConvertIcmp2Mbp((ICmpInst*)inst, funcMM);
 	  }
 	}
     //PrintIR(&F);
@@ -350,9 +337,6 @@ struct FuncObf : public FunctionPass {
 };
 
 }
-
-char FuncObf::ID = 0;
-static RegisterPass<FuncObf> X("fobf", "obfuscate llvm instructions");
 
 char ModuObf::ID = 1;
 static RegisterPass<ModuObf> Y("mobf", "module level modification, add functions");
