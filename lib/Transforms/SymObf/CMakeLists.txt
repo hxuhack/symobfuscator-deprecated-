@@ -1,4 +1,4 @@
-add_llvm_loadable_module(symobf 
+add_llvm_loadable_module(LLVMSymObf 
   #TaintEngine.cpp
   Utils.cpp
   BranchProg.cpp
@@ -6,4 +6,4 @@ add_llvm_loadable_module(symobf
   BoolProg.cpp
   SymObf.cpp
 )
-add_dependencies(symobf intrinsics_gen)
+add_dependencies(LLVMSymObf intrinsics_gen)
