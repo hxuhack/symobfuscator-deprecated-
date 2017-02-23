@@ -1,5 +1,5 @@
-#ifndef _SYMOBF_BOOLPROG_HPP_
-#define _SYMOBF_BOOLPROG_HPP_
+#ifndef _SYMOBF_SYMOBF_H_
+#define _SYMOBF_SYMOBF_H_
 
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/ADT/Statistic.h"
@@ -11,18 +11,22 @@
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/IRBuilder.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
-#include "Logger.hpp"
+#include "llvm/Transforms/SymObf/Logger.h"
+#include "llvm/Transforms/SymObf/Utils.h"
+#include "llvm/Transforms/SymObf/BoolProg.h"
+#include "llvm/Transforms/SymObf/BranchProg.h"
+#include "llvm/Transforms/SymObf/MatrixBranchProg.h"
 #include <list>
 
-
-std::list<llvm::ConstantInt*> ConvertConstInt2Bool(llvm::ConstantInt*);
-std::list<llvm::Value*> ConvertVal2Bool(llvm::Value *);
-llvm::BasicBlock* ConvertInst2Bool(llvm::Instruction *);
+namespace llvm{
+  Pass* CreateSymObf(bool flag);
+}
 
 #endif

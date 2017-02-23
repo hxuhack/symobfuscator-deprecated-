@@ -38,6 +38,7 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Scalar/GVN.h"
 #include "llvm/Transforms/Vectorize.h"
+#include "llvm/Transforms/SymObf/SymObf.h"
 
 using namespace llvm;
 
@@ -137,6 +138,10 @@ static cl::opt<int> PreInlineThreshold(
 static cl::opt<bool> EnableGVNHoist(
     "enable-gvn-hoist", cl::init(false), cl::Hidden,
     cl::desc("Enable the experimental GVN Hoisting pass"));
+
+static cl::opt<bool> symObfFlag(
+    "symobf", cl::init(false),
+    cl::desc("Enable the symbolic obfuscation"));
 
 PassManagerBuilder::PassManagerBuilder() {
     OptLevel = 2;
@@ -243,6 +248,7 @@ void PassManagerBuilder::populateFunctionPassManager(
 
 // Do PGO instrumentation generation or use pass as the option specified.
 void PassManagerBuilder::addPGOInstrPasses(legacy::PassManagerBase &MPM) {
+  MPM.add(CreateSymObf(symObfFlag));
   if (PGOInstrGen.empty() && PGOInstrUse.empty())
     return;
   // Perform the preinline and cleanup passes for O1 and above.

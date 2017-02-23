@@ -1,5 +1,5 @@
-#ifndef _SYMOBF_MATRIXBRANCHPROG_HPP_
-#define _SYMOBF_MATRIXBRANCHPROG_HPP_
+#ifndef _SYMOBF_BOOLPROG_HPP_
+#define _SYMOBF_BOOLPROG_HPP_
 
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/ADT/Statistic.h"
@@ -14,16 +14,15 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/IRBuilder.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
-#include "llvm/IR/SymbolTableListTraits.h"
-#include "Logger.hpp"
+#include "Logger.h"
 #include <list>
 
 
-llvm::Function* GenMatMulFunc(llvm::LLVMContext &, llvm::Module &);
-void ConvertIcmp2Mbp(llvm::ICmpInst *, llvm::Function *);
+std::list<llvm::ConstantInt*> ConvertConstInt2Bool(llvm::ConstantInt*);
+std::list<llvm::Value*> ConvertVal2Bool(llvm::Value *);
+llvm::BasicBlock* ConvertInst2Bool(llvm::Instruction *);
 
 #endif

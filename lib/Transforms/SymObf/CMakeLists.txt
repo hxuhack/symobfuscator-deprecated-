@@ -4,6 +4,6 @@ add_llvm_loadable_module(symobf
   BranchProg.cpp
   MatrixBranchProg.cpp
   BoolProg.cpp
-  Taint.cpp
+  SymObf.cpp
 )
-
+add_dependencies(symobf intrinsics_gen)

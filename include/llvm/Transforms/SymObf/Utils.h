@@ -1,5 +1,5 @@
-#ifndef _SYMOBF_BRANCHPROG_HPP_
-#define _SYMOBF_BRANCHPROG_HPP_
+#ifndef _SYMOBF_UTILS_H_
+#define _SYMOBF_UTILS_H_
 
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/ADT/Statistic.h"
@@ -17,10 +17,10 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
-#include "Logger.hpp"
+#include "Logger.h"
 #include <list>
 
-
-llvm::BasicBlock* ConvertIcmp2BranProg(llvm::ICmpInst *);
+void PrintIR(llvm::Function *);
+void PrintIR(std::list<llvm::Instruction*>);
 
 #endif

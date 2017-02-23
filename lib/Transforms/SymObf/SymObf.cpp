@@ -15,29 +15,7 @@ ICmpInst
 (Value*) dest = Opcode  Operand(0), Operand(1)
 =========================================================
 */
-#include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/DenseSet.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/Pass.h"
-#include "llvm/IR/Module.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/IR/InstVisitor.h"
-#include "llvm/IR/DataLayout.h"
-#include "llvm/Analysis/ConstantFolding.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/InitializePasses.h"
-#include "Logger.hpp"
-#include "Utils.hpp"
-#include "BoolProg.hpp"
-#include "BranchProg.hpp"
-#include "MatrixBranchProg.hpp"
-#include <list> 
+#include "llvm/Transforms/SymObf/SymObf.h"
 
 using namespace llvm;
 using namespace std;
@@ -289,9 +267,9 @@ void TaintEngine::Propagate(){
 
 
 namespace {
-struct ModuObf : public ModulePass {
+struct SymObf : public ModulePass {
   static char ID; 
-  ModuObf() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
+  SymObf() : ModulePass(ID) {} //initializeSymobfPass(*PassRegistry::getPassRegistry());
 
   //Entry function
   virtual bool runOnModule(Module &module){
@@ -339,5 +317,10 @@ struct ModuObf : public ModulePass {
 
 }
 
-char ModuObf::ID = 1;
-static RegisterPass<ModuObf> Y("mobf", "module level modification, add functions");
+char SymObf::ID = 1;
+static RegisterPass<SymObf> Y("symobf", "symbolic obfuscation");
+
+Pass* llvm::CreateSymObf(bool flag) {
+	if(flag)
+	  return new SymObf();
+}

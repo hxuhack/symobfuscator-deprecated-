@@ -1,4 +1,4 @@
-#include "BoolProg.hpp"
+#include "llvm/Transforms/SymObf/BoolProg.h"
 
 using namespace llvm;
 using namespace std;
