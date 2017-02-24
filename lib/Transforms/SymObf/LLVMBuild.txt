@@ -3,4 +3,3 @@ type = Library
 name = SymObf
 parent = Transforms
 library_name = SymObf
-

@@ -469,3 +469,6 @@ N: Bob Wilson
 E: bob.wilson@acm.org
 D: Advanced SIMD (NEON) support in the ARM backend.
 
+N: Hui Xu
+E: china.xuhui@gmail.com
+D: lib/Transformations/SymObf
