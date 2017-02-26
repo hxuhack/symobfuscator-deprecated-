@@ -54,7 +54,6 @@ public:
 	  //Construct an GetElementPtrInst;
 	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
 	  //http://llvm.org/docs/GetElementPtr.html
-		  /*
       ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
       ConstantInt* ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
 	  vector<Value*> conIntVec;
@@ -79,7 +78,6 @@ public:
 		conIntMatrix[i][j] = tmpConstInt;
 		StoreInst* storeInst = new StoreInst((Value *) tmpConstInt, (Value *) l2GetPEInst, bb);
 	  }
-	  */
 	}
   }
 
