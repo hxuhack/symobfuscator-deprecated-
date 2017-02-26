@@ -169,8 +169,8 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   LLVMContext& context = icmpInst->getContext();
   Function* parentFunc = icmpInst->getFunction();
   BasicBlock* pBB = icmpInst->getParent();
-
   BasicBlock* forCondBB = pBB->splitBasicBlock(icmpInst, "for_cond_loop");
+  pBB->getTerminator()->eraseFromParent();
   BasicBlock* forBodyBB = forCondBB->splitBasicBlock(icmpInst, "for_body_loop");
   forCondBB->getTerminator()->eraseFromParent();
   BasicBlock* forIncBB = forBodyBB->splitBasicBlock(icmpInst, "for_inc_loop");
@@ -305,6 +305,7 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   //StoreInst* matSI = new StoreInst((Value *) mmCI, interMatAI, pBB);
 
   StoreInst* interMatSI = new StoreInst((Value*) mmCI, interMatAI, "", pBB);
+  BranchInst::Create(forCondBB, pBB);
 
   LoadInst* iLI = new LoadInst((Value*) iAI, "", forCondBB);
   LoadInst* lenLoadInst = new LoadInst((Value*) lenAllocaInst, "", forCondBB);
@@ -362,9 +363,10 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   oriBI->eraseFromParent();
 
   BitCastInst* tailMatBI = new BitCastInst((Value*) tailMat->getMatAI(), l1PtrType, "", conBB);
+  LoadInst* interMatConLI = new LoadInst(interMatAI,"",conBB);
   vector<Value*> vecConMM;
-  vecConMM.push_back(interMatLI);
-  vecConMM.push_back(ldFbMatLI);
+  vecConMM.push_back(interMatConLI);
+  vecConMM.push_back(tailMatBI);
   vecConMM.push_back(ci1);
   vecConMM.push_back(ciDim);
   vecConMM.push_back(ciDim);
@@ -374,8 +376,8 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   StoreInst* interMatConSI = new StoreInst((Value*) mmConCI, interMatAI, "", conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
-  LoadInst* interMatConLI = new LoadInst(interMatAI,"",conBB);
-  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI, l2PtrType, "", conBB);
+  LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);
+  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, l2PtrType, "", conBB);
   GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) cmpCI, ci0,"", conBB);
   GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getCmpL1EPI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
@@ -390,6 +392,9 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
 /*
  *Function Define:
  *i32** @MM(i32** %mat1, i32** %mat2, i32 %m1Height, i32 %m1Width, i32 %m2Height, i32 %m2Width)
+ *
+ *Another way is to write the code in c and link during compilation: 
+ *(https://www.cs.cornell.edu/~asampson/blog/llvm.html)
 */
 
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
@@ -561,8 +566,8 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 
   //BasicBlock* if_dimCheckEnd
 
-  StoreInst* iSI = new StoreInst((Value*) ci0, (Value*) iAI, ifDimCheckBB);
-  BranchInst::Create(forCond1BB,ifDimCheckBB);
+  StoreInst* iSI = new StoreInst((Value*) ci0, (Value*) iAI, ifDimCheckEndBB);
+  BranchInst::Create(forCond1BB,ifDimCheckEndBB);
 
   //BasicBlock* for_cond1
   LoadInst* iLI = new LoadInst((Value*) iAI, "", forCond1BB);

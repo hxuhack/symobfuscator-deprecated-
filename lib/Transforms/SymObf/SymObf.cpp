@@ -16,16 +16,13 @@ ICmpInst
 =========================================================
 */
 #include "llvm/Transforms/SymObf/SymObf.h"
+#include "llvm/Transforms/IPO/PassManagerBuilder.h"
 
 using namespace llvm;
 using namespace std;
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
 loglevel_e loglevel = L3_DEBUG;
-
-//This is to set parameters passing to opt
-//const std::string default_symvar = "argv";
-//static cl::opt<std::string> symvar("symvar", cl::desc("choose a symbolic variable to obfuscate"), cl::value_desc("variable name"), cl::init(default_symvar), cl::Optional);
 
 
 namespace{
@@ -320,7 +317,7 @@ struct SymObf : public ModulePass {
 char SymObf::ID = 1;
 static RegisterPass<SymObf> Y("symobf", "symbolic obfuscation");
 
-Pass* llvm::CreateSymObf(bool flag) {
-	if(flag)
-	  return new SymObf();
+static void registerMyPass(const PassManagerBuilder &, legacy::PassManagerBase &PM) {
+  PM.add(new SymObf());
 }
+static RegisterStandardPasses RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,registerMyPass);

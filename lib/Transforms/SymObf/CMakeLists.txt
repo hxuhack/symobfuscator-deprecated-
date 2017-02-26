@@ -4,9 +4,5 @@ add_llvm_loadable_module(LLVMSymObf
   MatrixBranchProg.cpp
   BoolProg.cpp
   SymObf.cpp
-
-  DEPENDS
-  intrinsics_gen
-  PLUGIN_TOOL
-  opt
 )
+add_dependencies(LLVMSymObf intrinsics_gen)

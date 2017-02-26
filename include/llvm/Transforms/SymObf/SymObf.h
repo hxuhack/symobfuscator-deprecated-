@@ -15,6 +15,7 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/DataLayout.h"
+#include "llvm/IR/LegacyPassManager.h"
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
