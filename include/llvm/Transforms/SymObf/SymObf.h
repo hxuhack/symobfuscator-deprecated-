@@ -30,4 +30,5 @@ namespace llvm{
   Pass* CreateSymObf(bool flag);
 }
 
+
 #endif

@@ -3,10 +3,8 @@ source_filename = "matrix.c"
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
 
-@.str = private unnamed_addr constant [4 x i8] c"%d\0A\00", align 1
-
 ; Function Attrs: nounwind uwtable
-define i64** @MM(i64** %mat1, i64** %mat2, i64 %m1Height, i64 %m1Width, i64 %m2Height, i64 %m2Width) #0 {
+define i64** @MatrixMult(i64** %mat1, i64** %mat2, i64 %m1Height, i64 %m1Width, i64 %m2Height, i64 %m2Width) #0 {
 entry:
   %retval = alloca i64**, align 8
   %mat1.addr = alloca i64**, align 8
@@ -114,13 +112,11 @@ for.end:                                          ; preds = %for.cond5
   %arrayidx = getelementptr inbounds i64, i64* %vla, i64 %30
   %arrayidx13 = getelementptr inbounds i64, i64* %arrayidx, i64 %28
   store i64 %27, i64* %arrayidx13, align 8
-  %31 = load i64, i64* %ele, align 8
-  %call = call i32 (i8*, i64, ...) bitcast (i32 (...)* @print64_tf to i32 (i8*, i64, ...)*)(i8* getelementptr inbounds ([4 x i8], [4 x i8]* @.str, i32 0, i32 0), i64 %31)
   br label %for.inc14
 
 for.inc14:                                        ; preds = %for.end
-  %32 = load i64, i64* %j, align 8
-  %inc15 = add nsw i64 %32, 1
+  %31 = load i64, i64* %j, align 8
+  %inc15 = add nsw i64 %31, 1
   store i64 %inc15, i64* %j, align 8
   br label %for.cond2
 
@@ -128,35 +124,32 @@ for.end16:                                        ; preds = %for.cond2
   br label %for.inc17
 
 for.inc17:                                        ; preds = %for.end16
-  %33 = load i64, i64* %i, align 8
-  %inc18 = add nsw i64 %33, 1
+  %32 = load i64, i64* %i, align 8
+  %inc18 = add nsw i64 %32, 1
   store i64 %inc18, i64* %i, align 8
   br label %for.cond
 
 for.end19:                                        ; preds = %for.cond
-  %34 = bitcast i64* %vla to i64**
-  store i64** %34, i64*** %retval, align 8
+  %33 = bitcast i64* %vla to i64**
+  store i64** %33, i64*** %retval, align 8
   store i32 1, i32* %cleanup.dest.slot, align 4
   br label %cleanup
 
 cleanup:                                          ; preds = %for.end19, %if.then
-  %35 = load i8*, i8** %saved_stack, align 8
-  call void @llvm.stackrestore(i8* %35)
-  %36 = load i64**, i64*** %retval, align 8
-  ret i64** %36
+  %34 = load i8*, i8** %saved_stack, align 8
+  call void @llvm.stackrestore(i8* %34)
+  %35 = load i64**, i64*** %retval, align 8
+  ret i64** %35
 }
 
 ; Function Attrs: nounwind
 declare i8* @llvm.stacksave() #1
-
-declare i32 @print64_tf(...) #2
 
 ; Function Attrs: nounwind
 declare void @llvm.stackrestore(i8*) #1
 
 attributes #0 = { nounwind uwtable "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-jump-tables"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 attributes #1 = { nounwind }
-attributes #2 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-frame-pointer-elim"="true" "no-frame-pointer-elim-non-leaf" "no-infs-fp-math"="false" "no-nans-fp-math"="false" "no-signed-zeros-fp-math"="false" "stack-protector-buffer-size"="8" "target-cpu"="x86-64" "target-features"="+fxsr,+mmx,+sse,+sse2,+x87" "unsafe-fp-math"="false" "use-soft-float"="false" }
 
 !llvm.ident = !{!0}
 

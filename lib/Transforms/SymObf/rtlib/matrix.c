@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdint.h>
 
-int64_t** MM(const int64_t** mat1, const int64_t** mat2, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
+int64_t** MatrixMult(const int64_t** mat1, const int64_t** mat2, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
   int64_t restMat[m1Height][m2Width]; 
   if(m1Width != m2Height)
     return restMat;

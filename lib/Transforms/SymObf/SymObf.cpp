@@ -274,6 +274,23 @@ struct SymObf : public ModulePass {
     //Generate the function for matrix multiplication
     const DataLayout &dataLayout = module.getDataLayout();
 	LLVMContext& context = module.getContext();
+
+    Type* i64Type = IntegerType::getInt64Ty(context);
+    Type* i32Type = IntegerType::getInt32Ty(context);
+    Type* i8Type = IntegerType::getInt8Ty(context);
+    PointerType* strType = PointerType::getUnqual(i8Type);
+    PointerType* l2PtrType = PointerType::getUnqual(i64Type);
+    PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+
+    //Define the printf function:
+    vector<Type*> printVec;
+    printVec.push_back(strType);
+    printVec.push_back(i64Type);
+    ArrayRef<Type*> prType(printVec);
+    FunctionType* printFuncType = FunctionType::get((Type *) i32Type, prType, false);
+    printFunc = module.getOrInsertFunction("printf", printFuncType); 
+
+    //Start the taint engine
     TaintEngine taintEngine(dataLayout);
 	
     for(Module::iterator mIt = module.begin(); mIt != module.end(); ++mIt){
@@ -290,10 +307,6 @@ struct SymObf : public ModulePass {
     //PrintIR(taintEngine.taintedInstList);
 	//We generate the function of matrix multiplication
     // Function* funcMM = GenMatMulFunc(module.getContext(),module);
-    Type* i64Type = IntegerType::getInt64Ty(context);
-    Type* i32Type = IntegerType::getInt32Ty(context);
-    PointerType* l2PtrType = PointerType::getUnqual(i64Type);
-    PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
 
     //We declare the parameters of the function
     vector<Type*> paramVec;

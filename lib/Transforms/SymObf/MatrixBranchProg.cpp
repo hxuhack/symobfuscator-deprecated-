@@ -386,6 +386,14 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
 
+  const char* strPfm = "+++++++++icmp result: %d\n";
+  Constant* printFormat= ConstantDataArray::getString(context, strPfm); 
+  vector<Value*> vecPrint;
+  vecConMM.push_back(printFormat);
+  vecConMM.push_back(cmpLI);
+  ArrayRef<Value*> arPrint(vecPrint);
+  CallInst::Create(printFunc, arPrint, "", conBB);
+
   ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) cmpLI, ci1, "");
   BranchInst::Create(trueBB, falseBB, conII, conBB);
 }
