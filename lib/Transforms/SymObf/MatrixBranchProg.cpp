@@ -3,6 +3,7 @@
 using namespace llvm;
 using namespace std;
 
+
 class MatrixInIR{
 
 private:
@@ -165,8 +166,10 @@ public:
 void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
   LLVMContext& context = icmpInst->getContext();
-  Function* parentFunc = icmpInst->getFunction();
+  Function* pFunc = icmpInst->getFunction();
   BasicBlock* pBB = icmpInst->getParent();
+
+
   BasicBlock* forCondBB = pBB->splitBasicBlock(icmpInst, "for_cond_loop");
   pBB->getTerminator()->eraseFromParent();
   BasicBlock* forBodyBB = forCondBB->splitBasicBlock(icmpInst, "for_body_loop");
@@ -394,6 +397,7 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
  *Another way is to write the code in c and link during compilation: 
  *(https://www.cs.cornell.edu/~asampson/blog/llvm.html)
 */
+/*
 
 Function* GenMatMulFunc(LLVMContext& context, Module& module){
   LOG(L2_DEBUG) << "GenMatMulFunc...";
@@ -660,3 +664,5 @@ Function* GenMatMulFunc(LLVMContext& context, Module& module){
 
   return funcMM;
 }
+
+*/

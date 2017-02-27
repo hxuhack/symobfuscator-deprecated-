@@ -273,6 +273,7 @@ struct SymObf : public ModulePass {
     LOG(L2_DEBUG) << "Entering runOnModule...: " << module.getName().str();
     //Generate the function for matrix multiplication
     const DataLayout &dataLayout = module.getDataLayout();
+	LLVMContext& context = module.getContext();
     TaintEngine taintEngine(dataLayout);
 	
     for(Module::iterator mIt = module.begin(); mIt != module.end(); ++mIt){
@@ -287,7 +288,27 @@ struct SymObf : public ModulePass {
     
     taintEngine.Propagate();
     //PrintIR(taintEngine.taintedInstList);
-    Function* funcMM = GenMatMulFunc(module.getContext(),module);
+	//We generate the function of matrix multiplication
+    // Function* funcMM = GenMatMulFunc(module.getContext(),module);
+    Type* i64Type = IntegerType::getInt64Ty(context);
+    Type* i32Type = IntegerType::getInt32Ty(context);
+    PointerType* l2PtrType = PointerType::getUnqual(i64Type);
+    PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+
+    //We declare the parameters of the function
+    vector<Type*> paramVec;
+    paramVec.push_back((Type *) l1PtrType);
+    paramVec.push_back((Type *) l1PtrType);
+    paramVec.push_back(i64Type);
+    paramVec.push_back(i64Type);
+    paramVec.push_back(i64Type);
+    paramVec.push_back(i64Type);
+    ArrayRef<Type*> paramArrayType(paramVec);
+
+    //We wrap the type of the function
+    //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
+    FunctionType* funcType = FunctionType::get((Type *) l1PtrType, paramArrayType, false);
+    Constant* mmFunc = module.getOrInsertFunction("MatrixMult", funcType); 
 
 /*
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
@@ -298,7 +319,7 @@ struct SymObf : public ModulePass {
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	    ConvertIcmp2Mbp((ICmpInst*)inst, funcMM);
+	    ConvertIcmp2Mbp((ICmpInst*)inst, (Function*) mmFunc);
 		inst->eraseFromParent();
 	  }
 	}
