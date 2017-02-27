@@ -163,7 +163,7 @@ public:
 };
 
 
-void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
+void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
   LLVMContext& context = icmpInst->getContext();
   Function* pFunc = icmpInst->getFunction();
@@ -211,10 +211,12 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   int dim = len + 1;
   IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
 
+  Type* i8Type = IntegerType::getInt8Ty(context);
   Type* i64Type = IntegerType::getInt64Ty(context);
   Type* i32Type = IntegerType::getInt32Ty(context);
   ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
   ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
+  ArrayType* i8AT = ArrayType::get(i8Type, 26);
 
   //We create an level-2 array that points to matrix 
   PointerType* l2PtrType = PointerType::getUnqual(i64Type);
@@ -302,7 +304,7 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   vecMM.push_back(ciDim);
   vecMM.push_back(ciDim);
   ArrayRef<Value*> arMM(vecMM);
-  CallInst* mmCI = CallInst::Create(calleeMM, arMM, "", pBB);
+  CallInst* mmCI = CallInst::Create(funcMM, arMM, "", pBB);
   //StoreInst* matSI = new StoreInst((Value *) mmCI, interMatAI, pBB);
 
   StoreInst* interMatSI = new StoreInst((Value*) mmCI, interMatAI, "", pBB);
@@ -347,7 +349,7 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   vecFbMM.push_back(ciDim);
   vecFbMM.push_back(ciDim);
   ArrayRef<Value*> arFbMM(vecFbMM);
-  CallInst* mmFbCI = CallInst::Create(calleeMM, arFbMM, "", forBodyBB);
+  CallInst* mmFbCI = CallInst::Create(funcMM, arFbMM, "", forBodyBB);
   StoreInst* interMatFbSI = new StoreInst((Value*) mmFbCI, interMatAI, "", forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
   
@@ -373,7 +375,7 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   vecConMM.push_back(ciDim);
   vecConMM.push_back(ci1);
   ArrayRef<Value*> arConMM(vecConMM);
-  CallInst* mmConCI = CallInst::Create(calleeMM, arConMM, "", conBB);
+  CallInst* mmConCI = CallInst::Create(funcMM, arConMM, "", conBB);
   StoreInst* interMatConSI = new StoreInst((Value*) mmConCI, interMatAI, "", conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
@@ -385,12 +387,16 @@ void ConvertIcmp2Mbp(ICmpInst *icmpInst, Function* calleeMM){
   StoreInst* cmpSI = new StoreInst((Value*) getCmpLI, cmpAI, "", conBB);
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
+  GlobalVariable* pfmGV = new GlobalVariable(module, i8AT, true, GlobalValue::PrivateLinkage, 0, "pfmStr");
+  pfmGV->setAlignment(1);
+  Constant* strPf = ConstantDataArray::getString(context,"++++++++++icmp result:%d\n", true);
+  //Constant* getPfm = ConstantExpr::getGetElementPtr(pfmGV, vec00);
+  pfmGV->setInitializer(strPf);
+  GetElementPtrInst* getPfm = GetElementPtrInst::CreateInBounds(i8AT, pfmGV, ar00,"", conBB);
 
-  const char* strPfm = "+++++++++icmp result: %d\n";
-  Constant* printFormat= ConstantDataArray::getString(context, strPfm); 
   vector<Value*> vecPrint;
-  vecConMM.push_back(printFormat);
-  vecConMM.push_back(cmpLI);
+  vecPrint.push_back(getPfm);
+  vecPrint.push_back(cmpLI);
   ArrayRef<Value*> arPrint(vecPrint);
   CallInst::Create(printFunc, arPrint, "", conBB);
 

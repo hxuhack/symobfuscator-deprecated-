@@ -24,6 +24,6 @@
 
 
 llvm::Function* GenMatMulFunc(llvm::LLVMContext &, llvm::Module &);
-void ConvertIcmp2Mbp(llvm::ICmpInst *, llvm::Function *);
+void ConvertIcmp2Mbp(llvm::Module&, llvm::ICmpInst *, llvm::Function *);
 
 #endif

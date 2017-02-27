@@ -23,6 +23,7 @@ using namespace std;
 
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
 loglevel_e loglevel = L3_DEBUG;
+Constant* printFunc;
 
 
 namespace{
@@ -283,12 +284,7 @@ struct SymObf : public ModulePass {
     PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
 
     //Define the printf function:
-    vector<Type*> printVec;
-    printVec.push_back(strType);
-    printVec.push_back(i64Type);
-    ArrayRef<Type*> prType(printVec);
-    FunctionType* printFuncType = FunctionType::get((Type *) i32Type, prType, false);
-    printFunc = module.getOrInsertFunction("printf", printFuncType); 
+    printFunc = module.getFunction("printf"); 
 
     //Start the taint engine
     TaintEngine taintEngine(dataLayout);
@@ -332,7 +328,7 @@ struct SymObf : public ModulePass {
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	    ConvertIcmp2Mbp((ICmpInst*)inst, (Function*) mmFunc);
+	    ConvertIcmp2Mbp(module, (ICmpInst*)inst, (Function*) mmFunc);
 		inst->eraseFromParent();
 	  }
 	}
