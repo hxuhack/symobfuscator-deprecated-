@@ -22,5 +22,11 @@
 
 void PrintIR(llvm::Function *);
 void PrintIR(std::list<llvm::Instruction*>);
+void PrintInIR(llvm::Module&, llvm::BasicBlock*, const char*, int, llvm::Value*);
 
+extern llvm::Type *boolType, *i8Type, *i32Type, *i64Type;
+extern llvm::PointerType *l2PtrType, *l1PtrType;
+extern llvm::ConstantInt *ci0, *ci1;
+extern std::vector<llvm::Value*> vec00,vec01;
+//Create the blocks
 #endif

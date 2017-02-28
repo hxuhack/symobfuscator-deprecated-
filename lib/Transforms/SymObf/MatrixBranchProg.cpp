@@ -3,31 +3,6 @@
 using namespace llvm;
 using namespace std;
 
-void PrintInIR(Module& module, BasicBlock* bb, const char* arg1, int len, Value* arg2){
-  LLVMContext& context = bb->getContext();
-  Type* i8Type = IntegerType::getInt8Ty(context);
-  Type* i64Type = IntegerType::getInt64Ty(context);
-  ArrayType* i8AT = ArrayType::get(i8Type, len);
-  ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-  vector<Value*> vec00,vec01;
-  vec00.push_back(ci0);
-  vec00.push_back(ci0);
-  ArrayRef<Value*> ar00(vec00);
-
-  GlobalVariable* pfmGV = new GlobalVariable(module, i8AT, true, GlobalValue::PrivateLinkage, 0, "");
-  pfmGV->setAlignment(1);
-  Constant* strPf = ConstantDataArray::getString(context,arg1, true);
-  pfmGV->setInitializer(strPf);
-  GetElementPtrInst* getPfm = GetElementPtrInst::CreateInBounds(i8AT, pfmGV, ar00,"", bb);
-
-  vector<Value*> vecPrint;
-  vecPrint.push_back(getPfm);
-  if(arg2 != nullptr)
-	vecPrint.push_back(arg2);
-  ArrayRef<Value*> arPrint(vecPrint);
-  CallInst::Create(printFunc, arPrint, "", bb);
-}
-
 class MatrixInIR{
 
 private:
@@ -189,6 +164,9 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   Function* pFunc = icmpInst->getFunction();
   BasicBlock* pBB = icmpInst->getParent();
 
+  ArrayRef<Value*> ar00(vec00);
+  ArrayRef<Value*> ar01(vec01);
+
   //Create the blocks
   BasicBlock* forCondBB = pBB->splitBasicBlock(icmpInst, "for_cond_loop");
   pBB->getTerminator()->eraseFromParent();
@@ -229,35 +207,19 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   int len = conInt->getBitWidth();
   int dim = len + 1;
-  IntegerType* boolType = IntegerType::get(conInt->getContext(),1);
 
-  Type* i8Type = IntegerType::getInt8Ty(context);
-  Type* i64Type = IntegerType::getInt64Ty(context);
-  Type* i32Type = IntegerType::getInt32Ty(context);
   ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
   ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
   ArrayType* i8AT = ArrayType::get(i8Type, 26);
 
-  //We create an level-2 array that points to matrix 
-  PointerType* l2PtrType = PointerType::getUnqual(i64Type);
-  PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+  //We create a matrix that points to l1PtrType 
   ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
   ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
 
   AllocaInst* matAI = new AllocaInst(l1MatArrayType,"matrix", pBB);
 
-  ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-  ConstantInt* ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
   ConstantInt* ciDim = (ConstantInt*) ConstantInt::getSigned(i64Type,dim);
   ConstantInt* ciLen = (ConstantInt*) ConstantInt::getSigned(i64Type,len);
-
-  vector<Value*> vec00,vec01;
-  vec00.push_back(ci0);
-  vec00.push_back(ci0);
-  ArrayRef<Value*> ar00(vec00);
-  vec01.push_back(ci0);
-  vec01.push_back(ci1);
-  ArrayRef<Value*> ar01(vec01);
 
   //Get the pointers of matrix for input bit 0
   GetElementPtrInst* mat0PtrEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, ar00,"", pBB);

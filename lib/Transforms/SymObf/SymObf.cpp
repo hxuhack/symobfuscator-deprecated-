@@ -25,6 +25,10 @@ using namespace std;
 loglevel_e loglevel = L3_DEBUG;
 Constant* printFunc;
 
+Type *boolType, *i8Type, *i32Type, *i64Type;
+PointerType *l2PtrType, *l1PtrType;
+ConstantInt *ci0, *ci1;
+vector<Value*> vec00,vec01;
 
 namespace{
 
@@ -276,12 +280,21 @@ struct SymObf : public ModulePass {
     const DataLayout &dataLayout = module.getDataLayout();
 	LLVMContext& context = module.getContext();
 
-    Type* i64Type = IntegerType::getInt64Ty(context);
-    Type* i32Type = IntegerType::getInt32Ty(context);
-    Type* i8Type = IntegerType::getInt8Ty(context);
-    PointerType* strType = PointerType::getUnqual(i8Type);
-    PointerType* l2PtrType = PointerType::getUnqual(i64Type);
-    PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
+    i64Type = IntegerType::getInt64Ty(context);
+    i32Type = IntegerType::getInt32Ty(context);
+    i8Type = IntegerType::getInt8Ty(context);
+    boolType = IntegerType::get(context,1);
+    ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
+    ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
+    l2PtrType = PointerType::getUnqual(i64Type);
+    l1PtrType = PointerType::getUnqual(l2PtrType);
+
+  vec00.push_back(ci0);
+  vec00.push_back(ci0);
+  ArrayRef<Value*> ar00(vec00);
+  vec01.push_back(ci0);
+  vec01.push_back(ci1);
+  ArrayRef<Value*> ar01(vec01);
 
     //Define the printf function:
     printFunc = module.getFunction("printf"); 
@@ -346,8 +359,9 @@ struct SymObf : public ModulePass {
 
 char SymObf::ID = 0;
 static RegisterPass<SymObf> X("symobf", "symbolic obfuscation");
-
+/*
 static void registerMyPass(const PassManagerBuilder &, legacy::PassManagerBase &PM) {
   PM.add(new SymObf());
 }
 static RegisterStandardPasses RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,registerMyPass);
+*/

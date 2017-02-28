@@ -19,7 +19,8 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
 #include "llvm/IR/SymbolTableListTraits.h"
-#include "Logger.h"
+#include "llvm/Transforms/SymObf/Logger.h"
+#include "llvm/Transforms/SymObf/Utils.h"
 #include <list>
 
 
