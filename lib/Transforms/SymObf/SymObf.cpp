@@ -359,9 +359,8 @@ struct SymObf : public ModulePass {
 
 char SymObf::ID = 0;
 static RegisterPass<SymObf> X("symobf", "symbolic obfuscation");
-/*
+
 static void registerMyPass(const PassManagerBuilder &, legacy::PassManagerBase &PM) {
   PM.add(new SymObf());
 }
 static RegisterStandardPasses RegisterMyPass(PassManagerBuilder::EP_EarlyAsPossible,registerMyPass);
-*/

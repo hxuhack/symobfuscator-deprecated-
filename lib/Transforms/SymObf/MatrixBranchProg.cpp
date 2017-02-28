@@ -255,7 +255,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	//matListInp1.push_back(mat1);
   }
   headMat = new MatrixInIR(module, context, pBB, 1,dim,0,0,boolType); //bit
-  tailMat = new MatrixInIR(module, context, pBB, dim,1,dim-1,0,boolType); //~bit
+  tailMat = new MatrixInIR(module, context, pBB, dim,1,0,dim-1,boolType); //~bit
 
   //Init the parameter for the for loop; 
   AllocaInst* iAI = new AllocaInst(i64Type,"", pBB);
