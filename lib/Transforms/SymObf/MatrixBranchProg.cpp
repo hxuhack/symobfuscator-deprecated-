@@ -209,8 +209,12 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
   ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
-  ArrayType* i8AT = ArrayType::get(i8Type, 26);
 
+  ArrayType* l2HeadMat = ArrayType::get(i64Type, 1);
+  ArrayType* l1HeadMat = ArrayType::get(l2HeadMat, dim);
+  
+  ArrayType* l2TailMat = ArrayType::get(i64Type, dim);
+  ArrayType* l1TailMat = ArrayType::get(l2TailMat, 1);
   //We create a matrix that points to l1PtrType 
   ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
   ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
@@ -263,14 +267,11 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
     GetElementPtrInst* getEPl20Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat0PtrEPI, ar0i,"", pBB);
     GetElementPtrInst* getEPl21Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat1PtrEPI, ar0i,"", pBB);
 
-    GetElementPtrInst* getEPMat0Inst;
-    GetElementPtrInst* getEPMat1Inst;
-	//The is the seting according to the bit (expected input). If the bit is 1, then we assign mat1, or mat0 otherwise; 
-    getEPMat0Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
-    getEPMat1Inst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
 
-    BitCastInst* mat0BCI = new BitCastInst((Value*) getEPMat0Inst, l1PtrType, "", pBB);
-    BitCastInst* mat1BCI = new BitCastInst((Value*) getEPMat1Inst, l1PtrType, "", pBB);
+    BitCastInst* mat0BCI = new BitCastInst((Value*) mat0EPI, l1PtrType, "", pBB);
+    BitCastInst* mat1BCI = new BitCastInst((Value*) mat1EPI, l1PtrType, "", pBB);
 
     StoreInst* mat0StoreInst = new StoreInst(mat0BCI, (Value *) getEPl20Inst, pBB);
     StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) getEPl21Inst, pBB);
@@ -306,12 +307,16 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getBinEPI, ar00,"", pBB);
   LoadInst* ldMatLI = new LoadInst(getLenEPI,"",pBB);
 
-  BitCastInst* headMatBI = new BitCastInst((Value*) headMat->getMatAI(), l1PtrType, "", pBB);
+  GetElementPtrInst* headMatEPI = GetElementPtrInst::CreateInBounds(l1HeadMat, (Value*) headMat->getMatAI(), ar00,"", pBB);
+  BitCastInst* headMatBI = new BitCastInst((Value*) headMatEPI, l1PtrType, "", pBB);
+  AllocaInst* headMatAI = new AllocaInst(l1PtrType,"", pBB);
+  StoreInst* headMatSI = new StoreInst(headMatBI, (Value *) headMatAI, pBB);
+  LoadInst* headMatLI = new LoadInst(headMatAI,"", pBB);
 
   AllocaInst* interMatAI = new AllocaInst(l1PtrType,"interMat",pBB);
   
   vector<Value*> vecMM;
-  vecMM.push_back(headMatBI);
+  vecMM.push_back(headMatLI);
   vecMM.push_back(ldMatLI);
   vecMM.push_back(ci1);
   vecMM.push_back(ciDim);
@@ -339,10 +344,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   LoadInst* matIdFbLI = new LoadInst((Value *) matIdAI, "", forBodyBB);
   LoadInst* iFbLI02 = new LoadInst((Value*) iAI, "", forBodyBB);
-/*
-  const char strArg_11[] = "Inp: %d\n";
-  PrintInIR(module, forBodyBB, strArg_11, sizeof(strArg_11), matIdFbLI);
-*/
+
+  //const char strArg_11[] = "Inp: %d\n";
+  //PrintInIR(module, forBodyBB, strArg_11, sizeof(strArg_11), matIdFbLI);
+
   vector<Value*> vecFb0I0;
   vecFb0I0.push_back(ci0);
   vecFb0I0.push_back(matIdFbLI);
@@ -382,11 +387,17 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   BasicBlock* falseBB = oriBI->getSuccessor(1);
   oriBI->eraseFromParent();
 
-  BitCastInst* tailMatBI = new BitCastInst((Value*) tailMat->getMatAI(), l1PtrType, "", conBB);
+  GetElementPtrInst* tailMatEPI = GetElementPtrInst::CreateInBounds(l1TailMat, (Value*) tailMat->getMatAI(), ar00,"", conBB);
+  BitCastInst* tailMatBI = new BitCastInst((Value*) tailMatEPI, l1PtrType, "", conBB);
+  AllocaInst* tailMatAI = new AllocaInst(l1PtrType,"", conBB);
+  StoreInst* tailMatSI = new StoreInst(tailMatBI, (Value *) tailMatAI, conBB);
+  LoadInst* tailMatLI = new LoadInst(tailMatAI,"", conBB);
+
   LoadInst* interMatConLI = new LoadInst(interMatAI,"",conBB);
+
   vector<Value*> vecConMM;
   vecConMM.push_back(interMatConLI);
-  vecConMM.push_back(tailMatBI);
+  vecConMM.push_back(tailMatLI);
   vecConMM.push_back(ci1);
   vecConMM.push_back(ciDim);
   vecConMM.push_back(ciDim);
