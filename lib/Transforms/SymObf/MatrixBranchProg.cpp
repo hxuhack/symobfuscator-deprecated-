@@ -32,17 +32,15 @@ public:
   ret void
 */
 
-  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, const int width, const int height, int iRow, int conInt_col, Type* type)
+  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, const int height, const int width, int iRow, int conInt_col, Type* type)
 	  :module(module), context(context), bb(bb), width(width), height(height){
 
     ConstantInt*** ciMat = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
 
 	//Construct an allocaInst:
 	//AllocaInst (Type *Ty, const Twine &Name="", Instruction *InsertBefore=nullptr)
-	Type* i32Type = IntegerType::getInt32Ty(context);
-	Type* i64Type = IntegerType::getInt64Ty(context);
-	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
-	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
+	ArrayType* l2ArrayType = ArrayType::get(i64Type, width);
+	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, height);
 
 	matAI = new AllocaInst(l1ArrayType,"", bb);
 
@@ -52,11 +50,10 @@ public:
 	  //Construct an GetElementPtrInst;
 	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
 	  //http://llvm.org/docs/GetElementPtr.html
-      ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-      ConstantInt* ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+      ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
 	  vector<Value*> conIntVec;
 	  conIntVec.push_back(ci0);
-	  conIntVec.push_back(ci1);
+	  conIntVec.push_back(cii);
 	  ArrayRef<Value*> conIntArrayRef(conIntVec);
 	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAI, conIntArrayRef,"", bb);
 
@@ -90,8 +87,8 @@ public:
 	  :module(module), context(context), bb(bb), width(width), height(height){
     ConstantInt*** ciMat = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
 	Type* i64Type = IntegerType::getInt64Ty(context);
-	ArrayType* l2ArrayType = ArrayType::get(i64Type, height);
-	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, width);
+	ArrayType* l2ArrayType = ArrayType::get(i64Type, width);
+	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, height);
 
 	matAI = new AllocaInst(l1ArrayType,"", bb);
 
@@ -99,11 +96,10 @@ public:
 	for(int i=0; i<height; i++){
 	  ciMat[i] = (ConstantInt**) malloc (sizeof(ConstantInt*) * width);
 
-      ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-      ConstantInt* ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+      ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
 	  vector<Value*> conIntVec;
 	  conIntVec.push_back(ci0);
-	  conIntVec.push_back(ci1);
+	  conIntVec.push_back(cii);
 	  ArrayRef<Value*> conIntArrayRef(conIntVec);
 	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAI, conIntArrayRef,"", bb);
 
@@ -210,11 +206,11 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
   ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
 
-  ArrayType* l2HeadMat = ArrayType::get(i64Type, 1);
-  ArrayType* l1HeadMat = ArrayType::get(l2HeadMat, dim);
+  ArrayType* l2HeadMat = ArrayType::get(i64Type, dim);
+  ArrayType* l1HeadMat = ArrayType::get(l2HeadMat, 1);
   
-  ArrayType* l2TailMat = ArrayType::get(i64Type, dim);
-  ArrayType* l1TailMat = ArrayType::get(l2TailMat, 1);
+  ArrayType* l2TailMat = ArrayType::get(i64Type, 1);
+  ArrayType* l1TailMat = ArrayType::get(l2TailMat, dim);
   //We create a matrix that points to l1PtrType 
   ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
   ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
@@ -259,28 +255,28 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	  mat0 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4T,boolType); //bit
 	  mat1 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4F,boolType); //~bit
 	}
-    ConstantInt* conInti = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
+    ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
     vector<Value*> vec0i;
     vec0i.push_back(ci0);
-    vec0i.push_back(conInti);
+    vec0i.push_back(cii);
     ArrayRef<Value*> ar0i(vec0i);
-    GetElementPtrInst* getEPl20Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat0PtrEPI, ar0i,"", pBB);
-    GetElementPtrInst* getEPl21Inst = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat1PtrEPI, ar0i,"", pBB);
+    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat0PtrEPI, ar0i,"", pBB);
+    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat1PtrEPI, ar0i,"", pBB);
 
-    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
-    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat0iEPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat1iEPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat1->getMatAI(), ar00,"", pBB);
 
-    BitCastInst* mat0BCI = new BitCastInst((Value*) mat0EPI, l1PtrType, "", pBB);
-    BitCastInst* mat1BCI = new BitCastInst((Value*) mat1EPI, l1PtrType, "", pBB);
+    BitCastInst* mat0BCI = new BitCastInst((Value*) mat0iEPI, l1PtrType, "", pBB);
+    BitCastInst* mat1BCI = new BitCastInst((Value*) mat1iEPI, l1PtrType, "", pBB);
 
-    StoreInst* mat0StoreInst = new StoreInst(mat0BCI, (Value *) getEPl20Inst, pBB);
-    StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) getEPl21Inst, pBB);
+    StoreInst* mat0StoreInst = new StoreInst(mat0BCI, (Value *) mat0EPI, pBB);
+    StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) mat1EPI, pBB);
 
 	//matListInp0.push_back(mat0);
 	//matListInp1.push_back(mat1);
   }
-  headMat = new MatrixInIR(module, context, pBB, dim, 1, 0, 0, boolType); //~bit
-  tailMat = new MatrixInIR(module, context, pBB, 1, dim, dim-1, 0, boolType); //bit
+  headMat = new MatrixInIR(module, context, pBB, 1, dim, 0, 0, boolType); //~bit
+  tailMat = new MatrixInIR(module, context, pBB, dim, 1, dim-1, 0, boolType); //bit
 
   //Init the parameter for the for loop; 
   AllocaInst* iAI = new AllocaInst(i64Type,"", pBB);
@@ -293,11 +289,9 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   BinaryOperator* andBO = BinaryOperator::Create(Instruction::And, (Value*) inp64, ci1, "", pBB);
   StoreInst* matIdSI = new StoreInst((Value *) andBO, matIdAI, pBB);
   LoadInst* matIdLI = new LoadInst((Value *) matIdAI, "", pBB);
-
-  /*
+  
   const char strArg_10[] = "Inp: %d\n";
   PrintInIR(module, pBB, strArg_10, sizeof(strArg_10), matIdLI);
-  */
 
   vector<Value*> vec0li;
   vec0li.push_back(ci0);
@@ -360,6 +354,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, arFb0I0,"", forBodyBB);
   GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getBinFbEPI, arFb0I1,"", forBodyBB);
+
   LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
   LoadInst* interMatLI = new LoadInst(interMatAI,"",forBodyBB);
 
