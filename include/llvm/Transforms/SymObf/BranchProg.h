@@ -17,7 +17,7 @@
 #include "llvm/Analysis/ConstantFolding.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/InitializePasses.h"
-#include "Logger.h"
+#include "llvm/Transforms/SymObf/Logger.h"
 #include <list>
 
 

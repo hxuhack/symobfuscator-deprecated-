@@ -1,6 +1,7 @@
 #add_llvm_loadable_module(SymObf 
 
 add_library(SymObf MODULE 
+  matrix/GenMatPair.cpp
   Utils.cpp
   BranchProg.cpp
   MatrixBranchProg.cpp

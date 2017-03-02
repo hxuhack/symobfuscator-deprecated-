@@ -1,4 +1,5 @@
-#include"llvm/Transforms/SymObf/MatrixBranchProg.h"
+#include "llvm/Transforms/SymObf/MatrixBranchProg.h"
+#include "matrix/MatUtils.h"
 
 using namespace llvm;
 using namespace std;
@@ -227,7 +228,34 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   const char strArg_1[] = "ICmp constant: %d\n";
   PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), conInt);
+
   //Generate the matrix and save to matAI
+  double** mat = (double**) malloc (sizeof(double*) * dim);
+  double** matInv = (double**) malloc (sizeof(double*) * dim);
+  for (int i = 0; i < dim; i++)
+  {
+	mat[i] = (double*) malloc (sizeof(double) * dim);
+	matInv[i] = (double*) malloc (sizeof(double) * dim);
+  }
+  GenMatPair(mat, matInv, dim);
+  LOG(L1_DEBUG) << "-----------------Generated Matrix:";
+  for(int i=0; i<dim; i++){
+	for(int j=0; j<dim; j++){
+	  int tmp = mat[i][j];
+	  errs()<< tmp <<" ";
+	}
+    errs()<<"\n";
+  }
+  LOG(L1_DEBUG) << "-----------------Generated Matrix Inverse:";
+  for(int i=0; i<dim; i++){
+	for(int j=0; j<dim; j++){
+	  errs()<< ("%.1f ", matInv[i][j]);
+	}
+    errs()<<"\n";
+  }
+
+  headMat = new MatrixInIR(module, context, pBB, 1, dim, 0, 0, boolType); //~bit
+
   int iRow;
   int iCol4T;
   int iCol4F = len;
@@ -275,7 +303,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	//matListInp0.push_back(mat0);
 	//matListInp1.push_back(mat1);
   }
-  headMat = new MatrixInIR(module, context, pBB, 1, dim, 0, 0, boolType); //~bit
   tailMat = new MatrixInIR(module, context, pBB, dim, 1, dim-1, 0, boolType); //bit
 
   //Init the parameter for the for loop; 
