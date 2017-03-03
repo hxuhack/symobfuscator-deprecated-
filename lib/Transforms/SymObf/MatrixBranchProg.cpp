@@ -273,14 +273,14 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   StoreInst* matIdSI = new StoreInst((Value *) andBO, matIdAI, pBB);
   LoadInst* matIdLI = new LoadInst((Value *) matIdAI, "", pBB);
   
-  const char strArg_10[] = "Inp: %d\n";
-  PrintInIR(module, pBB, strArg_10, sizeof(strArg_10), matIdLI);
+  const char strArg_IdLI[] = "Choose mat for inp: %d\n";
+  PrintInIR(module, pBB, strArg_IdLI, sizeof(strArg_IdLI), matIdLI);
 
-  vector<Value*> vec0li;
-  vec0li.push_back(ci0);
-  vec0li.push_back(matIdLI);
-  ArrayRef<Value*> ar0li(vec0li);
-  GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar0li,"", pBB);
+  vector<Value*> vec0inp;
+  vec0inp.push_back(ci0);
+  vec0inp.push_back(matIdLI);
+  ArrayRef<Value*> ar0inp(vec0inp);
+  GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar0inp,"", pBB);
   GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) getBinEPI, ar00,"", pBB);
   LoadInst* ldMatLI = new LoadInst(getLenEPI,"",pBB);
 
@@ -291,7 +291,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   LoadInst* headMatLI = new LoadInst(headMatAI,"", pBB);
 
   AllocaInst* interMatAI = new AllocaInst(ptrPT,"interMat",pBB);
-  
+
   vector<Value*> vecMM;
   vecMM.push_back(headMatLI);
   vecMM.push_back(ldMatLI);
@@ -300,8 +300,12 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecMM.push_back(ciDim);
   vecMM.push_back(ciDim);
   ArrayRef<Value*> arMM(vecMM);
+
+  const char strArg_tmp1[] = "Before MM=================================\n";
+  PrintInIR(module, pBB, strArg_tmp1, sizeof(strArg_tmp1), nullptr);
   CallInst* mmCI = CallInst::Create(funcMM, arMM, "", pBB);
-  //StoreInst* matSI = new StoreInst((Value *) mmCI, interMatAI, pBB);
+  const char strArg_tmp3[] = "TAG2===========================================\n";
+  PrintInIR(module, pBB, strArg_tmp3, sizeof(strArg_tmp3), nullptr);
 
   StoreInst* interMatSI = new StoreInst((Value*) mmCI, interMatAI, "", pBB);
   BranchInst::Create(forCondBB, pBB);
@@ -322,8 +326,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   LoadInst* matIdFbLI = new LoadInst((Value *) matIdAI, "", forBodyBB);
   LoadInst* iFbLI02 = new LoadInst((Value*) iAI, "", forBodyBB);
 
-  //const char strArg_11[] = "Inp: %.3f\n";
-  //PrintInIR(module, forBodyBB, strArg_11, sizeof(strArg_11), matIdFbLI);
+  PrintInIR(module, forBodyBB, strArg_IdLI, sizeof(strArg_IdLI), matIdFbLI);
 
   vector<Value*> vecFb0I0;
   vecFb0I0.push_back(ci0);
@@ -339,10 +342,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) getBinFbEPI, arFb0I1,"", forBodyBB);
 
   LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
-  LoadInst* interMatLI = new LoadInst(interMatAI,"",forBodyBB);
+  LoadInst* interMatFbLI = new LoadInst(interMatAI,"",forBodyBB);
 
   vector<Value*> vecFbMM;
-  vecFbMM.push_back(interMatLI);
+  vecFbMM.push_back(interMatFbLI);
   vecFbMM.push_back(ldFbMatLI);
   vecFbMM.push_back(ci1);
   vecFbMM.push_back(ciDim);
@@ -350,7 +353,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecFbMM.push_back(ciDim);
   ArrayRef<Value*> arFbMM(vecFbMM);
   CallInst* mmFbCI = CallInst::Create(funcMM, arFbMM, "", forBodyBB);
-  StoreInst* interMatFbSI = new StoreInst((Value*) mmFbCI, interMatAI, "", forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
   
   //For inc 
@@ -382,7 +384,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecConMM.push_back(ci1);
   ArrayRef<Value*> arConMM(vecConMM);
   CallInst* mmConCI = CallInst::Create(funcMM, arConMM, "", conBB);
-  StoreInst* interMatConSI = new StoreInst((Value*) mmConCI, interMatAI, "", conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
   LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);

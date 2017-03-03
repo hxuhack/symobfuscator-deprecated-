@@ -28,26 +28,6 @@ int MatrixMult(double** mat1, double** mat2, double** retMat, int64_t m1Height, 
   if(m1Width != m2Height)
     return -1;
 
-  /*
-  printf("Mat1#################################\n");
-  for(int64_t i=0; i < m1Height; i++){
-    for(int64_t j=0; j < m1Width; j++){
-	  printf("%d", *(mat1 + i * m1Width + j));
-	}
-	printf("\n");
-  }
-  printf("####################################\n");
-
-  printf("Mat2#################################\n");
-  for(int64_t i=0; i < m2Height; i++){
-    for(int64_t j=0; j < m2Width; j++){
-	  printf("%d", *(mat2 + i * m2Width + j));
-	}
-	printf("\n");
-  }
-  printf("####################################\n");
-*/
-
   for(int64_t i=0; i < m1Height; i++){
     for(int64_t j=0; j < m2Width; j++){
 	  double ele = 0;
