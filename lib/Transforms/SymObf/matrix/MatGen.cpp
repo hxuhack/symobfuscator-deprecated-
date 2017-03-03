@@ -103,7 +103,7 @@ int InvMat(double** matrix,  double** inverse,  int size)
 	return 1;
 }
 
-void GenNonSinMat(double** matrix, double** identity, int size)
+void GenNonSinMat(double** matrix, double** identity, int size, int mod)
 {
 	srand((unsigned)time(NULL));
 
@@ -111,7 +111,7 @@ void GenNonSinMat(double** matrix, double** identity, int size)
 	{
 		for (int j = 0; j < size; j++)
 		{
-			matrix[i][j] = rand() % 100;
+			matrix[i][j] = rand() % mod;
 
 			identity[i][j] = 0;
 			if (i == j)
@@ -123,15 +123,28 @@ void GenNonSinMat(double** matrix, double** identity, int size)
 }
 
 
-int GenMatPair(double** mat, double** matInv, int dim)
+int GenRandMatPair(double** mat, double** matInv, int dim, int mod)
 {
 	while (1)
 	{
-		GenNonSinMat(mat, matInv, dim); //generate S
+		GenNonSinMat(mat, matInv, dim, mod); //generate S
 
 		if (InvMat(mat, matInv, dim) != 0) //calcurate S inverse
 			break;
 	}
 
 	return 0;
+}
+
+int CreateMat(double** mat, int height, int width, int rowId, int colId){
+  for (int i = 0; i < height; i++){
+	for (int j = 0; j < width; j++){
+	  if ( (i == j && height!=1 && width != 1) || (i==rowId && j==colId) ){
+		mat[i][j] = 1;
+	  }
+	  else{
+	    mat[i][j] = 0;
+	  }
+	}
+  }
 }

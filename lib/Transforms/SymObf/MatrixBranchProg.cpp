@@ -15,111 +15,40 @@ private:
   AllocaInst* matAI;
 
 public:
-//TODO: Impelemt array structure in IR.
-/*
-  %mat = alloca [2 x [2 x i32]], align 16
-  %arrayconInt = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 0
-  %arrayci1 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayconInt, i64 0, i64 0
-  store i32 0, i32* %arrayci1, align 16
-  %arrayconInt2 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 0
-  %arrayconInt3 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayconInt2, i64 0, i64 1
-  store i32 1, i32* %arrayconInt3, align 4
-  %arrayconInt4 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 1
-  %arrayconInt5 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayconInt4, i64 0, i64 0
-  store i32 0, i32* %arrayconInt5, align 8
-  %arrayconInt6 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat, i64 0, i64 1
-  %arrayconInt7 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayconInt6, i64 0, i64 1
-  store i32 1, i32* %arrayconInt7, align 4
-  ret void
-*/
 
-  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, const int height, const int width, int iRow, int conInt_col, Type* type)
-	  :module(module), context(context), bb(bb), width(width), height(height){
+  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, double** mat, const int height, const int width)
+	  :module(module), context(context), bb(bb), height(height), width(width){
+    LOG(L2_DEBUG) << "Constructing MatrixInIR...";
+	ArrayType* fpAT = ArrayType::get(doubleType, width);
+	ArrayType* arAT = ArrayType::get(fpAT, height);
 
-    ConstantInt*** ciMat = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
-
-	//Construct an allocaInst:
-	//AllocaInst (Type *Ty, const Twine &Name="", Instruction *InsertBefore=nullptr)
-	ArrayType* l2ArrayType = ArrayType::get(i64Type, width);
-	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, height);
-
-	matAI = new AllocaInst(l1ArrayType,"", bb);
-
+	matAI = new AllocaInst(arAT,"", bb);
 	for(int i=0; i<height; i++){
-	  ciMat[i] = (ConstantInt**) malloc (sizeof(ConstantInt*) * width);
-
-	  //Construct an GetElementPtrInst;
-	  //Create (Type *PointeeType, Value *Ptr, ArrayRef< Value * > IdxList, const Twine &NameStr="", Instruction *InsertBefore=nullptr) 
-	  //http://llvm.org/docs/GetElementPtr.html
-      ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
-	  vector<Value*> conIntVec;
-	  conIntVec.push_back(ci0);
-	  conIntVec.push_back(cii);
-	  ArrayRef<Value*> conIntArrayRef(conIntVec);
-	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAI, conIntArrayRef,"", bb);
+      ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type, i);
+	  vector<Value*> ciVec;
+	  ciVec.push_back(ci0);
+	  ciVec.push_back(cii);
+	  ArrayRef<Value*> ar0i(ciVec);
+	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(arAT, (Value*) matAI, ar0i,"", bb);
 
 	  for(int j=0; j<width; j++){
-        ConstantInt* conInt2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
+        ConstantInt* cij = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
 	    vector<Value*> l2IdxVec;
 	    l2IdxVec.push_back(ci0);
-	    l2IdxVec.push_back(conInt2);
-	    ArrayRef<Value*> conIntArrayRef(l2IdxVec);
-	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, conIntArrayRef,"", bb);
-		ConstantInt* ciTmp;
-		if((i==j && width>1 && height >1)|| (i==iRow && j == conInt_col)){
-          ciTmp = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
-		}else{
-          ciTmp = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-		}
-		ciMat[i][j] = ciTmp;
-		StoreInst* storeInst = new StoreInst((Value *) ciTmp, (Value *) l2GetPEInst, bb);
+	    l2IdxVec.push_back(cij);
+	    ArrayRef<Value*> ar0j(l2IdxVec);
+	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(fpAT, (Value*) getEPInst, ar0j,"", bb);
+		ConstantFP* fpTmp = (ConstantFP*) ConstantFP::get(doubleType, mat[i][j]);
+		StoreInst* storeInst = new StoreInst((Value *) fpTmp, (Value *) l2GetPEInst, bb);
 
-		const char strArg1[] = "%d";
-		PrintInIR(module, bb, strArg1, sizeof(strArg1), ciTmp);
+		const char strArg1[] = "%.3f,";
+		PrintInIR(module, bb, strArg1, sizeof(strArg1), fpTmp);
 	  }
  	  const char strArg1[] = "\n";
 	  PrintInIR(module, bb, strArg1, sizeof(strArg1), nullptr);
 	}
  	const char strArg1[] = "---------------------------\n";
 	PrintInIR(module, bb, strArg1, sizeof(strArg1), nullptr);
-  }
-
-  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb,  const int width, const int height)
-	  :module(module), context(context), bb(bb), width(width), height(height){
-    ConstantInt*** ciMat = (ConstantInt***) malloc (sizeof(ConstantInt**)*height);
-	Type* i64Type = IntegerType::getInt64Ty(context);
-	ArrayType* l2ArrayType = ArrayType::get(i64Type, width);
-	ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, height);
-
-	matAI = new AllocaInst(l1ArrayType,"", bb);
-
-
-	for(int i=0; i<height; i++){
-	  ciMat[i] = (ConstantInt**) malloc (sizeof(ConstantInt*) * width);
-
-      ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
-	  vector<Value*> conIntVec;
-	  conIntVec.push_back(ci0);
-	  conIntVec.push_back(cii);
-	  ArrayRef<Value*> conIntArrayRef(conIntVec);
-	  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) matAI, conIntArrayRef,"", bb);
-
-	  for(int j=0; j<width; j++){
-        ConstantInt* conInt2 = (ConstantInt*) ConstantInt::getSigned(i64Type,j);
-	    vector<Value*> l2IdxVec;
-	    l2IdxVec.push_back(ci0);
-	    l2IdxVec.push_back(conInt2);
-	    ArrayRef<Value*> conIntArrayRef(l2IdxVec);
-	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(l2ArrayType, (Value*) getEPInst, conIntArrayRef,"", bb);
-		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
-		ciMat[i][j] = ciTmp;
-		StoreInst* storeInst = new StoreInst((Value *) ciTmp, (Value *) l2GetPEInst, bb);
-	  }
-	}
-  }
-
-  //Constant has to be loaded
-  void CreateLoadInst(){
   }
 
   AllocaInst* getMatAI(){
@@ -134,9 +63,6 @@ public:
 	return height;
   }
 
-  void Randomize(){
-    //TODO: to be implement
-  }
   void GradEncode(){
     //TODO: to be implement
   }
@@ -174,9 +100,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   BasicBlock* forEndBB = forIncBB->splitBasicBlock(icmpInst, "for_end_loop");
   forIncBB->getTerminator()->eraseFromParent();
   BasicBlock* conBB = forEndBB->splitBasicBlock(icmpInst, "entry_continue");
-
-  MatrixInIR* headMat;
-  MatrixInIR* tailMat;
   //list<MatrixInIR*> matListInp0;
   //list<MatrixInIR*> matListInp1;
 
@@ -189,80 +112,96 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	LOG(L_INFO) << "[-PI-]:ICmpInst has two symbolic variables; Don't obfuscate!";
   }
 
-  ConstantInt* conInt;
+  ConstantInt* ciCmpObj;
   IntegerType* inp;
 
   if(isa<ConstantInt> (*op0)){
-	conInt = (ConstantInt*)op0;
+	ciCmpObj = (ConstantInt*)op0;
 	inp = (IntegerType*) op1;
   }
   else{	
-	conInt = (ConstantInt*) op1;
+	ciCmpObj = (ConstantInt*) op1;
 	inp = (IntegerType*) op0;
   }
 
-  int len = conInt->getBitWidth();
+  int len = ciCmpObj->getBitWidth();
   int dim = len + 2;
+  LOG(L_INFO) << "LEN:"<<len;
 
-  ArrayType* l2ArrayType = ArrayType::get(i64Type, dim);
-  ArrayType* l1ArrayType = ArrayType::get(l2ArrayType, dim);
+  ArrayType* fpAT = ArrayType::get(doubleType, dim);
+  ArrayType* arAT = ArrayType::get(fpAT, dim);
 
-  ArrayType* l2HeadMat = ArrayType::get(i64Type, dim);
+  ArrayType* l2HeadMat = ArrayType::get(doubleType, dim);
   ArrayType* l1HeadMat = ArrayType::get(l2HeadMat, 1);
   
-  ArrayType* l2TailMat = ArrayType::get(i64Type, 1);
+  ArrayType* l2TailMat = ArrayType::get(doubleType, 1);
   ArrayType* l1TailMat = ArrayType::get(l2TailMat, dim);
-  //We create a matrix that points to l1PtrType 
-  ArrayType* l2MatArrayType = ArrayType::get(l1PtrType, len);
-  ArrayType* l1MatArrayType = ArrayType::get(l2MatArrayType, 2);
+  //We create a matrix that points to ptrPT 
+  ArrayType* ptrPtrAT = ArrayType::get(ptrPT, len);
+  ArrayType* ptrPtrArAT = ArrayType::get(ptrPtrAT, 2);
 
-  AllocaInst* matAI = new AllocaInst(l1MatArrayType,"matrix", pBB);
+  AllocaInst* matAI = new AllocaInst(ptrPtrArAT,"matrix", pBB);
 
   ConstantInt* ciDim = (ConstantInt*) ConstantInt::getSigned(i64Type,dim);
   ConstantInt* ciLen = (ConstantInt*) ConstantInt::getSigned(i64Type,len);
 
   //Get the pointers of matrix for input bit 0
-  GetElementPtrInst* mat0PtrEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, ar00,"", pBB);
+  GetElementPtrInst* mat0PtrEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar00,"", pBB);
   //Get the pointers of matrix for input bit 1 
-  GetElementPtrInst* mat1PtrEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, ar01,"", pBB);
+  GetElementPtrInst* mat1PtrEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar01,"", pBB);
 
-  const char strArg_1[] = "ICmp constant: %d\n";
-  PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), conInt);
+  const char strArg_1[] = "ICmp constant: %.3f\n";
+  PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), ciCmpObj);
 
   //Generate the matrix and save to matAI
-  double** mat = (double**) malloc (sizeof(double*) * dim);
-  double** matInv = (double**) malloc (sizeof(double*) * dim);
-  for (int i = 0; i < dim; i++)
-  {
-	mat[i] = (double*) malloc (sizeof(double) * dim);
-	matInv[i] = (double*) malloc (sizeof(double) * dim);
-  }
-  GenMatPair(mat, matInv, dim);
-  LOG(L1_DEBUG) << "-----------------Generated Matrix:";
+  double** headMat = (double**) malloc (sizeof(double*) * 1);
+  double** headMatRand = (double**) malloc (sizeof(double*) * 1);
+  double** tailMat = (double**) malloc (sizeof(double*) * dim);
+  double** tailMatRand = (double**) malloc (sizeof(double*) * dim);
+  double** midMat0 = (double**) malloc (sizeof(double*) * dim);
+  double** midMat0Rand = (double**) malloc (sizeof(double*) * dim);
+  double** midMat1 = (double**) malloc (sizeof(double*) * dim);
+  double** midMat1Rand = (double**) malloc (sizeof(double*) * dim);
+
+  headMat[0] = (double*) malloc (sizeof(double) * dim);
+  headMatRand[0] = (double*) malloc (sizeof(double) * dim);
   for(int i=0; i<dim; i++){
-	for(int j=0; j<dim; j++){
-	  int tmp = mat[i][j];
-	  errs()<< tmp <<" ";
-	}
-    errs()<<"\n";
-  }
-  LOG(L1_DEBUG) << "-----------------Generated Matrix Inverse:";
-  for(int i=0; i<dim; i++){
-	for(int j=0; j<dim; j++){
-	  errs()<< ("%.1f ", matInv[i][j]);
-	}
-    errs()<<"\n";
+    tailMat[i] = (double*) malloc (sizeof(double) * 1);
+    tailMatRand[i] = (double*) malloc (sizeof(double) * 1);
+	midMat0[i] = (double*) malloc (sizeof(double) * dim);
+	midMat0Rand[i] = (double*) malloc (sizeof(double) * dim);
+	midMat1[i] = (double*) malloc (sizeof(double) * dim);
+	midMat1Rand[i] = (double*) malloc (sizeof(double) * dim);
   }
 
-  headMat = new MatrixInIR(module, context, pBB, 1, dim, 0, 0, boolType); //~bit
+  CreateMat(headMat, 1, dim, 0, 0);
+  CreateMat(tailMat, dim, 1, dim-1, 0);
+
+  double** randMat = (double**) malloc (sizeof(double*) * dim);
+  double** randMatInv = (double**) malloc (sizeof(double*) * dim);
+  double** randMat2 = (double**) malloc (sizeof(double*) * dim);
+  double** randMatInv2 = (double**) malloc (sizeof(double*) * dim);
+  for (int i = 0; i < dim; i++)
+  {
+	randMat[i] = (double*) malloc (sizeof(double) * dim);
+	randMatInv[i] = (double*) malloc (sizeof(double) * dim);
+	randMat2[i] = (double*) malloc (sizeof(double) * dim);
+	randMatInv2[i] = (double*) malloc (sizeof(double) * dim);
+  }
+  GenRandMatPair(randMat, randMatInv, dim, 1024);
+  MatrixMult(headMat, randMat, headMatRand, 1, dim, dim, dim);
+  PrintMat(headMatRand, 1, dim);
+  
+  MatrixInIR* headMatIR = new MatrixInIR(module, context, pBB, headMatRand, 1, dim); //~bit
+
+  GenRandMatPair(randMat2, randMatInv2, dim, 1024);
 
   int iRow;
   int iCol4T;
   int iCol4F = len;
   for(int i=0; i<len; i++){
-	bool inp = conInt->getValue()[i];//It starts from the lower bit.
-	//bool inp = conInt->getValue()[len-i-1];//It starts from the lower bit.
-	LOG(L1_DEBUG)<<"+++++++++++++++++++++++++++++++Inp:"<<inp;
+	bool inp = ciCmpObj->getValue()[i];//It starts from the lower bit.
+	LOG(L1_DEBUG)<<"+++++++++++++++++++++++++++++++Inp["<<i<<"]:"<<inp;
 
     iRow = i;
 
@@ -273,37 +212,54 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	  iCol4T = i+2;
 	}
 
-	MatrixInIR *mat0, *mat1;
-
 	if(inp){
-	  mat0 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4F,boolType); //~bit
-	  mat1 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4T,boolType); //bit
+	  CreateMat(midMat0,dim,dim,iRow,iCol4F);
+	  CreateMat(midMat1,dim,dim,iRow,iCol4T);
 	}
 	else{
-	  mat0 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4T,boolType); //bit
-	  mat1 = new MatrixInIR(module, context, pBB, dim,dim,iRow,iCol4F,boolType); //~bit
+	  CreateMat(midMat0,dim,dim,iRow,iCol4T);
+	  CreateMat(midMat1,dim,dim,iRow,iCol4F);
 	}
+
+	if(i==0){
+	  MatrixMult(randMatInv, midMat0, midMat0Rand, dim, dim, dim, dim);
+	  MatrixMult(randMatInv, midMat1, midMat1Rand, dim, dim, dim, dim);
+	}
+	else{
+	  MatrixMult(randMatInv2, midMat0, midMat0Rand, dim, dim, dim, dim);
+	  MatrixMult(randMatInv2, midMat1, midMat1Rand, dim, dim, dim, dim);
+	}
+
+    CopyMat(midMat0Rand, midMat0, dim, dim); 
+    CopyMat(midMat1Rand, midMat1, dim, dim); 
+
+    GenRandMatPair(randMat2, randMatInv2, dim, 1024);
+    MatrixMult(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim);
+    MatrixMult(midMat1, randMat2, midMat1Rand, dim, dim, dim, dim);
+
+	MatrixInIR*  mat0 = new MatrixInIR(module, context, pBB, midMat0Rand, dim,dim); //bit
+	MatrixInIR*  mat1 = new MatrixInIR(module, context, pBB, midMat1Rand, dim,dim); //~bit
+
     ConstantInt* cii = (ConstantInt*) ConstantInt::getSigned(i64Type,i);
     vector<Value*> vec0i;
     vec0i.push_back(ci0);
     vec0i.push_back(cii);
     ArrayRef<Value*> ar0i(vec0i);
-    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat0PtrEPI, ar0i,"", pBB);
-    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) mat1PtrEPI, ar0i,"", pBB);
+    GetElementPtrInst* mat0EPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) mat0PtrEPI, ar0i,"", pBB);
+    GetElementPtrInst* mat1EPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) mat1PtrEPI, ar0i,"", pBB);
 
-    GetElementPtrInst* mat0iEPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat0->getMatAI(), ar00,"", pBB);
-    GetElementPtrInst* mat1iEPI = GetElementPtrInst::CreateInBounds(l1ArrayType, (Value*) mat1->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat0iEPI = GetElementPtrInst::CreateInBounds(arAT, (Value*) mat0->getMatAI(), ar00,"", pBB);
+    GetElementPtrInst* mat1iEPI = GetElementPtrInst::CreateInBounds(arAT, (Value*) mat1->getMatAI(), ar00,"", pBB);
 
-    BitCastInst* mat0BCI = new BitCastInst((Value*) mat0iEPI, l1PtrType, "", pBB);
-    BitCastInst* mat1BCI = new BitCastInst((Value*) mat1iEPI, l1PtrType, "", pBB);
+    BitCastInst* mat0BCI = new BitCastInst((Value*) mat0iEPI, ptrPT, "", pBB);
+    BitCastInst* mat1BCI = new BitCastInst((Value*) mat1iEPI, ptrPT, "", pBB);
 
     StoreInst* mat0StoreInst = new StoreInst(mat0BCI, (Value *) mat0EPI, pBB);
     StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) mat1EPI, pBB);
-
-	//matListInp0.push_back(mat0);
-	//matListInp1.push_back(mat1);
   }
-  tailMat = new MatrixInIR(module, context, pBB, dim, 1, dim-1, 0, boolType); //bit
+
+  MatrixMult(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1);
+  MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
 
   //Init the parameter for the for loop; 
   AllocaInst* iAI = new AllocaInst(i64Type,"", pBB);
@@ -324,17 +280,17 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vec0li.push_back(ci0);
   vec0li.push_back(matIdLI);
   ArrayRef<Value*> ar0li(vec0li);
-  GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, ar0li,"", pBB);
-  GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getBinEPI, ar00,"", pBB);
+  GetElementPtrInst* getBinEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar0li,"", pBB);
+  GetElementPtrInst* getLenEPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) getBinEPI, ar00,"", pBB);
   LoadInst* ldMatLI = new LoadInst(getLenEPI,"",pBB);
 
-  GetElementPtrInst* headMatEPI = GetElementPtrInst::CreateInBounds(l1HeadMat, (Value*) headMat->getMatAI(), ar00,"", pBB);
-  BitCastInst* headMatBI = new BitCastInst((Value*) headMatEPI, l1PtrType, "", pBB);
-  AllocaInst* headMatAI = new AllocaInst(l1PtrType,"", pBB);
+  GetElementPtrInst* headMatEPI = GetElementPtrInst::CreateInBounds(l1HeadMat, (Value*) headMatIR->getMatAI(), ar00,"", pBB);
+  BitCastInst* headMatBI = new BitCastInst((Value*) headMatEPI, ptrPT, "", pBB);
+  AllocaInst* headMatAI = new AllocaInst(ptrPT,"", pBB);
   StoreInst* headMatSI = new StoreInst(headMatBI, (Value *) headMatAI, pBB);
   LoadInst* headMatLI = new LoadInst(headMatAI,"", pBB);
 
-  AllocaInst* interMatAI = new AllocaInst(l1PtrType,"interMat",pBB);
+  AllocaInst* interMatAI = new AllocaInst(ptrPT,"interMat",pBB);
   
   vector<Value*> vecMM;
   vecMM.push_back(headMatLI);
@@ -366,7 +322,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   LoadInst* matIdFbLI = new LoadInst((Value *) matIdAI, "", forBodyBB);
   LoadInst* iFbLI02 = new LoadInst((Value*) iAI, "", forBodyBB);
 
-  //const char strArg_11[] = "Inp: %d\n";
+  //const char strArg_11[] = "Inp: %.3f\n";
   //PrintInIR(module, forBodyBB, strArg_11, sizeof(strArg_11), matIdFbLI);
 
   vector<Value*> vecFb0I0;
@@ -379,8 +335,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecFb0I1.push_back(iFbLI02);
   ArrayRef<Value*> arFb0I1(vecFb0I1);
 
-  GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(l1MatArrayType, (Value*) matAI, arFb0I0,"", forBodyBB);
-  GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(l2MatArrayType, (Value*) getBinFbEPI, arFb0I1,"", forBodyBB);
+  GetElementPtrInst* getBinFbEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, arFb0I0,"", forBodyBB);
+  GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) getBinFbEPI, arFb0I1,"", forBodyBB);
 
   LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
   LoadInst* interMatLI = new LoadInst(interMatAI,"",forBodyBB);
@@ -409,9 +365,9 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   BasicBlock* falseBB = oriBI->getSuccessor(1);
   oriBI->eraseFromParent();
 
-  GetElementPtrInst* tailMatEPI = GetElementPtrInst::CreateInBounds(l1TailMat, (Value*) tailMat->getMatAI(), ar00,"", conBB);
-  BitCastInst* tailMatBI = new BitCastInst((Value*) tailMatEPI, l1PtrType, "", conBB);
-  AllocaInst* tailMatAI = new AllocaInst(l1PtrType,"", conBB);
+  GetElementPtrInst* tailMatEPI = GetElementPtrInst::CreateInBounds(l1TailMat, (Value*) tailMatIR->getMatAI(), ar00,"", conBB);
+  BitCastInst* tailMatBI = new BitCastInst((Value*) tailMatEPI, ptrPT, "", conBB);
+  AllocaInst* tailMatAI = new AllocaInst(ptrPT,"", conBB);
   StoreInst* tailMatSI = new StoreInst(tailMatBI, (Value *) tailMatAI, conBB);
   LoadInst* tailMatLI = new LoadInst(tailMatAI,"", conBB);
 
@@ -430,293 +386,17 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
   LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);
-  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, l2PtrType, "", conBB);
-  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) cmpCI, ci0,"", conBB);
-  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getCmpL1EPI, ci0,"", conBB);
+  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, fpPT, "", conBB);
+  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(doubleType, (Value*) cmpCI, ci0,"", conBB);
+  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(doubleType, (Value*) getCmpL1EPI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
-  StoreInst* cmpSI = new StoreInst((Value*) getCmpLI, cmpAI, "", conBB);
+  FPToSIInst* fp2SI = new FPToSIInst(getCmpLI, i64Type, "", conBB);
+  StoreInst* cmpSI = new StoreInst((Value*) fp2SI, cmpAI, "", conBB);
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
-  const char strArg1[] = "ICmp Reuslt: %d\n";
+  const char strArg1[] = "ICmp Reuslt: %.3f\n";
   PrintInIR(module, conBB, strArg1, sizeof(strArg1), cmpLI);
 
   ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) cmpLI, ci1, "");
   BranchInst::Create(trueBB, falseBB, conII, conBB);
 }
-
-/*
- *Function Define:
- *i32** @MM(i32** %mat1, i32** %mat2, i32 %m1Height, i32 %m1Width, i32 %m2Height, i32 %m2Width)
- *
- *Another way is to write the code in c and link during compilation: 
- *(https://www.cs.cornell.edu/~asampson/blog/llvm.html)
-*/
-/*
-
-Function* GenMatMulFunc(LLVMContext& context, Module& module){
-  LOG(L2_DEBUG) << "GenMatMulFunc...";
-  //We construct a type of 2-level int array as the type for the matrix. 
-
-  Type* i64Type = IntegerType::getInt64Ty(context);
-  Type* i32Type = IntegerType::getInt32Ty(context);
-
-  ConstantInt* ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0); 
-  ConstantInt* ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1); 
-
-  PointerType* l2PtrType = PointerType::getUnqual(i64Type);
-  PointerType* l1PtrType = PointerType::getUnqual(l2PtrType);
-
-
-  //We declare the parameters of the function
-  vector<Type*> paramVec;
-  paramVec.push_back((Type *) l1PtrType);
-  paramVec.push_back((Type *) l1PtrType);
-  paramVec.push_back(i64Type);
-  paramVec.push_back(i64Type);
-  paramVec.push_back(i64Type);
-  paramVec.push_back(i64Type);
-  ArrayRef<Type*> paramArrayType(paramVec);
-
-
-  //We wrap the type of the function
-  //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-  FunctionType* funcType = FunctionType::get((Type *) l1PtrType, paramArrayType, false);
-
-  //We define the function name as "MatrixMult"
-  const Twine* funcName = new Twine("MatrixMult");
-  //Params: (FunctionType *Ty, LinkageTypes Linkage, const Twine &N="", Module *M=nullptr)
-  Function* funcMM = Function::Create(funcType, GlobalValue::ExternalLinkage, *funcName, &module);
-
-  BasicBlock* entryBB = BasicBlock::Create(context, "entry", funcMM);
-  BasicBlock* ifDimCheckBB = BasicBlock::Create(context, "if_dimCheck", funcMM);
-  BasicBlock* ifDimCheckEndBB = BasicBlock::Create(context, "if_dimCheckEnd", funcMM);
-  BasicBlock* forCond1BB = BasicBlock::Create(context, "for_cond1", funcMM);
-  BasicBlock* forBody1BB = BasicBlock::Create(context, "for_body1", funcMM);
-  BasicBlock* forCond2BB = BasicBlock::Create(context, "for_cond2", funcMM);
-  BasicBlock* forBody2BB = BasicBlock::Create(context, "for_body2", funcMM);
-  BasicBlock* forCond3BB = BasicBlock::Create(context, "for_cond3", funcMM);
-  BasicBlock* forBody3BB = BasicBlock::Create(context, "for_body3", funcMM);
-  BasicBlock* forInc1BB = BasicBlock::Create(context, "for_inc1", funcMM);
-  BasicBlock* forEnd1BB = BasicBlock::Create(context, "for_end1", funcMM);
-  BasicBlock* forInc2BB = BasicBlock::Create(context, "for_inc2", funcMM);
-  BasicBlock* forEnd2BB = BasicBlock::Create(context, "for_end2", funcMM);
-  BasicBlock* forInc3BB = BasicBlock::Create(context, "for_inc3", funcMM);
-  BasicBlock* forEnd3BB = BasicBlock::Create(context, "for_end3", funcMM);
-  BasicBlock* cleanupBB = BasicBlock::Create(context, "cleanup", funcMM);
-  IRBuilder<> builder(entryBB);
-
-  //Get the two matrix from arguments
-  Value* mat1;
-  Value* mat2;
-  Value* mat1Height;
-  Value* mat1Width;
-  Value* mat2Height;
-  Value* mat2Width;
-  int argId = 0;
-  for (Function::arg_iterator arg = funcMM->arg_begin(); arg!=funcMM->arg_end(); ++arg){
-    ++argId;
-	switch (argId)
-	{
-	  case 1:
-	  {
-		LOG(L2_DEBUG)<<"argId:" << argId;
-	    mat1 = (Value*) &*arg;
-		break;
-	  }
-	  case 2:
-	  {
-		LOG(L2_DEBUG)<<"argId:" << argId;
-		mat2 = (Value*) &*arg;
-		break;
-	  }
-	  case 3:
-	  {
-		if(arg->getType()->isIntegerTy()){
-		  LOG(L2_DEBUG)<<"argId:" << argId;
-	      mat1Height = (Value*) &*arg;
-		}
-		else{
-		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
-		}
-		break;
-	  }
-	  case 4:
-	  {
-		if(arg->getType()->isIntegerTy()){
-		  LOG(L2_DEBUG)<<"argId:" << argId;
-	      mat1Width = (Value*) &*arg;
-		}
-		else{
-		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
-		}
-		break;
-	  }
-	  case 5:
-	  {
-		if(arg->getType()->isIntegerTy()){
-		  LOG(L2_DEBUG)<<"argId:" << argId;
-	      mat2Height = (Value*) &*arg;
-		}
-		else{
-		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
-		}
-		break;
-	  }
-	  case 6:
-	  {
-		if(arg->getType()->isIntegerTy()){
-		  LOG(L2_DEBUG)<<"argId:" << argId;
-	      mat2Width = (Value*) &*arg;
-		}
-		else{
-		  LOG(L2_DEBUG)<<"Wrong parameters:" << arg->getType()->getTypeID();
-		}
-		break;
-	  }
-	  default:
-	    break;
-	  //TODO:
-	  //We return an empty matrix;
-	  //TODO:Throw an alert;
-	}
-	//TODO:Get the argument
-  }
-  //TODO: Muliply the arg
-
-  //TODO:
-  AllocaInst* retAllocaInst = new AllocaInst(l1PtrType,"retval", entryBB);
-
-  AllocaInst* mat1AddrAllocaInst = new AllocaInst(l1PtrType,"mat1.addr", entryBB);
-  AllocaInst* mat2AddrAllocaInst = new AllocaInst(l1PtrType,"mat2.addr", entryBB);
-  AllocaInst* m1HeightAddrAllocaInst = new AllocaInst(i64Type,"m1Heigh.addr", entryBB);
-  AllocaInst* m1WidthAddrAllocaInst = new AllocaInst(i64Type,"m1Width.addr", entryBB);
-  AllocaInst* m2HeightAddrAllocaInst = new AllocaInst(i64Type,"m2Heigh.addr", entryBB);
-  AllocaInst* m2WidthAddrAllocaInst = new AllocaInst(i64Type,"m2Width.addr", entryBB);
-  AllocaInst* iAI = new AllocaInst(i64Type,"i", entryBB);
-  AllocaInst* jAI = new AllocaInst(i64Type,"j", entryBB);
-  AllocaInst* eleAllocaInst = new AllocaInst(i64Type,"ele", entryBB);
-  AllocaInst* kAI = new AllocaInst(i64Type,"k", entryBB);
-
-  StoreInst* mat1StoreInst = new StoreInst(mat1, (Value *) mat1AddrAllocaInst, entryBB);
-  StoreInst* mat2StoreInst = new StoreInst(mat2, (Value *) mat2AddrAllocaInst, entryBB);
-  StoreInst* m1HeightStoreInst = new StoreInst(mat1Height, (Value *) m1HeightAddrAllocaInst, entryBB);
-  StoreInst* m1WidthStoreInst = new StoreInst(mat1Width, (Value *) m1WidthAddrAllocaInst, entryBB);
-  StoreInst* m2HeightStoreInst = new StoreInst(mat2Height, (Value *) m2HeightAddrAllocaInst, entryBB);
-  StoreInst* m2WidthStoreInst = new StoreInst(mat2Width, (Value *) m2WidthAddrAllocaInst, entryBB);
-  
-  LoadInst* m1HeightLoadInst = new LoadInst((Value*) m1HeightAddrAllocaInst, "", entryBB);
-  LoadInst* m1WidthLoadInst = new LoadInst((Value*) m1WidthAddrAllocaInst, "", entryBB);
-  LoadInst* m2HeightLoadInst = new LoadInst((Value*) m2HeightAddrAllocaInst, "", entryBB);
-  LoadInst* m2WidthLoadInst = new LoadInst((Value*) m2WidthAddrAllocaInst, "", entryBB);
-
-  BinaryOperator* getMatSizeMul = BinaryOperator::CreateNUWMul((Value*) m1HeightLoadInst,(Value*) m2WidthLoadInst, "retMatSize", entryBB);
-
-  AllocaInst* vlaAllocaInst = new AllocaInst(i64Type,(Value *) getMatSizeMul,"vla", entryBB);
-  ICmpInst* icmpInst = new ICmpInst(*entryBB,CmpInst::ICMP_NE,(Value*) m1WidthLoadInst, (Value*) m2HeightLoadInst,"dimCheck");
-  BranchInst::Create(ifDimCheckBB,ifDimCheckEndBB,icmpInst, entryBB);
-
-  //BasicBlock* if_dimCheck
-  BitCastInst* bitCastInst = new BitCastInst((Value*) vlaAllocaInst, l1PtrType, "", ifDimCheckBB);
-  StoreInst* retStoreInst = new StoreInst((Value*) bitCastInst, (Value*) retAllocaInst, ifDimCheckBB);
-  BranchInst::Create(cleanupBB,ifDimCheckBB);
-
-  //BasicBlock* if_dimCheckEnd
-
-  StoreInst* iSI = new StoreInst((Value*) ci0, (Value*) iAI, ifDimCheckEndBB);
-  BranchInst::Create(forCond1BB,ifDimCheckEndBB);
-
-  //BasicBlock* for_cond1
-  LoadInst* iLI = new LoadInst((Value*) iAI, "", forCond1BB);
-  //LoadInst* m1HeightAddrLoadInst = new LoadInst((Value*) m1HeightAddrAllocaInst, "", forCond1BB);
-  ICmpInst* icmpInst1 = new ICmpInst(*forCond1BB,CmpInst::ICMP_SLT,(Value*) iLI, (Value*) m1HeightLoadInst, "");
-  BranchInst::Create(forBody1BB,forEnd3BB,icmpInst1, forCond1BB);
-  
-  //BasicBlock* for_body1
-  StoreInst* jSI = new StoreInst((Value*) ci0, (Value*) jAI, forBody1BB);
-  BranchInst::Create(forCond2BB,forBody1BB);
-  
-  //BasicBlock* for_cond2
-  LoadInst* jLI = new LoadInst((Value*) jAI, "", forCond2BB);
-  ICmpInst* icmpInst2 = new ICmpInst(*forCond2BB,CmpInst::ICMP_SLT,(Value*) iLI, (Value*) m2WidthLoadInst, "");
-  BranchInst::Create(forBody2BB, forEnd2BB, icmpInst2, forCond2BB);
-  
-  //BasicBlock* for_body2
-  StoreInst* kSI = new StoreInst((Value*) ci0, (Value*) kAI, forBody2BB);
-  StoreInst* eleStoreInst = new StoreInst((Value*) ci0, (Value*) eleAllocaInst, forBody2BB);
-  BranchInst::Create(forCond3BB,forBody2BB);
-  
-  //BasicBlock* for_cond3
-  LoadInst* kLI = new LoadInst((Value*) kAI, "", forCond3BB);
-  ICmpInst* icmpInst3 = new ICmpInst(*forCond3BB,CmpInst::ICMP_SLT,(Value*) kLI, (Value*) m1WidthLoadInst, "");
-  BranchInst::Create(forBody3BB, forEnd1BB, icmpInst3, forCond3BB);
-  
-  //BasicBlock* for_body3
-  LoadInst* eleLoadInst = new LoadInst((Value*) eleAllocaInst, "", forBody3BB);
-  //load an element from the first matrix
-  LoadInst* mat1AddrLoadInst = new LoadInst((Value*) mat1AddrAllocaInst, "", forBody3BB);
-  BitCastInst* bitCastInst2 = new BitCastInst((Value*) mat1AddrLoadInst, l2PtrType, "", forBody3BB);
-  LoadInst* iLI2 = new LoadInst((Value*) iAI, "", forBody3BB);
-  BinaryOperator* bopMul1 = BinaryOperator::CreateNUWMul((Value*) m1WidthLoadInst, (Value*) iLI2, "", forBody3BB);
-  GetElementPtrInst* getEPInst = GetElementPtrInst::CreateInBounds(i64Type, (Value*) bitCastInst2, bopMul1,"", forBody3BB);
-  LoadInst* kLI2 = new LoadInst((Value*) kAI, "", forBody3BB);
-  GetElementPtrInst* getEPInst2 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInst, kLI2,"", forBody3BB);
-  LoadInst* eLoadInst31 = new LoadInst((Value*) getEPInst2, "", forBody3BB);
-
-  //load an element from the first matrix
-  LoadInst* mat2AddrLoadInst = new LoadInst((Value*) mat2AddrAllocaInst, "", forBody3BB);
-  BitCastInst* bitCastInst3 = new BitCastInst((Value*) mat2AddrLoadInst, l2PtrType, "", forBody3BB);
-  LoadInst* kLI3 = new LoadInst((Value*) kAI, "", forBody3BB);
-  BinaryOperator* bopMul3 = BinaryOperator::CreateNUWMul((Value*) m2WidthLoadInst, (Value*) kLI2, "", forBody3BB);
-  GetElementPtrInst* getEPInst31 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) bitCastInst3, bopMul3,"", forBody3BB);
-  LoadInst* jLI3 = new LoadInst((Value*) jAI, "", forBody3BB);
-  GetElementPtrInst* getEPInst32 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInst31, jLI3,"", forBody3BB);
-  LoadInst* eLoadInst32 = new LoadInst((Value*) getEPInst32, "", forBody3BB);
-  BinaryOperator* bopMul32 = BinaryOperator::CreateNSWMul((Value*) eLoadInst31, (Value*) eLoadInst32, "", forBody3BB);
-  BinaryOperator* bopAdd31 = BinaryOperator::CreateNSWAdd((Value*) bopMul32, (Value*) eleLoadInst, "", forBody3BB);
-  StoreInst* eleStoreInst3 = new StoreInst((Value*) bopAdd31, (Value*) eleAllocaInst, forBody3BB);
-  BranchInst::Create(forInc1BB,forBody3BB);
-  
-  //BasicBlock* for_inc1
-  LoadInst* kLIInc1 = new LoadInst((Value*) kAI, "", forInc1BB);
-  BinaryOperator* bopAddInc1 = BinaryOperator::CreateNSWAdd((Value*) kLIInc1, (Value*) ci1, "", forInc1BB);
-  StoreInst* kSIInc1 = new StoreInst((Value*) bopAddInc1, (Value*) kAI, forInc1BB);
-  BranchInst::Create(forCond3BB,forInc1BB);
-  
-  //BasicBlock* for_end1
-  LoadInst* eleLoadInstEnd1 = new LoadInst((Value*) eleAllocaInst, "", forEnd1BB);
-  LoadInst* jLIEnd1 = new LoadInst((Value*) jAI, "", forEnd1BB);
-  LoadInst* iLIEnd1 = new LoadInst((Value*) iAI, "", forEnd1BB);
-  BinaryOperator* bopMulEnd1 = BinaryOperator::CreateNSWMul((Value*) iLIEnd1, (Value*) m2WidthLoadInst, "", forEnd1BB);
-  GetElementPtrInst* getEPInstEnd1 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) vlaAllocaInst, bopMulEnd1,"", forEnd1BB);
-  GetElementPtrInst* getEPInstEnd2 = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getEPInstEnd1, jLIEnd1,"", forEnd1BB);
-  StoreInst* eleStoreInstEnd1 = new StoreInst((Value*) eleLoadInstEnd1, (Value*) getEPInstEnd2, forEnd1BB);
-  BranchInst::Create(forInc2BB,forEnd1BB);
-  
-  //BasicBlock* for_inc2
-  LoadInst* jLIInc2 = new LoadInst((Value*) jAI, "", forInc2BB);
-  BinaryOperator* bopAddInc2 = BinaryOperator::CreateNSWAdd((Value*) jLIInc2, (Value*) ci1, "", forInc2BB);
-  StoreInst* jSIInc2 = new StoreInst((Value*) bopAddInc2, (Value*) jAI, forInc2BB);
-  BranchInst::Create(forCond2BB,forInc2BB);
-  
-  //BasicBlock* for_end2
-  BranchInst::Create(forInc3BB,forEnd2BB);
-  
-  //BasicBlock* for_inc3
-  LoadInst* iLIInc3 = new LoadInst((Value*) iAI, "", forInc3BB);
-  BinaryOperator* bopAddInc3 = BinaryOperator::CreateNSWAdd((Value*) iLIInc3, (Value*) ci1, "", forInc3BB);
-  StoreInst* iSIInc3 = new StoreInst((Value*) bopAddInc3, (Value*) iAI, forInc3BB);
-  BranchInst::Create(forCond1BB,forInc3BB);
-  
-  //BasicBlock* for_end3
-  BitCastInst* bitCastInstEnd3 = new BitCastInst((Value*) vlaAllocaInst, l1PtrType, "", forEnd3BB);
-  StoreInst* storeInstEnd3 = new StoreInst((Value*) bitCastInstEnd3, (Value*) retAllocaInst, forEnd3BB);
-  BranchInst::Create(cleanupBB,forEnd3BB);
-
-  //BasicBlock* cleanup
-  LoadInst* retLoadInst= new LoadInst((Value*) retAllocaInst,"",cleanupBB); 
-  ReturnInst* retInst = ReturnInst::Create(context, retLoadInst, cleanupBB);
-
-  return funcMM;
-}
-
-*/

@@ -1,10 +1,32 @@
 #include <stdio.h>
 #include <stdint.h>
+#include "llvm/Transforms/SymObf/Utils.h"
 
-double** MatrixMult(double** mat1, double** mat2, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
-  double retMat[m1Height][m2Width];
+using namespace llvm;
+
+int PrintMat(double** mat, int height, int width){
+  for(int i=0; i<height; i++){
+	for(int j=0; j<width; j++){
+	  char tmpStr[8] = {0}; 
+	  sprintf(tmpStr, "%.2f,", mat[i][j]);
+	  errs()<< tmpStr;
+	}
+    errs()<<"\n";
+  }
+}
+
+int CopyMat(double** src, double** dst, int height, int width){
+  for(int i=0; i<height; i++){
+	for(int j=0; j<width; j++){
+	  dst[i][j] = src[i][j];
+	}
+  }
+
+}
+
+int MatrixMult(double** mat1, double** mat2, double** retMat, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
   if(m1Width != m2Height)
-    return retMat;
+    return -1;
 
   /*
   printf("Mat1#################################\n");
@@ -39,5 +61,5 @@ double** MatrixMult(double** mat1, double** mat2, int64_t m1Height, int64_t m1Wi
 	//printf("\n");
   }
   //printf("*********************\n");
-  return retMat;
+  return 0;
 }

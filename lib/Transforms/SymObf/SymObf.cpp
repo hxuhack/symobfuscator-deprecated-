@@ -26,7 +26,8 @@ loglevel_e loglevel = L3_DEBUG;
 Constant* printFunc;
 
 Type *boolType, *i8Type, *i32Type, *i64Type;
-PointerType *l2PtrType, *l1PtrType;
+Type *doubleType;
+PointerType *fpPT, *ptrPT;
 ConstantInt *ci0, *ci1;
 vector<Value*> vec00,vec01;
 
@@ -284,17 +285,18 @@ struct SymObf : public ModulePass {
     i32Type = IntegerType::getInt32Ty(context);
     i8Type = IntegerType::getInt8Ty(context);
     boolType = IntegerType::get(context,1);
+	doubleType = Type::getDoubleTy(context);
     ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
     ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
-    l2PtrType = PointerType::getUnqual(i64Type);
-    l1PtrType = PointerType::getUnqual(l2PtrType);
+    fpPT = PointerType::getUnqual(doubleType);
+    ptrPT = PointerType::getUnqual(fpPT);
 
-  vec00.push_back(ci0);
-  vec00.push_back(ci0);
-  ArrayRef<Value*> ar00(vec00);
-  vec01.push_back(ci0);
-  vec01.push_back(ci1);
-  ArrayRef<Value*> ar01(vec01);
+	vec00.push_back(ci0);
+	vec00.push_back(ci0);
+	ArrayRef<Value*> ar00(vec00);
+	vec01.push_back(ci0);
+	vec01.push_back(ci1);
+	ArrayRef<Value*> ar01(vec01);
 
     //Define the printf function:
     printFunc = module.getFunction("printf"); 
@@ -319,8 +321,8 @@ struct SymObf : public ModulePass {
 
     //We declare the parameters of the function
     vector<Type*> paramVec;
-    paramVec.push_back((Type *) l1PtrType);
-    paramVec.push_back((Type *) l1PtrType);
+    paramVec.push_back((Type *) ptrPT);
+    paramVec.push_back((Type *) ptrPT);
     paramVec.push_back(i64Type);
     paramVec.push_back(i64Type);
     paramVec.push_back(i64Type);
@@ -329,7 +331,7 @@ struct SymObf : public ModulePass {
 
     //We wrap the type of the function
     //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-    FunctionType* funcType = FunctionType::get((Type *) l1PtrType, paramArrayType, false);
+    FunctionType* funcType = FunctionType::get((Type *) ptrPT, paramArrayType, false);
     Constant* mmFunc = module.getOrInsertFunction("MatrixMult", funcType); 
 
 /*
