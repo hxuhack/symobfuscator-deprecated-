@@ -3,7 +3,7 @@
 using namespace llvm;
 using namespace std;
 
-void PrintInIR(Module& module, BasicBlock* bb, const char* arg1, int len, Value* arg2){
+void PrintInIR(Module& module, BasicBlock* bb, const char* arg1, int64_t len, Value* arg2){
   LLVMContext& context = bb->getContext();
 	
   vector<Value*> vec00;
@@ -26,8 +26,8 @@ void PrintInIR(Module& module, BasicBlock* bb, const char* arg1, int len, Value*
 }
 
 void PrintIR(Function* func){
-//we print the whole IR for development
-  LOG(L2_DEBUG) << "=====================Print Function IR==========================";
+//we print64_t the whole IR for development
+  LOG(L2_DEBUG) << "=====================Print64_t Function IR==========================";
 
   list<BasicBlock *> basicBlocks;
   for (Function::iterator i=func->begin();i!=func->end();++i) {
@@ -41,7 +41,7 @@ void PrintIR(Function* func){
 }
 
 void PrintIR(list<Instruction*> instList){
-  LOG(L2_DEBUG) << "=====================Print List IR==========================";
+  LOG(L2_DEBUG) << "=====================Print64_t List IR==========================";
   for(list<Instruction*>::iterator it = instList.begin(); it!=instList.end(); ++it){
     Instruction *inst = *it;
     inst->print(errs()); errs()<<"\n";

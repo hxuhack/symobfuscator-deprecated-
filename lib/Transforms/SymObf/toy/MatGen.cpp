@@ -4,7 +4,7 @@
 #include <math.h>	//fabs
 
 
-int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
+int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width, int64_t mod){
   if(m1Width != m2Height)
     return -1;
 
@@ -12,7 +12,7 @@ int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t 
     for(int64_t j=0; j < m2Width; j++){
 	  int64_t ele = 0;
 	  for(int64_t k=0; k < m1Width; k++){
-		ele = ele + mat1[i][k] * mat2[k][j];
+		ele = (ele + mat1[i][k] * mat2[k][j]) % mod;
 	  }
 	  retMat[i][j] = ele;
 	}
@@ -64,7 +64,7 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
 	}
 	if(i>0){
 	  for (int j = 0; j < dim; j++){
-	    mat[i][j] = mat[i][j] + mat[rowId[i-1]][j] * t[i-1]; 
+	    mat[i][j] = (mat[i][j] + mat[rowId[i-1]][j] * t[i-1]) % mod; 
 		iMat[i][j] = mat[i][j];
 	  }
 	}
@@ -72,8 +72,8 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
   PrintStep(mat,matInv,dim,0);
   for(int i = dim-1; i>0; i--){
     for(int j = 0; j < dim; j++){
-	  iMat[i][j] = iMat[i][j] - iMat[rowId[i-1]][j]*t[i-1];
-	  matInv[i][j] = matInv[i][j] - matInv[rowId[i-1]][j]*t[i-1];
+	  iMat[i][j] = (iMat[i][j] - iMat[rowId[i-1]][j]*t[i-1]) % mod;
+	  matInv[i][j] = (matInv[i][j] - matInv[rowId[i-1]][j]*t[i-1]) % mod;
 	}
     PrintStep(iMat,matInv,dim,dim-i);
   }
@@ -81,8 +81,8 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
     for(int j = 0; j<i; j++){
 	int tmp = iMat[j][i];
       for(int k = 0; k < dim; k++){
-	    iMat[j][k] = iMat[j][k] - iMat[i][k] * tmp;
-	    matInv[j][k] = matInv[j][k] - matInv[i][k] * tmp;
+	    iMat[j][k] = (iMat[j][k] - iMat[i][k] * tmp) % mod;
+	    matInv[j][k] = (matInv[j][k] - matInv[i][k] * tmp) % mod;
 	  }
 	}
     PrintStep(iMat,matInv,dim,2*dim-i-1);
@@ -106,9 +106,10 @@ int main(int argc, char** argv)
 		iMat[i] = (int64_t*)malloc(sizeof(int64_t) * dim);
 	}
 
-	GenIntMatPair(mat,matInv,iMat, dim,4);
+	int64_t mod = 1024;
+	GenIntMatPair(mat,matInv,iMat, dim, mod);
 
-	MultIntMatrix(mat,matInv,iMat,dim,dim,dim,dim);
+	MultIntMatrix(mat,matInv,iMat,dim,dim,dim,dim, mod);
     printf("===========Identity Mat========\n");
     for (int i = 0; i < dim; i++){
 	  for (int j = 0; j < dim; j++){

@@ -28,8 +28,9 @@ Constant* printFunc;
 Type *boolType, *i8Type, *i32Type, *i64Type;
 Type *doubleType;
 PointerType *fpPT, *i64PT, *ptrPT;
-ConstantInt *ci0, *ci1;
+ConstantInt *ci0, *ci1, *ciMod;
 vector<Value*> vec00,vec01;
+int64_t mod;
 
 namespace{
 
@@ -288,9 +289,11 @@ struct SymObf : public ModulePass {
 	doubleType = Type::getDoubleTy(context);
     ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
     ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
+    ciMod = (ConstantInt*) ConstantInt::getSigned(i64Type,1024);
     fpPT = PointerType::getUnqual(doubleType);
     i64PT = PointerType::getUnqual(i64Type);
     ptrPT = PointerType::getUnqual(i64PT);
+	mod = 1024;
 
 	vec00.push_back(ci0);
 	vec00.push_back(ci0);
@@ -324,6 +327,7 @@ struct SymObf : public ModulePass {
     vector<Type*> paramVec;
     paramVec.push_back((Type *) ptrPT);
     paramVec.push_back((Type *) ptrPT);
+    paramVec.push_back(i64Type);
     paramVec.push_back(i64Type);
     paramVec.push_back(i64Type);
     paramVec.push_back(i64Type);
