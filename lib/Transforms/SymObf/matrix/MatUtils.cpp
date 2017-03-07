@@ -27,7 +27,7 @@ int64_t PrintIntMat(int64_t** mat, int64_t height, int64_t width){
   errs()<<"---------------------\n";
 }
 
-int64_t CopyFpMat(double** src, double** dst, int64_t height, int64_t width){
+int64_t CopyFpMat(double** dst, double** src, int64_t height, int64_t width){
   for(int64_t i=0; i<height; i++){
 	for(int64_t j=0; j<width; j++){
 	  dst[i][j] = src[i][j];
@@ -35,7 +35,7 @@ int64_t CopyFpMat(double** src, double** dst, int64_t height, int64_t width){
   }
 }
 
-int64_t CopyIntMat(int64_t** src, int64_t** dst, int64_t height, int64_t width){
+int64_t CopyIntMat(int64_t** dst, int64_t** src,  int64_t height, int64_t width){
   for(int64_t i=0; i<height; i++){
 	for(int64_t j=0; j<width; j++){
 	  dst[i][j] = src[i][j];

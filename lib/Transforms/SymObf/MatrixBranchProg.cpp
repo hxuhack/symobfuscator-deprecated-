@@ -234,8 +234,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	  MultIntMatrix(randMatInv2, midMat1, midMat1Rand, dim, dim, dim, dim, mod);
 	}
 
-    CopyIntMat(midMat0Rand, midMat0, dim, dim); 
-    CopyIntMat(midMat1Rand, midMat1, dim, dim); 
+    CopyIntMat(midMat0, midMat0Rand, dim, dim); 
+    CopyIntMat(midMat1, midMat1Rand, dim, dim); 
 
     GenIntMatPair(randMat2, randMatInv2, dim, mod);
     MultIntMatrix(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim, mod);
@@ -262,10 +262,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
     StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) mat1EPI, pBB);
   }
 
-  errs()<<"mod = " << mod;
   MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1, mod);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
-  PrintIntMat(randMatInv2, dim, dim);
   PrintIntMat(tailMatRand, dim, 1);
 
   //Init the parameter for the for loop; 
@@ -358,6 +356,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecFbMM.push_back(ciMod);
   ArrayRef<Value*> arFbMM(vecFbMM);
   CallInst* mmFbCI = CallInst::Create(funcMM, arFbMM, "", forBodyBB);
+  StoreInst* interMatFbSI = new StoreInst((Value*) mmFbCI, interMatAI, "", forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
   
   //For inc 
@@ -390,6 +389,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecConMM.push_back(ciMod);
   ArrayRef<Value*> arConMM(vecConMM);
   CallInst* mmConCI = CallInst::Create(funcMM, arConMM, "", conBB);
+  StoreInst* interMatConSI = new StoreInst((Value*) mmConCI, interMatAI, "", conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
   LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);
