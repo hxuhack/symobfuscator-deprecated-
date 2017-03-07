@@ -31,8 +31,8 @@ int main(int argc, char** argv){
   
 
   mat00[0][0] = 0;
-  mat00[0][1] = 0;
-  mat00[1][1] = 0;
+  mat00[0][1] = 2;
+  mat00[1][1] = 3;
   mat00[1][0] = 0;
 
   mat11[0][0] = 0;
@@ -44,7 +44,7 @@ int main(int argc, char** argv){
   mat10[0][0] = 0;
   mat10[0][1] = 1;
   mat10[1][0] = 0;
-  mat10[1][1] = 0;
+  mat10[1][1] = 5;
 
   int** mat[2][2] = {{mat00, mat01}, {mat10,  mat11}}; 
 

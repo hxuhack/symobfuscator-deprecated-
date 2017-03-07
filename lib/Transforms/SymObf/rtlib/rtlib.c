@@ -8,6 +8,23 @@ int64_t** MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t m1Height, int64_
   if(m1Width != m2Height)
     return retMat;
 
+  printf("*******mat1**************\n");
+  for(int64_t i=0; i < m1Height; i++){
+    for(int64_t j=0; j < m1Width; j++){
+	  int64_t val = *(int64_t*) (mat1 + i*m1Width + j);
+	  printf("%d,", val);
+	}
+	printf("\n");
+  }
+  printf("*******mat2**************\n");
+  for(int64_t i=0; i < m2Height; i++){
+    for(int64_t j=0; j < m2Width; j++){
+	  int64_t val = *(int64_t*) (mat2 + i*m2Width + j);
+	  printf("%d,", val);
+	}
+	printf("\n");
+  }
+  printf("*******mult result**************\n");
   for(int64_t i=0; i < m1Height; i++){
     for(int64_t j=0; j < m2Width; j++){
 	  int64_t ele = 0;

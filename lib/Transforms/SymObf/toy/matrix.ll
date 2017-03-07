@@ -200,10 +200,10 @@ entry:
   store i32 0, i32* %arrayidx9, align 16
   %arrayidx10 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 0
   %arrayidx11 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx10, i64 0, i64 1
-  store i32 0, i32* %arrayidx11, align 4
+  store i32 2, i32* %arrayidx11, align 4
   %arrayidx12 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 1
   %arrayidx13 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx12, i64 0, i64 1
-  store i32 0, i32* %arrayidx13, align 4
+  store i32 3, i32* %arrayidx13, align 4
   %arrayidx14 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i64 0, i64 1
   %arrayidx15 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx14, i64 0, i64 0
   store i32 0, i32* %arrayidx15, align 8
@@ -230,7 +230,7 @@ entry:
   store i32 0, i32* %arrayidx29, align 8
   %arrayidx30 = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat10, i64 0, i64 1
   %arrayidx31 = getelementptr inbounds [2 x i32], [2 x i32]* %arrayidx30, i64 0, i64 1
-  store i32 0, i32* %arrayidx31, align 4
+  store i32 5, i32* %arrayidx31, align 4
   %arrayinit.begin = getelementptr inbounds [2 x [2 x i32**]], [2 x [2 x i32**]]* %mat, i64 0, i64 0
   %arrayinit.begin32 = getelementptr inbounds [2 x i32**], [2 x i32**]* %arrayinit.begin, i64 0, i64 0
   %arraydecay = getelementptr inbounds [2 x [2 x i32]], [2 x [2 x i32]]* %mat00, i32 0, i32 0
@@ -313,4 +313,4 @@ attributes #3 = { argmemonly nounwind }
 
 !llvm.ident = !{!0}
 
-!0 = !{!"clang version 3.9.0 (tags/RELEASE_390/final)"}
+!0 = !{!"Symbolic Obfuscator clang version 3.9.0 (tags/RELEASE_390/final) (based on LLVM 3.9.0)"}
