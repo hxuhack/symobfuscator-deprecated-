@@ -16,11 +16,13 @@ private:
 
 public:
 
-  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, double** mat, const int height, const int width)
+  MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, int64_t** mat, const int height, const int width)
 	  :module(module), context(context), bb(bb), height(height), width(width){
     LOG(L2_DEBUG) << "Constructing MatrixInIR...";
-	ArrayType* fpAT = ArrayType::get(doubleType, width);
-	ArrayType* arAT = ArrayType::get(fpAT, height);
+	//ArrayType* fpAT = ArrayType::get(int64_tType, width);
+	//ArrayType* arAT = ArrayType::get(fpAT, height);
+	ArrayType* i64AT = ArrayType::get(i64Type, width);
+	ArrayType* arAT = ArrayType::get(i64AT, height);
 
 	matAI = new AllocaInst(arAT,"", bb);
 	for(int i=0; i<height; i++){
@@ -37,12 +39,13 @@ public:
 	    l2IdxVec.push_back(ci0);
 	    l2IdxVec.push_back(cij);
 	    ArrayRef<Value*> ar0j(l2IdxVec);
-	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(fpAT, (Value*) getEPInst, ar0j,"", bb);
-		ConstantFP* fpTmp = (ConstantFP*) ConstantFP::get(doubleType, mat[i][j]);
-		StoreInst* storeInst = new StoreInst((Value *) fpTmp, (Value *) l2GetPEInst, bb);
+	    GetElementPtrInst* l2GetPEInst = GetElementPtrInst::CreateInBounds(i64AT, (Value*) getEPInst, ar0j,"", bb);
+		//ConstantFP* fpTmp = (ConstantFP*) ConstantFP::get(int64_tType, mat[i][j]);
+		ConstantInt* i64Tmp = (ConstantInt*) ConstantInt::get(i64Type, mat[i][j]);
+		StoreInst* storeInst = new StoreInst((Value *) i64Tmp, (Value *) l2GetPEInst, bb);
 
-		const char strArg1[] = "%.3f,";
-		PrintInIR(module, bb, strArg1, sizeof(strArg1), fpTmp);
+		const char strArg1[] = "%d,";
+		PrintInIR(module, bb, strArg1, sizeof(strArg1), i64Tmp);
 	  }
  	  const char strArg1[] = "\n";
 	  PrintInIR(module, bb, strArg1, sizeof(strArg1), nullptr);
@@ -128,13 +131,13 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   int dim = len + 2;
   LOG(L_INFO) << "LEN:"<<len;
 
-  ArrayType* fpAT = ArrayType::get(doubleType, dim);
-  ArrayType* arAT = ArrayType::get(fpAT, dim);
+  ArrayType* i64AT = ArrayType::get(i64Type, dim);
+  ArrayType* arAT = ArrayType::get(i64AT, dim);
 
-  ArrayType* l2HeadMat = ArrayType::get(doubleType, dim);
+  ArrayType* l2HeadMat = ArrayType::get(i64Type, dim);
   ArrayType* l1HeadMat = ArrayType::get(l2HeadMat, 1);
   
-  ArrayType* l2TailMat = ArrayType::get(doubleType, 1);
+  ArrayType* l2TailMat = ArrayType::get(i64Type, 1);
   ArrayType* l1TailMat = ArrayType::get(l2TailMat, dim);
   //We create a matrix that points to ptrPT 
   ArrayType* ptrPtrAT = ArrayType::get(ptrPT, len);
@@ -150,51 +153,53 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   //Get the pointers of matrix for input bit 1 
   GetElementPtrInst* mat1PtrEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar01,"", pBB);
 
-  const char strArg_1[] = "ICmp constant: %.3f\n";
+  const char strArg_1[] = "ICmp constant: %d\n";
   PrintInIR(module, pBB, strArg_1, sizeof(strArg_1), ciCmpObj);
 
   //Generate the matrix and save to matAI
-  double** headMat = (double**) malloc (sizeof(double*) * 1);
-  double** headMatRand = (double**) malloc (sizeof(double*) * 1);
-  double** tailMat = (double**) malloc (sizeof(double*) * dim);
-  double** tailMatRand = (double**) malloc (sizeof(double*) * dim);
-  double** midMat0 = (double**) malloc (sizeof(double*) * dim);
-  double** midMat0Rand = (double**) malloc (sizeof(double*) * dim);
-  double** midMat1 = (double**) malloc (sizeof(double*) * dim);
-  double** midMat1Rand = (double**) malloc (sizeof(double*) * dim);
+  int64_t** headMat = (int64_t**) malloc (sizeof(int64_t*) * 1);
+  int64_t** headMatRand = (int64_t**) malloc (sizeof(int64_t*) * 1);
+  int64_t** tailMat = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** tailMatRand = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** midMat0 = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** midMat0Rand = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** midMat1 = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** midMat1Rand = (int64_t**) malloc (sizeof(int64_t*) * dim);
 
-  headMat[0] = (double*) malloc (sizeof(double) * dim);
-  headMatRand[0] = (double*) malloc (sizeof(double) * dim);
+  headMat[0] = (int64_t*) malloc (sizeof(int64_t) * dim);
+  headMatRand[0] = (int64_t*) malloc (sizeof(int64_t) * dim);
   for(int i=0; i<dim; i++){
-    tailMat[i] = (double*) malloc (sizeof(double) * 1);
-    tailMatRand[i] = (double*) malloc (sizeof(double) * 1);
-	midMat0[i] = (double*) malloc (sizeof(double) * dim);
-	midMat0Rand[i] = (double*) malloc (sizeof(double) * dim);
-	midMat1[i] = (double*) malloc (sizeof(double) * dim);
-	midMat1Rand[i] = (double*) malloc (sizeof(double) * dim);
+    tailMat[i] = (int64_t*) malloc (sizeof(int64_t) * 1);
+    tailMatRand[i] = (int64_t*) malloc (sizeof(int64_t) * 1);
+	midMat0[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	midMat0Rand[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	midMat1[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	midMat1Rand[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
   }
 
-  CreateMat(headMat, 1, dim, 0, 0);
-  CreateMat(tailMat, dim, 1, dim-1, 0);
+  CreateIntMat(headMat, 1, dim, 0, 0);
+  CreateIntMat(tailMat, dim, 1, dim-1, 0);
 
-  double** randMat = (double**) malloc (sizeof(double*) * dim);
-  double** randMatInv = (double**) malloc (sizeof(double*) * dim);
-  double** randMat2 = (double**) malloc (sizeof(double*) * dim);
-  double** randMatInv2 = (double**) malloc (sizeof(double*) * dim);
+  int64_t** randMat = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** randMatInv = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** randMat2 = (int64_t**) malloc (sizeof(int64_t*) * dim);
+  int64_t** randMatInv2 = (int64_t**) malloc (sizeof(int64_t*) * dim);
   for (int i = 0; i < dim; i++)
   {
-	randMat[i] = (double*) malloc (sizeof(double) * dim);
-	randMatInv[i] = (double*) malloc (sizeof(double) * dim);
-	randMat2[i] = (double*) malloc (sizeof(double) * dim);
-	randMatInv2[i] = (double*) malloc (sizeof(double) * dim);
+	randMat[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	randMatInv[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	randMat2[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
+	randMatInv2[i] = (int64_t*) malloc (sizeof(int64_t) * dim);
   }
-  GenRandMatPair(randMat, randMatInv, dim, 1024);
-  MatrixMult(headMat, randMat, headMatRand, 1, dim, dim, dim);
-  PrintMat(headMatRand, 1, dim);
-  
-  MatrixInIR* headMatIR = new MatrixInIR(module, context, pBB, headMatRand, 1, dim); //~bit
+  GenIntMatPair(randMat, randMatInv, dim, 16);
+  MultIntMatrix(headMat, randMat, headMatRand, 1, dim, dim, dim);
 
-  GenRandMatPair(randMat2, randMatInv2, dim, 1024);
+  PrintIntMat(headMatRand, 1, dim);
+  //PrintIntMat(randMat, dim, dim);
+  //PrintIntMat(randMatInv, dim, dim);
+
+  MatrixInIR* headMatIR = new MatrixInIR(module, context, pBB, headMatRand, 1, dim); //~bit
+  GenIntMatPair(randMat2, randMatInv2, dim, 16);
 
   int iRow;
   int iCol4T;
@@ -213,29 +218,29 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 	}
 
 	if(inp){
-	  CreateMat(midMat0,dim,dim,iRow,iCol4F);
-	  CreateMat(midMat1,dim,dim,iRow,iCol4T);
+	  CreateIntMat(midMat0,dim,dim,iRow,iCol4F);
+	  CreateIntMat(midMat1,dim,dim,iRow,iCol4T);
 	}
 	else{
-	  CreateMat(midMat0,dim,dim,iRow,iCol4T);
-	  CreateMat(midMat1,dim,dim,iRow,iCol4F);
+	  CreateIntMat(midMat0,dim,dim,iRow,iCol4T);
+	  CreateIntMat(midMat1,dim,dim,iRow,iCol4F);
 	}
 
 	if(i==0){
-	  MatrixMult(randMatInv, midMat0, midMat0Rand, dim, dim, dim, dim);
-	  MatrixMult(randMatInv, midMat1, midMat1Rand, dim, dim, dim, dim);
+	  MultIntMatrix(randMatInv, midMat0, midMat0Rand, dim, dim, dim, dim);
+	  MultIntMatrix(randMatInv, midMat1, midMat1Rand, dim, dim, dim, dim);
 	}
 	else{
-	  MatrixMult(randMatInv2, midMat0, midMat0Rand, dim, dim, dim, dim);
-	  MatrixMult(randMatInv2, midMat1, midMat1Rand, dim, dim, dim, dim);
+	  MultIntMatrix(randMatInv2, midMat0, midMat0Rand, dim, dim, dim, dim);
+	  MultIntMatrix(randMatInv2, midMat1, midMat1Rand, dim, dim, dim, dim);
 	}
 
-    CopyMat(midMat0Rand, midMat0, dim, dim); 
-    CopyMat(midMat1Rand, midMat1, dim, dim); 
+    CopyIntMat(midMat0Rand, midMat0, dim, dim); 
+    CopyIntMat(midMat1Rand, midMat1, dim, dim); 
 
-    GenRandMatPair(randMat2, randMatInv2, dim, 1024);
-    MatrixMult(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim);
-    MatrixMult(midMat1, randMat2, midMat1Rand, dim, dim, dim, dim);
+    GenIntMatPair(randMat2, randMatInv2, dim, 16);
+    MultIntMatrix(randMat2, midMat0, midMat0Rand, dim, dim, dim, dim);
+    MultIntMatrix(midMat1, randMatInv2, midMat1Rand, dim, dim, dim, dim);
 
 	MatrixInIR*  mat0 = new MatrixInIR(module, context, pBB, midMat0Rand, dim,dim); //bit
 	MatrixInIR*  mat1 = new MatrixInIR(module, context, pBB, midMat1Rand, dim,dim); //~bit
@@ -258,7 +263,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
     StoreInst* mat1StoreInst = new StoreInst(mat1BCI, (Value *) mat1EPI, pBB);
   }
 
-  MatrixMult(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1);
+  MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
 
   //Init the parameter for the for loop; 
@@ -387,17 +392,38 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
   LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);
-  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, fpPT, "", conBB);
-  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(doubleType, (Value*) cmpCI, ci0,"", conBB);
-  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(doubleType, (Value*) getCmpL1EPI, ci0,"", conBB);
+  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, i64PT, "", conBB);
+  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) cmpCI, ci0,"", conBB);
+  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getCmpL1EPI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
-  FPToSIInst* fp2SI = new FPToSIInst(getCmpLI, i64Type, "", conBB);
-  StoreInst* cmpSI = new StoreInst((Value*) fp2SI, cmpAI, "", conBB);
+  //FPToSIInst* fp2SI = new FPToSIInst(getCmpLI, i64Type, "", conBB);
+  //StoreInst* cmpSI = new StoreInst((Value*) fp2SI, cmpAI, "", conBB);
+  StoreInst* cmpSI = new StoreInst((Value*) getCmpLI, cmpAI, "", conBB);
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
-  const char strArg1[] = "ICmp Reuslt: %.3f\n";
+  const char strArg1[] = "ICmp Reuslt: %d\n";
   PrintInIR(module, conBB, strArg1, sizeof(strArg1), cmpLI);
 
   ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) cmpLI, ci1, "");
   BranchInst::Create(trueBB, falseBB, conII, conBB);
+
+
+  free(headMat[0]);
+  free(headMatRand[0]);
+  for(int i=0; i<dim; i++){
+    free(tailMat[i]);
+    free(tailMatRand[i]);
+	free(midMat0[i]);
+	free(midMat0Rand[i]);
+	free(midMat1[i]);
+	free(midMat1Rand[i]);
+  }
+  free(headMat);
+  free(headMatRand);
+  free(tailMat);
+  free(tailMatRand);
+  free(midMat0);
+  free(midMat0Rand);
+  free(midMat1);
+  free(midMat1Rand);
 }

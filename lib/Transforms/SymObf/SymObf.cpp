@@ -27,7 +27,7 @@ Constant* printFunc;
 
 Type *boolType, *i8Type, *i32Type, *i64Type;
 Type *doubleType;
-PointerType *fpPT, *ptrPT;
+PointerType *fpPT, *i64PT, *ptrPT;
 ConstantInt *ci0, *ci1;
 vector<Value*> vec00,vec01;
 
@@ -289,7 +289,8 @@ struct SymObf : public ModulePass {
     ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
     ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
     fpPT = PointerType::getUnqual(doubleType);
-    ptrPT = PointerType::getUnqual(fpPT);
+    i64PT = PointerType::getUnqual(i64Type);
+    ptrPT = PointerType::getUnqual(i64PT);
 
 	vec00.push_back(ci0);
 	vec00.push_back(ci0);
@@ -332,7 +333,7 @@ struct SymObf : public ModulePass {
     //We wrap the type of the function
     //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
     FunctionType* funcType = FunctionType::get((Type *) ptrPT, paramArrayType, false);
-    Constant* mmFunc = module.getOrInsertFunction("MatrixMult", funcType); 
+    Constant* mmFunc = module.getOrInsertFunction("MultIntMatrix", funcType); 
 
 /*
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){

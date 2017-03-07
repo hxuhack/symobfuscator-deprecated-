@@ -3,148 +3,79 @@
 #include <time.h>	//time
 #include <math.h>	//fabs
 
-int InvMat(double** matrix,  double** inverse,  int size)
-{
-	double** clone = (double**)malloc(sizeof(double*) * size);
 
-	for (int i = 0; i < size; i++)
-	{
-		clone[i] = (double*)malloc(sizeof(double) * size);
-		for (int j = 0; j < size; j++)
-		{
-			clone[i][j] = matrix[i][j];
-		}
-	}
-
-	for (int i = 0; i < size; i++)
-	{		
-		for (int j = i+1; j < size; j++)
-		{
-			if (clone[i][i] == 0 && clone[j][i] != 0)
-			{
-				double* swap = clone[i];
-				clone[i] = clone[j];
-				clone[j] = swap;
-
-				swap = inverse[i];
-				inverse[i] = inverse[j];
-				inverse[j] = swap;
-			}
-
-			if (clone[i][i] != 1 )
-			{
-				double cons = clone[i][i];
-				
-				for (int k = 0; k < size; k++)
-				{
-					clone[i][k] = clone[i][k] / cons;
-					inverse[i][k] = inverse[i][k] / cons;
-				}
-			}
-
-			if (clone[i][i] == 1 && clone[j][i] != 0 )
-			{
-				double cons = clone[i][i] * fabs(clone[j][i]);
-				
-				if (0 < clone[j][i])
-					cons = -1 * cons;
-				
-				for (int k = 0; k < size; k++)
-				{	
-					clone[j][k] = clone[j][k] + (clone[i][k] * cons);
-					inverse[j][k] = inverse[j][k] + (inverse[i][k] * cons);	
-				}				
-			}
-		}		
-
-		if (clone[i][i] == 0)
-		{
-			return 0;
-		}
-
-		if (i == size-1)
-		{
-			double cons = clone[i][i];
-
-			for (int k = 0; k < size; k++)
-			{
-				clone[i][k] = clone[i][k] / cons;
-				inverse[i][k] = inverse[i][k] / cons;
-			}
-		}
-
-
-		for (int j = 0; j < i; j++)
-		{
-			if (clone[j][i] != 0)
-			{
-				double cons = (clone[i][i] * fabs(clone[j][i]));
-				if (0 < clone[j][i])
-					cons = -1 * cons;
-
-				for (int k = 0; k<size; k++)
-				{
-					clone[j][k] = clone[j][k] + (clone[i][k] * cons);
-					inverse[j][k] = inverse[j][k] + (inverse[i][k] * cons);
-				}
-
-			}
-		}
-		
-	}
-
-
-	for (int i = 0; i < size; i++)
-	{
-		free(clone[i]);
-	}
-	free(clone);
-
-	return 1;
-}
-
-void GenNonSinMat(double** matrix, double** identity, int size, int mod)
-{
-	srand((unsigned)time(NULL));
-
-	for (int i = 0; i < size; i++)
-	{
-		for (int j = 0; j < size; j++)
-		{
-			matrix[i][j] = rand() % mod;
-
-			identity[i][j] = 0;
-			if (i == j)
-			{
-				identity[i][j] = 1;
-			}
-		}
-	}
-}
-
-
-int GenRandMatPair(double** mat, double** matInv, int dim, int mod)
-{
-	while (1)
-	{
-		GenNonSinMat(mat, matInv, dim, mod); //generate S
-
-		if (InvMat(mat, matInv, dim) != 0) //calcurate S inverse
-			break;
-	}
-
-	return 0;
-}
-
-int CreateMat(double** mat, int height, int width, int rowId, int colId){
-  for (int i = 0; i < height; i++){
-	for (int j = 0; j < width; j++){
-	  if ( (i == j && height!=1 && width != 1) || (i==rowId && j==colId) ){
-		mat[i][j] = 1;
-	  }
-	  else{
-	    mat[i][j] = 0;
+int CreateIntMat(int64_t** mat, int height, int width, int rowId, int colId){
+  for (int i=0; i< height; i++){
+    for (int j=0; j< width; j++){
+	  mat[i][j] = 0;
+	  if((i==j && width !=1 && height != 1)||(i==rowId && j==colId)){
+	    mat[i][j] = 1;  
 	  }
 	}
   }
+}
+
+int CreateFpMat(double** mat, int height, int width, int rowId, int colId){
+  for (int i=0; i< height; i++){
+    for (int j=0; j< width; j++){
+	  mat[i][j] = 0;
+	  if((i==j && width !=1 && height != 1)||(i==rowId && j==colId)){
+	    mat[i][j] = 1;  
+	  }
+	}
+  }
+}
+
+
+int GenIntMatPair(int64_t** mat, int64_t** matInv, int dim, int mod)
+{
+  srand((unsigned)time(NULL));
+  int64_t iMat[dim][dim];
+  int64_t t[dim-1];
+  int64_t rowId[dim-1];
+  for(int i=0; i<dim-1; i++){
+    t[i] = rand() % 10 + 1; 
+    rowId[i] = rand()%(i+1); 
+  }
+
+  for (int i = 0; i < dim; i++){
+	for (int j = 0; j < dim; j++){
+	  matInv[i][j] = 0;
+	  if (i == j){
+		mat[i][j] = 1;
+		matInv[i][j] = 1;
+		iMat[i][j] = mat[i][j];
+	  }
+	  if (i < j){
+	    mat[i][j] = rand() % mod;
+		iMat[i][j] = mat[i][j];
+	  }
+	  if (i>j){
+		mat[i][j] = 0;
+		iMat[i][j] = mat[i][j];
+	  }
+	}
+	if(i>0){
+	  for (int j = 0; j < dim; j++){
+	    mat[i][j] = mat[i][j] + mat[rowId[i-1]][j] * t[i-1]; 
+		iMat[i][j] = mat[i][j];
+	  }
+	}
+  }
+  for(int i = dim-1; i>0; i--){
+    for(int j = 0; j < dim; j++){
+	  iMat[i][j] = iMat[i][j] - iMat[rowId[i-1]][j]*t[i-1];
+	  matInv[i][j] = matInv[i][j] - matInv[rowId[i-1]][j]*t[i-1];
+	}
+  }
+  for (int i = dim-1; i >0; i--){
+    for(int j = 0; j<i; j++){
+	int tmp = iMat[j][i];
+      for(int k = 0; k < dim; k++){
+	    iMat[j][k] = iMat[j][k] - iMat[i][k] * tmp;
+	    matInv[j][k] = matInv[j][k] - matInv[i][k] * tmp;
+	  }
+	}
+  }
+  return 0;
 }
