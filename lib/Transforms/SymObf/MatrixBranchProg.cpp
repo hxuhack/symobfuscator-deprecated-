@@ -19,8 +19,6 @@ public:
   MatrixInIR(Module& module, LLVMContext& context, BasicBlock* bb, int64_t** mat, const int64_t height, const int64_t width)
 	  :module(module), context(context), bb(bb), height(height), width(width){
     LOG(L2_DEBUG) << "Constructing MatrixInIR...";
-	//ArrayType* fpAT = ArrayType::get(int64_tType, width);
-	//ArrayType* arAT = ArrayType::get(fpAT, height);
 	ArrayType* i64AT = ArrayType::get(i64Type, width);
 	ArrayType* arAT = ArrayType::get(i64AT, height);
 
@@ -140,6 +138,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   ConstantInt* ciDim = (ConstantInt*) ConstantInt::getSigned(i64Type,dim);
   ConstantInt* ciLen = (ConstantInt*) ConstantInt::getSigned(i64Type,len);
+  ConstantInt* ci8 = (ConstantInt*) ConstantInt::getSigned(i64Type,8);
+  ConstantInt* ci8Dim = (ConstantInt*) ConstantInt::getSigned(i64Type,8*dim);
 
   //Get the pointers of matrix for input bit 0
   GetElementPtrInst* mat0PtrEPI = GetElementPtrInst::CreateInBounds(ptrPtrArAT, (Value*) matAI, ar00,"", pBB);
@@ -293,11 +293,35 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   StoreInst* headMatSI = new StoreInst(headMatBI, (Value *) headMatAI, pBB);
   LoadInst* headMatLI = new LoadInst(headMatAI,"", pBB);
 
-  AllocaInst* interMatAI = new AllocaInst(ptrPT,"interMat",pBB);
+  // Allocate two inter matrix
+  AllocaInst* iMatAI = new AllocaInst(ptrPT,"iMat",pBB);
+  AllocaInst* iMat2AI = new AllocaInst(ptrPT,"iMat2",pBB);
+  //CreateMalloc (BasicBlock *InsertAtEnd, Type *IntPtrTy, Type *AllocTy, Value *AllocSize, Value *ArraySize=nullptr, Function *MallocF=nullptr, const Twine &Name="")
+  Instruction* mallocI11 = CallInst::CreateMalloc(iMatAI, i64Type, i8Type, ci8, nullptr, (Function*) mallocFunc, "mallocCall11");
+  BitCastInst* mallocBI11 = new BitCastInst(mallocI11, ptrPT, "", pBB);
+  StoreInst* mallocSI11 = new StoreInst(mallocBI11, iMatAI, pBB);
 
+  Instruction* mallocI12 = CallInst::CreateMalloc(iMatAI, i64Type, i8Type, ci8Dim, nullptr, (Function*) mallocFunc, "mallocCall12");
+  BitCastInst* mallocBI12 = new BitCastInst(mallocI12, i64PT, "", pBB);
+  LoadInst* iMatLI = new LoadInst(iMatAI,"", pBB);
+  GetElementPtrInst* iMatEPI1 = GetElementPtrInst::CreateInBounds(i64PT, iMatLI, ci0,"", pBB);
+  StoreInst* mallocSI12 = new StoreInst(mallocBI12, iMatEPI1, pBB);
+
+  Instruction* mallocI21 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8, nullptr, nullptr, "mallocCall21");
+  BitCastInst* mallocBI21 = new BitCastInst(mallocI21, ptrPT, "", pBB);
+  StoreInst* mallocSI21 = new StoreInst(mallocBI21, iMatAI, pBB);
+
+  Instruction* mallocI22 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8Dim, nullptr, nullptr, "mallocCall22");
+  BitCastInst* mallocBI22 = new BitCastInst(mallocI22, i64PT, "", pBB);
+  LoadInst* iMat2LI = new LoadInst(iMat2AI,"", pBB);
+  GetElementPtrInst* iMatEPI2 = GetElementPtrInst::CreateInBounds(i64PT, iMat2LI, ci0,"", pBB);
+  StoreInst* mallocSI22 = new StoreInst(mallocBI22, iMatEPI2, pBB);
+
+  LOG(L1_DEBUG)<<"++++++++T3++++++++++++++++";
   vector<Value*> vecMM;
   vecMM.push_back(headMatLI);
   vecMM.push_back(ldMatLI);
+  vecMM.push_back(iMat2LI);
   vecMM.push_back(ci1);
   vecMM.push_back(ciDim);
   vecMM.push_back(ciDim);
@@ -306,8 +330,9 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   ArrayRef<Value*> arMM(vecMM);
 
   CallInst* mmCI = CallInst::Create(funcMM, arMM, "", pBB);
+  StoreInst* mallocSI1 = new StoreInst(iMat2LI, iMatAI, pBB);
+  StoreInst* mallocSI2 = new StoreInst(iMatLI, iMat2AI, pBB);
 
-  StoreInst* interMatSI = new StoreInst((Value*) mmCI, interMatAI, pBB);
   BranchInst::Create(forCondBB, pBB);
 
   LoadInst* iLI = new LoadInst((Value*) iAI, "", forCondBB);
@@ -342,11 +367,13 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   GetElementPtrInst* getLenFbEPI = GetElementPtrInst::CreateInBounds(ptrPtrAT, (Value*) getBinFbEPI, arFb0I1,"", forBodyBB);
 
   LoadInst* ldFbMatLI = new LoadInst(getLenFbEPI,"",forBodyBB);
-  LoadInst* interMatFbLI = new LoadInst(interMatAI,"",forBodyBB);
+  LoadInst* iMatFbLI = new LoadInst(iMatAI,"",forBodyBB);
+  LoadInst* iMat2FbLI = new LoadInst(iMat2AI,"",forBodyBB);
 
   vector<Value*> vecFbMM;
-  vecFbMM.push_back(interMatFbLI);
+  vecFbMM.push_back(iMatFbLI);
   vecFbMM.push_back(ldFbMatLI);
+  vecFbMM.push_back(iMat2FbLI);
   vecFbMM.push_back(ci1);
   vecFbMM.push_back(ciDim);
   vecFbMM.push_back(ciDim);
@@ -354,7 +381,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecFbMM.push_back(ciMod);
   ArrayRef<Value*> arFbMM(vecFbMM);
   CallInst* mmFbCI = CallInst::Create(funcMM, arFbMM, "", forBodyBB);
-  StoreInst* interMatFbSI = new StoreInst((Value*) mmFbCI, interMatAI, forBodyBB);
+  StoreInst* mallocFbSI1 = new StoreInst(iMat2LI, iMatAI, forBodyBB);
+  StoreInst* mallocFbSI2 = new StoreInst(iMatLI, iMat2AI, forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
   
   //For inc 
@@ -375,11 +403,13 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   StoreInst* tailMatSI = new StoreInst(tailMatBI, (Value *) tailMatAI, conBB);
   LoadInst* tailMatLI = new LoadInst(tailMatAI,"", conBB);
 
-  LoadInst* interMatConLI = new LoadInst(interMatAI,"",conBB);
+  LoadInst* iMatConLI = new LoadInst(iMatAI,"",conBB);
+  LoadInst* iMat2ConLI = new LoadInst(iMat2AI,"",conBB);
 
   vector<Value*> vecConMM;
-  vecConMM.push_back(interMatConLI);
+  vecConMM.push_back(iMatConLI);
   vecConMM.push_back(tailMatLI);
+  vecConMM.push_back(iMat2ConLI);
   vecConMM.push_back(ci1);
   vecConMM.push_back(ciDim);
   vecConMM.push_back(ciDim);
@@ -387,11 +417,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecConMM.push_back(ciMod);
   ArrayRef<Value*> arConMM(vecConMM);
   CallInst* mmConCI = CallInst::Create(funcMM, arConMM, "", conBB);
-  StoreInst* interMatConSI = new StoreInst((Value*) mmConCI, interMatAI, conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
-  LoadInst* interMatConLI2 = new LoadInst(interMatAI,"",conBB);
-  BitCastInst* cmpCI = new BitCastInst((Value*) interMatConLI2, i64PT, "", conBB);
+  LoadInst* iMatConLI2 = new LoadInst(iMat2AI,"",conBB);
+  BitCastInst* cmpCI = new BitCastInst((Value*) iMatConLI2, i64PT, "", conBB);
   GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) cmpCI, ci0,"", conBB);
   GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getCmpL1EPI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
@@ -405,7 +434,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
 
   ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) cmpLI, ci1, "");
   BranchInst::Create(trueBB, falseBB, conII, conBB);
-
 /*
   free(headMat[0]);
   free(headMatRand[0]);

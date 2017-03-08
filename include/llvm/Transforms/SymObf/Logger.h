@@ -63,7 +63,6 @@ private:
 
 extern loglevel_e loglevel;
 
-extern llvm::Constant* printFunc; 
 
 #define LOG(level) \
 if (level > loglevel) ; \

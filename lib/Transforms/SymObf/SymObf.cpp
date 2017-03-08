@@ -24,10 +24,11 @@ using namespace std;
 //STATISTIC(TaintedInst, "Number of tainted llvm instructions");
 loglevel_e loglevel = L3_DEBUG;
 Constant* printFunc;
+Constant* mallocFunc;
 
 Type *boolType, *i8Type, *i32Type, *i64Type;
 Type *doubleType;
-PointerType *fpPT, *i64PT, *ptrPT;
+PointerType *fpPT, *i64PT, *ptrPT, *ptrPPT, *ptrPPPT;
 ConstantInt *ci0, *ci1, *ciMod;
 vector<Value*> vec00,vec01;
 int64_t mod;
@@ -293,6 +294,8 @@ struct SymObf : public ModulePass {
     fpPT = PointerType::getUnqual(doubleType);
     i64PT = PointerType::getUnqual(i64Type);
     ptrPT = PointerType::getUnqual(i64PT);
+    ptrPPT = PointerType::getUnqual(ptrPT);
+    ptrPPPT = PointerType::getUnqual(ptrPPT);
 	mod = 1024;
 
 	vec00.push_back(ci0);
@@ -304,6 +307,7 @@ struct SymObf : public ModulePass {
 
     //Define the printf function:
     printFunc = module.getFunction("printf"); 
+    mallocFunc = module.getFunction("malloc"); 
 
     //Start the taint engine
     TaintEngine taintEngine(dataLayout);
@@ -325,13 +329,14 @@ struct SymObf : public ModulePass {
 
     //We declare the parameters of the function
     vector<Type*> paramVec;
-    paramVec.push_back((Type *) ptrPT);
-    paramVec.push_back((Type *) ptrPT);
-    paramVec.push_back(i64Type);
-    paramVec.push_back(i64Type);
-    paramVec.push_back(i64Type);
-    paramVec.push_back(i64Type);
-    paramVec.push_back(i64Type);
+    paramVec.push_back((Type *) ptrPT); //mat1
+    paramVec.push_back((Type *) ptrPT); //mat2
+    paramVec.push_back((Type *) ptrPT); //result
+    paramVec.push_back(i64Type);		//m1Height
+    paramVec.push_back(i64Type);		//m1Width
+    paramVec.push_back(i64Type);		//m2Height
+    paramVec.push_back(i64Type);		//m2Width
+    paramVec.push_back(i64Type);		//mod
     ArrayRef<Type*> paramArrayType(paramVec);
 
     //We wrap the type of the function
@@ -349,7 +354,7 @@ struct SymObf : public ModulePass {
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
 	    ConvertIcmp2Mbp(module, (ICmpInst*)inst, (Function*) mmFunc);
-		inst->eraseFromParent();
+		//inst->eraseFromParent();
 	  }
 	}
     //PrintIR(&F);
