@@ -64,7 +64,7 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
 	}
 	if(i>0){
 	  for (int j = 0; j < dim; j++){
-	    mat[i][j] = (mat[i][j] + mat[rowId[i-1]][j] * t[i-1]) % mod; 
+	    mat[i][j] = (mat[i][j] + mat[rowId[i-1]][j] * t[i-1]) % mod;
 		iMat[i][j] = mat[i][j];
 	  }
 	}
@@ -74,6 +74,12 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
     for(int j = 0; j < dim; j++){
 	  iMat[i][j] = (iMat[i][j] - iMat[rowId[i-1]][j]*t[i-1]) % mod;
 	  matInv[i][j] = (matInv[i][j] - matInv[rowId[i-1]][j]*t[i-1]) % mod;
+	  if(iMat[i][j] < 0){
+		iMat[i][j] = iMat[i][j] + mod;
+	  }
+	  if(matInv[i][j] < 0){
+		matInv[i][j] = matInv[i][j] + mod;
+	  }
 	}
     PrintStep(iMat,matInv,dim,dim-i);
   }
@@ -83,6 +89,12 @@ int GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t** iMat, int dim, int 
       for(int k = 0; k < dim; k++){
 	    iMat[j][k] = (iMat[j][k] - iMat[i][k] * tmp) % mod;
 	    matInv[j][k] = (matInv[j][k] - matInv[i][k] * tmp) % mod;
+	    if(iMat[i][j] < 0){
+		  iMat[i][j] = iMat[i][j] + mod;
+	    }
+	    if(matInv[j][k] < 0){
+		  matInv[j][k] = matInv[j][k] + mod;
+	    }
 	  }
 	}
     PrintStep(iMat,matInv,dim,2*dim-i-1);

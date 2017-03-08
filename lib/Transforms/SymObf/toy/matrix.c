@@ -1,29 +1,35 @@
 #include <stdio.h>
+#include <stdint.h>
 
 
-int** MM(const int** mat1, const int** mat2, int m1Height, int m1Width, int m2Height, int m2Width){
-  int restMat[m1Height][m2Width]; 
+int64_t** MM(const int64_t** mat1, const int64_t** mat2, int64_t m1Height, int64_t m1Width, int64_t m2Height, int64_t m2Width){
+  int64_t retMat[m1Height][m2Width];
+	/*
+  int64_t** retMat = (int64_t**) malloc (sizeof(int64_t*) * m1Height);
+  for(int64_t i=0; i<m1Height; i++){
+    retMat[i] = (int64_t*) malloc (sizeof(int64_t) * m2Width);
+  }
+  */
   if(m1Width != m2Height)
-    return restMat;
+    return retMat;
 
-  for(int i=0; i < m1Height; i++){
-    for(int j=0; j < m2Width; j++){
-	  int ele = 0;
-	  for(int k=0; k < m1Width; k++){
-		ele = ele + *((int*)mat1 + i*m1Width + k) * *((int*)mat2+ k*m2Width + j);
+  for(int64_t i=0; i < m1Height; i++){
+    for(int64_t j=0; j < m2Width; j++){
+	  int64_t ele = 0;
+	  for(int64_t k=0; k < m1Width; k++){
+		ele = ele + *((int64_t*)mat1 + i*m1Width + k) * *((int64_t*)mat2+ k*m2Width + j);
 	  }
-	  restMat[i][j] = ele;
+	  retMat[i][j] = ele;
 	  printf("%d\n",ele);
 	}
   }
-  return restMat;
+  return retMat;
 }
 
 int main(int argc, char** argv){
-  int len = 2;
+  int64_t len = 2;
 
-
-  int mat01[2][2], mat00[2][2], mat11[2][2], mat10[2][2];
+  int64_t mat01[2][2], mat00[2][2], mat11[2][2], mat10[2][2];
   mat01[0][0] = 0;
   mat01[0][1] = 1;
   mat01[1][1] = 1;
@@ -46,15 +52,15 @@ int main(int argc, char** argv){
   mat10[1][0] = 0;
   mat10[1][1] = 5;
 
-  int** mat[2][2] = {{mat00, mat01}, {mat10,  mat11}}; 
+  int64_t** mat[2][2] = {{mat00, mat01}, {mat10,  mat11}}; 
 
-  int initMat[1][2] = {1,0};
-  int inp = (argc & 1);
+  int64_t initMat[1][2] = {1,0};
+  int64_t inp = (argc & 1);
 
-  int** interMat = MM(initMat, mat[inp][0], 1,2,2,2);
-  for(int i = 1; i<len;i++){
+  int64_t** int64_terMat = MM(initMat, mat[inp][0], 1,2,2,2);
+  for(int64_t i = 1; i<len;i++){
 	  //To get the k-th bit of n: (n & ( 1 << k )) >> k;
 	  inp = (argc & (1<<i)) >> i;
-      interMat = MM(interMat, mat[inp][i], 1,2,2,2);
+      int64_terMat = MM(int64_terMat, mat[inp][i], 1,2,2,2);
   }
 }
