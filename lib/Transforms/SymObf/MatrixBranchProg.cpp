@@ -75,7 +75,7 @@ public:
 };
 
 
-void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
+void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   LOG(L2_DEBUG) << "ConvertIcmp2Mbp...";
   LLVMContext& context = icmpInst->getContext();
   Function* pFunc = icmpInst->getFunction();
@@ -296,6 +296,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   // Allocate two inter matrix
   AllocaInst* iMatAI = new AllocaInst(ptrPT,"iMat",pBB);
   AllocaInst* iMat2AI = new AllocaInst(ptrPT,"iMat2",pBB);
+
   //CreateMalloc (BasicBlock *InsertAtEnd, Type *IntPtrTy, Type *AllocTy, Value *AllocSize, Value *ArraySize=nullptr, Function *MallocF=nullptr, const Twine &Name="")
   Instruction* mallocI11 = CallInst::CreateMalloc(iMatAI, i64Type, i8Type, ci8, nullptr, (Function*) mallocFunc, "mallocCall11");
   BitCastInst* mallocBI11 = new BitCastInst(mallocI11, ptrPT, "", pBB);
@@ -307,11 +308,11 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   GetElementPtrInst* iMatEPI1 = GetElementPtrInst::CreateInBounds(i64PT, iMatLI, ci0,"", pBB);
   StoreInst* mallocSI12 = new StoreInst(mallocBI12, iMatEPI1, pBB);
 
-  Instruction* mallocI21 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8, nullptr, nullptr, "mallocCall21");
+  Instruction* mallocI21 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8, nullptr, (Function*) mallocFunc, "mallocCall21");
   BitCastInst* mallocBI21 = new BitCastInst(mallocI21, ptrPT, "", pBB);
-  StoreInst* mallocSI21 = new StoreInst(mallocBI21, iMatAI, pBB);
+  StoreInst* mallocSI21 = new StoreInst(mallocBI21, iMat2AI, pBB);
 
-  Instruction* mallocI22 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8Dim, nullptr, nullptr, "mallocCall22");
+  Instruction* mallocI22 = CallInst::CreateMalloc(iMat2AI, i64Type, i8Type, ci8Dim, nullptr, (Function*) mallocFunc, "mallocCall22");
   BitCastInst* mallocBI22 = new BitCastInst(mallocI22, i64PT, "", pBB);
   LoadInst* iMat2LI = new LoadInst(iMat2AI,"", pBB);
   GetElementPtrInst* iMatEPI2 = GetElementPtrInst::CreateInBounds(i64PT, iMat2LI, ci0,"", pBB);
@@ -329,7 +330,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecMM.push_back(ciMod);
   ArrayRef<Value*> arMM(vecMM);
 
-  CallInst* mmCI = CallInst::Create(funcMM, arMM, "", pBB);
+
+  CallInst* mmCI = CallInst::Create(multArMatFunc, arMM, "", pBB);
   StoreInst* mallocSI1 = new StoreInst(iMat2LI, iMatAI, pBB);
   StoreInst* mallocSI2 = new StoreInst(iMatLI, iMat2AI, pBB);
 
@@ -380,7 +382,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecFbMM.push_back(ciDim);
   vecFbMM.push_back(ciMod);
   ArrayRef<Value*> arFbMM(vecFbMM);
-  CallInst* mmFbCI = CallInst::Create(funcMM, arFbMM, "", forBodyBB);
+  CallInst* mmFbCI = CallInst::Create(multMatFunc, arFbMM, "", forBodyBB);
   StoreInst* mallocFbSI1 = new StoreInst(iMat2LI, iMatAI, forBodyBB);
   StoreInst* mallocFbSI2 = new StoreInst(iMatLI, iMat2AI, forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
@@ -416,13 +418,13 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst, Function* funcMM){
   vecConMM.push_back(ci1);
   vecConMM.push_back(ciMod);
   ArrayRef<Value*> arConMM(vecConMM);
-  CallInst* mmConCI = CallInst::Create(funcMM, arConMM, "", conBB);
+  CallInst* mmConCI = CallInst::Create(multMatFunc, arConMM, "", conBB);
   
   AllocaInst* cmpAI = new AllocaInst(i64Type,"cmpAI", conBB);
   LoadInst* iMatConLI2 = new LoadInst(iMat2AI,"",conBB);
-  BitCastInst* cmpCI = new BitCastInst((Value*) iMatConLI2, i64PT, "", conBB);
-  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) cmpCI, ci0,"", conBB);
-  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, (Value*) getCmpL1EPI, ci0,"", conBB);
+  GetElementPtrInst* getCmpL1EPI = GetElementPtrInst::CreateInBounds(i64PT, iMatConLI2, ci0,"", conBB);
+  LoadInst* getCmpL1LI = new LoadInst(getCmpL1EPI,"",conBB);
+  GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, getCmpL1LI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
   //FPToSIInst* fp2SI = new FPToSIInst(getCmpLI, i64Type, "", conBB);
   //StoreInst* cmpSI = new StoreInst((Value*) fp2SI, cmpAI, "", conBB);

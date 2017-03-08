@@ -25,6 +25,8 @@ using namespace std;
 loglevel_e loglevel = L3_DEBUG;
 Constant* printFunc;
 Constant* mallocFunc;
+Constant* multMatFunc;
+Constant* multArMatFunc;
 
 Type *boolType, *i8Type, *i32Type, *i64Type;
 Type *doubleType;
@@ -341,9 +343,9 @@ struct SymObf : public ModulePass {
 
     //We wrap the type of the function
     //Params: (Type *Result, ArrayRef< Type * > Params, bool isVarArg)
-    FunctionType* funcType = FunctionType::get((Type *) ptrPT, paramArrayType, false);
-    Constant* mmFunc = module.getOrInsertFunction("MultIntMatrix", funcType); 
-
+    FunctionType* funcType = FunctionType::get(i64Type, paramArrayType, false);
+    multMatFunc = module.getOrInsertFunction("MultIntMatrix", funcType); 
+    multArMatFunc = module.getOrInsertFunction("MultArMatrix", funcType); 
 /*
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
 	  Instruction *inst = *it;
@@ -353,7 +355,7 @@ struct SymObf : public ModulePass {
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.
-	    ConvertIcmp2Mbp(module, (ICmpInst*)inst, (Function*) mmFunc);
+	    ConvertIcmp2Mbp(module, (ICmpInst*)inst);
 		//inst->eraseFromParent();
 	  }
 	}
