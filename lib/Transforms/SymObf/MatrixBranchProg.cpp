@@ -332,8 +332,12 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
 
 
   CallInst* mmCI = CallInst::Create(multArMatFunc, arMM, "", pBB);
-  StoreInst* mallocSI1 = new StoreInst(iMat2LI, iMatAI, pBB);
+
+  AllocaInst* swapMatAI = new AllocaInst(ptrPT,"swapMat",pBB);
+  StoreInst* mallocSI1 = new StoreInst(iMat2LI, swapMatAI, pBB);
   StoreInst* mallocSI2 = new StoreInst(iMatLI, iMat2AI, pBB);
+  LoadInst* swapMatLI = new LoadInst(swapMatAI,"", pBB);
+  StoreInst* mallocSI3 = new StoreInst(swapMatLI, iMatAI, pBB);
 
   BranchInst::Create(forCondBB, pBB);
 
@@ -383,8 +387,10 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   vecFbMM.push_back(ciMod);
   ArrayRef<Value*> arFbMM(vecFbMM);
   CallInst* mmFbCI = CallInst::Create(multMatFunc, arFbMM, "", forBodyBB);
-  StoreInst* mallocFbSI1 = new StoreInst(iMat2LI, iMatAI, forBodyBB);
-  StoreInst* mallocFbSI2 = new StoreInst(iMatLI, iMat2AI, forBodyBB);
+  StoreInst* mallocFbSI1 = new StoreInst(iMat2FbLI, swapMatAI, forBodyBB);
+  StoreInst* mallocFbSI2 = new StoreInst(iMatFbLI, iMat2AI, forBodyBB);
+  LoadInst* swapMatFbLI = new LoadInst(swapMatAI,"", forBodyBB);
+  StoreInst* mallocFbSI3 = new StoreInst(swapMatFbLI, iMatAI, forBodyBB);
   BranchInst::Create(forIncBB, forBodyBB);
   
   //For inc 
@@ -426,8 +432,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   LoadInst* getCmpL1LI = new LoadInst(getCmpL1EPI,"",conBB);
   GetElementPtrInst* getCmpEPI = GetElementPtrInst::CreateInBounds(i64Type, getCmpL1LI, ci0,"", conBB);
   LoadInst* getCmpLI = new LoadInst(getCmpEPI,"",conBB);
-  //FPToSIInst* fp2SI = new FPToSIInst(getCmpLI, i64Type, "", conBB);
-  //StoreInst* cmpSI = new StoreInst((Value*) fp2SI, cmpAI, "", conBB);
   StoreInst* cmpSI = new StoreInst((Value*) getCmpLI, cmpAI, "", conBB);
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
