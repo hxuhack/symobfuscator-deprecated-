@@ -33,12 +33,15 @@ int64_t GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t dim, int64_t mod)
 {
   srand((unsigned)time(NULL));
   int64_t iMat[dim][dim];
-  int64_t t[dim-1];
-  int64_t rowId[dim-1];
+  int64_t t[dim];
+  int64_t rowId[dim];
   for(int64_t i=0; i<dim-1; i++){
     t[i] = rand() % 10 + 1; 
-    rowId[i] = rand()%(i+1); 
+	if(i!=0){
+      rowId[i] = rand()%i; 
+	}
   }
+  rowId[0] = rand()%dim; 
 
   for (int64_t i = 0; i < dim; i++){
 	for (int64_t j = 0; j < dim; j++){
@@ -59,15 +62,29 @@ int64_t GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t dim, int64_t mod)
 	}
 	if(i>0){
 	  for (int64_t j = 0; j < dim; j++){
-	    mat[i][j] = (mat[i][j] + mat[rowId[i-1]][j] * t[i-1])%mod; 
+	    mat[i][j] = (mat[i][j] + mat[rowId[i]][j] * t[i])%mod; 
 		iMat[i][j] = mat[i][j];
 	  }
 	}
   }
+  for (int64_t j = 0; j < dim; j++){
+    mat[0][j] = (mat[0][j] + mat[rowId[0]][j] * t[0]) % mod;
+	iMat[0][j] = mat[0][j];
+  }
+  for(int64_t j = 0; j < dim; j++){
+    iMat[0][j] = (iMat[0][j] - iMat[rowId[0]][j]*t[0]) % mod;
+    matInv[0][j] = (matInv[0][j] - matInv[rowId[0]][j]*t[0]) % mod;
+    if(iMat[0][j] < 0){
+  	  iMat[0][j] = iMat[0][j] + mod;
+	}
+	if(matInv[0][j] < 0){
+	  matInv[0][j] = matInv[0][j] + mod;
+	}
+  }
   for(int64_t i = dim-1; i>0; i--){
     for(int64_t j = 0; j < dim; j++){
-	  iMat[i][j] = (iMat[i][j] - iMat[rowId[i-1]][j]*t[i-1]) % mod;
-	  matInv[i][j] = (matInv[i][j] - matInv[rowId[i-1]][j]*t[i-1]) % mod;
+	  iMat[i][j] = (iMat[i][j] - iMat[rowId[i]][j]*t[i]) % mod;
+	  matInv[i][j] = (matInv[i][j] - matInv[rowId[i]][j]*t[i]) % mod;
 	  if(iMat[i][j] < 0){
 	    iMat[i][j] = iMat[i][j] + mod;
 	  }
