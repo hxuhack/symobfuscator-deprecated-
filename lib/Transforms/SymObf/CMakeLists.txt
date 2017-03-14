@@ -3,6 +3,8 @@
 add_library(SymObf MODULE 
   matrix/MatGen.cpp
   matrix/MatUtils.cpp
+  mmap/PrimeGen.cpp
+  mmap/MillerRabin.cpp
   Utils.cpp
   BranchProg.cpp
   MatrixBranchProg.cpp
