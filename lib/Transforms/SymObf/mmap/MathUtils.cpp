@@ -1,5 +1,18 @@
-#include "MillerRabin.h"
+#include "MathUtils.h"
 
+class MillerRabin{
+public: MillerRabin();
+private: int iter;
+public: bool testcomposite(long long,long long); // composite testing of a number | eg:- testcomposite(235,3) would result to true/1 which states that 3 is witness for 235 being composite
+		bool testprime(long long);               // Tests if a number is prime | eg:- testprime(19) would result in true/1
+		void printprime(long long start, long long stop); // Prints prime from start to stop | eg:- printprime(2,9) would result in 2 3 5 7
+		int factorize2(long long);                        // Computes the power of 2 as a factor of the input number
+		long long  modulo(long long  a,long long  ,long long  c); // Computes the modulus a^b%c
+		long long mod(long long a,long long  b, long long  c);    // Computes the modulus a^b%c but is very slow for large numbers because its O(b)
+		long long* randgen(long long max, int num);               // Utility Function randgen computes num distinct random numbers from 1 to max-1 
+		bool search(long long *arr, int num);                     // Utility Function used by randgen to compute distinct random numbers by searching arr, if it contains num or not
+		void setiter(int);                                        // Sets the value of private variable iter
+};
 MillerRabin::MillerRabin()
 {
     // seed the random number generator
@@ -173,4 +186,77 @@ bool MillerRabin::search(long long *arr, int num)
 void MillerRabin::setiter(int num)
 {
 	iter=num;
+}
+
+int64_t GetPrime(int64_t mod){
+  srand((unsigned)time(NULL));
+  int64_t start = rand() % mod; 
+  MillerRabin mr;
+  for(int64_t i=start; i < mod; i++){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+  for(int64_t i=start; i > 0; i--){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+}
+
+int InvMod(int64_t p, int64_t mod) {
+	std::vector<int64_t> r;
+	std::vector<int64_t> s;
+	std::vector<int64_t> t;
+	std::vector<int64_t> q;
+	int size = 2;
+	int i = 1;
+	
+	r.resize(size);
+	s.resize(size);
+	t.resize(size);
+	q.resize(size);
+	
+	s[0] = 1;
+	t[0] = 0;
+	s[1] = 0;
+	t[1] = 1;
+	
+	//input from the arguments
+	r[0] = p;
+	r[1] = mod;
+	
+	//change order of input numbers, higher number comes first
+	if (r[0] < r[1]) {
+		int64_t swp;
+		swp = r[0];
+		r[0] = r[1];	
+		r[1] = swp;
+	}
+
+	//execute the extended euclidean algorithm
+	do {
+		i = i+1;
+		
+		//resize the vector and add one element per vector
+		size++;
+		r.resize(size);
+		s.resize(size);
+		t.resize(size);
+		q.resize(size);
+		
+		r[i] = r[i-2] % r[i-1];
+		q[i-1] = (r[i-2]-r[i]) / r[i-1];
+		s[i] = s[i-2] - (q[i-1] * s[i-1]);
+		t[i] = t[i-2] - (q[i-1] * t[i-1]);
+	} while (r[i] != 0);
+	//check if inverse is < 0 and if so, calculate mod n to display positive inverse
+	if(s[i-1] < 0){
+		s[i-1] = s[i-1] + r[0];
+	}
+	if(t[i-1] < 0){
+		t[i-1] = t[i-1] + r[0];
+	}
+
+	return t[i-1];
 }
