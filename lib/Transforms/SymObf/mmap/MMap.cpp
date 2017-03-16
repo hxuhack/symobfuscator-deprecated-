@@ -14,7 +14,6 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   sp.Z = z;
   sp.N = n;
   sp.setnum = setnum;
-  /*
   sp.z = (int64_t *) malloc (sizeof(int64_t) * sp.Z); 
   sp.h = (int64_t *) malloc (sizeof(int64_t) * sp.N); 
   sp.g = (int64_t *) malloc (sizeof(int64_t) * sp.N); 
@@ -38,7 +37,6 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   for(int64_t i =0; i< sp.setnum; i++){
     sp.setid[i].push_back(sp.z[i]);
   }
-  */
 }
 
 
