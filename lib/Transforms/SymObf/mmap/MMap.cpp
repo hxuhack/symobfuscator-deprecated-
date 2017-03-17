@@ -8,9 +8,10 @@ int64_t hMax = 128;
 int64_t gMax = 65535;
 int64_t pMax = 2147483647;
 
-struct secparam sp;
+secparam sp;
 
 int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
+  printf("Initializing MMap parameters...\n");
   sp.Z = z;
   sp.N = n;
   sp.setnum = setnum;
@@ -37,8 +38,9 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   for(int64_t i =0; i< sp.setnum; i++){
     sp.setid[i].push_back(sp.z[i]);
   }
+  printf("Finish MMap parameter initialization...\n");
+  return 0;
 }
-
 
 int64_t MMapIsZero(double u){
   double pzt = 0;
@@ -55,7 +57,8 @@ int64_t MMapIsZero(double u){
 	}
     pzt = pzt + sp.h[i] * mid * tail; 
   }
-  pzt = (int64_t) fmod((pzt * u), sp.q);
+  pzt = fmod((pzt * u), sp.q);
+  printf("pzt = %.5f\n",pzt);
   if(abs(pzt) < sp.q * pow(2,-2-sp.N-sp.alphalen))
 	return 1;
   return 0;
