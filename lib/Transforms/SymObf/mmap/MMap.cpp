@@ -118,13 +118,17 @@ int64_t MMapIsZero(mpz_t u){
   mpz_mod(left,left,sp.q);
   //right = sp.q * pow(2,- alpha - beta);
   mpz_init(right);
-  mpz_t tmp;
-  mpz_init_set_ui(tmp,pow(2,-alpha-beta));
-  mpz_mul(right,sp.q,tmp);
+  mpz_t tmp,tmp2;
+  mpz_init(tmp);
+  mpz_init_set_ui(tmp2,2);
+  mpz_pow_ui(tmp,tmp2,alpha);
+  mpz_div(right,sp.q,tmp);
 
   cout << "left = "<<left<<", right = " << right <<endl;
-  if(left < right)
+  if(mpz_cmp(left,right) < 0){
+    cout << "Zero test returns true!" <<endl;
 	return 1;
+  }
   return 0;
 }
 
