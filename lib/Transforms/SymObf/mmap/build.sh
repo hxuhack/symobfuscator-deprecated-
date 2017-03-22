@@ -1,1 +1,1 @@
-clang MathUtils.cpp MMap.cpp test.cpp -lstdc++ -lm -lgmpxx -lgmp
+clang MathUtils.cpp MMap.cpp test.cpp -lstdc++ -lm
