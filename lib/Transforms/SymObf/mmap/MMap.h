@@ -10,29 +10,29 @@
 //#include "llvm/Transforms/SymObf/Utils.h"
 
 struct secparam{
-  int64_t Z; //set num
-  int64_t N; //multilinear level
-  int64_t setnum;
-  int64_t lambda;
-  int64_t q; //public number = p1 * p2 *... * pN
-  int64_t pzt; //zero test parameter
-  int64_t* z; //small random value
-  int64_t* h; //small random value
-  int64_t* g; //small prime
-  int64_t* ginv; //inverse of g mod p
-  int64_t* p; //large prime
-  //std::vector<int64_t>* setid; 
+  int Z; //set num
+  int N; //multilinear level
+  int setnum;
+  int lambda;
+  __int128 q; //public number = p1 * p2 *... * pN
+  __int128 pzt; //zero test parameter
+  int* z; //small random value
+  int* h; //small random value
+  int* g; //small prime
+  __int128* ginv; //inverse of g mod p
+  __int128* p; //large prime
+  //std::vector<__int128>* setid; 
 };
 
-int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum);
-int64_t MMapEnc(int64_t m, int64_t mid, int64_t setid);
-int64_t MMapEncDefault(int64_t m, int64_t setid);
-int64_t MMapAdd(int64_t u1, int64_t u2, int64_t mid);
-int64_t MMapMult(int64_t u1, int64_t u2, int64_t mid);
-int64_t MMapIsZero(int64_t u);
+void MMapInitParam(int z, int n, int setnum);
+__int128 MMapEnc(int m, int mid, int setid);
+__int128 MMapEncDefault(int m, int setid);
+__int128 MMapAdd(__int128 u1, __int128 u2, int mid);
+__int128 MMapMult(__int128 u1, __int128 u2, int mid);
+__int128 MMapIsZero(__int128 u);
 
-int64_t GetPzt();
-int64_t GetQ();
-int64_t GetExp();
+__int128 GetPzt();
+__int128 GetQ();
+__int128 GetExp();
 
 #endif

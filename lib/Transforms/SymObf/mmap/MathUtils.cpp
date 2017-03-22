@@ -204,11 +204,43 @@ int64_t GetPrime(int64_t mod){
   }
 }
 
-int InvMod(int64_t p, int64_t mod) {
-	std::vector<int64_t> r;
-	std::vector<int64_t> s;
-	std::vector<int64_t> t;
-	std::vector<int64_t> q;
+int GetPrime(int mod){
+  srand((unsigned)time(NULL));
+  int start = rand() % mod; 
+  MillerRabin mr;
+  for(int i=start; i < mod; i++){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+  for(int i=start; i > 0; i--){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+}
+
+__int128 GetPrime(__int128 mod){
+  srand((unsigned)time(NULL));
+  __int128 start = rand() % mod; 
+  MillerRabin mr;
+  for(__int128 i=start; i < mod; i++){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+  for(__int128 i=start; i > 0; i--){
+    if(mr.testprime(i)){
+	  return i;
+	}
+  }
+}
+
+int InvMod(int p, __int128 mod) {
+	std::vector<__int128> r;
+	std::vector<__int128> s;
+	std::vector<__int128> t;
+	std::vector<__int128> q;
 	int size = 2;
 	int i = 1;
 	
@@ -228,7 +260,7 @@ int InvMod(int64_t p, int64_t mod) {
 	
 	//change order of input numbers, higher number comes first
 	if (r[0] < r[1]) {
-		int64_t swp;
+		__int128 swp;
 		swp = r[0];
 		r[0] = r[1];	
 		r[1] = swp;
