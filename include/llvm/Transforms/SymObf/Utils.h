@@ -31,6 +31,6 @@ extern llvm::ConstantInt *ci0, *ci1, *ciMod;
 extern std::vector<llvm::Value*> vec00,vec01;
 extern int64_t mod;
 
-extern llvm::Constant *printFunc, *mallocFunc, *multMatFunc, *multArMatFunc; 
+extern llvm::Constant *printFunc, *mallocFunc, *multMatFunc, *multArMatFunc, *zeroTestFunc; 
 //Create the blocks
 #endif

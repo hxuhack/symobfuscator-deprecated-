@@ -17,6 +17,7 @@ ICmpInst
 */
 #include "llvm/Transforms/SymObf/SymObf.h"
 #include "llvm/Transforms/IPO/PassManagerBuilder.h"
+#include "mmap/MMap.h"
 
 using namespace llvm;
 using namespace std;
@@ -27,6 +28,7 @@ Constant* printFunc;
 Constant* mallocFunc;
 Constant* multMatFunc;
 Constant* multArMatFunc;
+Constant* zeroTestFunc;
 
 Type *boolType, *i8Type, *i32Type, *i64Type;
 Type *doubleType;
@@ -285,6 +287,7 @@ struct SymObf : public ModulePass {
     const DataLayout &dataLayout = module.getDataLayout();
 	LLVMContext& context = module.getContext();
 
+
     i64Type = IntegerType::getInt64Ty(context);
     i32Type = IntegerType::getInt32Ty(context);
     i8Type = IntegerType::getInt8Ty(context);
@@ -346,12 +349,17 @@ struct SymObf : public ModulePass {
     FunctionType* funcType = FunctionType::get(i64Type, paramArrayType, false);
     multMatFunc = module.getOrInsertFunction("MultIntMatrix", funcType); 
     multArMatFunc = module.getOrInsertFunction("MultArMatrix", funcType); 
-/*
-	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); ++it){
-	  Instruction *inst = *it;
-	  ConvertInst2Bool(inst);
-	}
-*/
+
+    MMapInitParam(1,1,1);
+    vector<Type*> paramVec2;
+    paramVec2.push_back(i64Type);
+    paramVec2.push_back(i64Type);
+    paramVec2.push_back(i64Type);
+    paramVec2.push_back(i64Type);
+    ArrayRef<Type*> paramAT(paramVec2);
+    FunctionType* funcType2 = FunctionType::get(i64Type, paramAT, false);
+    zeroTestFunc = module.getOrInsertFunction("ZeroTest", funcType2); 
+
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;
 	  if(isa<ICmpInst> (*inst)){ //It is already boolean.

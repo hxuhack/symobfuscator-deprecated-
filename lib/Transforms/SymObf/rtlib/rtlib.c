@@ -72,3 +72,15 @@ int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t 
   }
   return 0;
 }
+
+int64_t ZeroTest(int64_t u, int64_t pzt, int64_t q, int64_t exp){
+  int64_t left, right;
+  left = pzt * u % q;
+  right = q * pow(2, exp);
+  printf("left = %d, right = %d\n", left, right);
+  if(left < right){
+    printf("Zero test returns true!\n");
+	return 0;
+  }
+  return 1;
+}

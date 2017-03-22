@@ -6,7 +6,8 @@
 #include <time.h>	//time
 #include <vector>	//time
 #include <cmath>	//time
-#include "gmp.h"
+#include "llvm/Transforms/SymObf/Logger.h"
+#include "llvm/Transforms/SymObf/Utils.h"
 
 struct secparam{
   int64_t Z; //set num
@@ -23,11 +24,15 @@ struct secparam{
   std::vector<int64_t>* setid; 
 };
 
-extern secparam sp;
-
 int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum);
 int64_t MMapEnc(int64_t m, int64_t mid, int64_t setid);
+int64_t MMapEncDefault(int64_t m);
 int64_t MMapAdd(int64_t u1, int64_t u2, int64_t mid);
 int64_t MMapMult(int64_t u1, int64_t u2, int64_t mid);
 int64_t MMapIsZero(int64_t u);
+
+int64_t GetPzt();
+int64_t GetQ();
+int64_t GetExp();
+
 #endif

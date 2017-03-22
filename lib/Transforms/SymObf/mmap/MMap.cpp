@@ -3,14 +3,9 @@
 
 using namespace std;
 
-int64_t zLen, hLen, beta, alpha, pLen, gLen;
-
-int64_t tmpRi;
-
 secparam sp;
-
 int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
-  printf("Initializing MMap parameters...\n");
+  //LOG(L_INFO) << "Initializing MMap parameters...";
   sp.Z = z;
   sp.N = n;
   sp.setnum = setnum;
@@ -21,6 +16,7 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   sp.p = (int64_t *) malloc (sizeof(int64_t) * sp.N); 
   sp.setid = (vector<int64_t> *) malloc (sizeof(vector<int64_t>) * sp.setnum); 
 
+  int64_t zLen, hLen, pLen, gLen;
   zLen = 2;
   hLen = 8;
   gLen = 8;
@@ -30,8 +26,6 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   int64_t gMax = pow(2, gLen); 
   int64_t pMax = pow(2, pLen); 
   sp.lambda = 8;
-  alpha = sp.lambda;
-  beta = sp.lambda;
 
   srand((unsigned)time(NULL));
 
@@ -64,11 +58,12 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   }
 
   //TODO:To implement more secure set mechanism
-  printf("Finish MMap parameter initialization...\n");
-  cout<<"pzt = " << sp.pzt<< endl;
   for(int64_t i =0; i< sp.setnum; i++){
     sp.setid[i].push_back(i);
   }
+  /*
+  printf("Finish MMap parameter initialization...\n");
+  cout<<"pzt = " << sp.pzt<< endl;
   for(int64_t i =0; i< sp.N; i++){
     cout << "g[" <<i<<"]="<< sp.g[i]<<endl;
   }
@@ -79,20 +74,34 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   for(int64_t i =0; i< sp.Z; i++){
     cout << "z[" <<i<<"]="<< sp.z[i]<<endl;
   }
+  */
   return 0;
+}
+
+int64_t GetPzt(){
+  return sp.pzt;
+}
+
+int64_t GetQ(){
+  return sp.q;
+}
+
+int64_t GetExp(){
+  return sp.lambda * -1;
 }
 
 int64_t MMapIsZero(int64_t u){
   int64_t left, right;
   left = sp.pzt * u % sp.q;
-  right = sp.q * pow(2,- alpha - beta);
+  right = sp.q * pow(2, sp.lambda * -1);
   cout << "left = "<<left<<", right = " << right <<endl;
   if(left < right){
     cout << "Zero test returns true!" <<endl;
-	return 1;
+	return 0;
   }
-  return 0;
+  return 1;
 }
+
 
 int64_t MMapEnc(int64_t m, int64_t mid, int64_t setid){
   int64_t set = 1;
@@ -105,6 +114,9 @@ int64_t MMapEnc(int64_t m, int64_t mid, int64_t setid){
   return result;
 }
 
+int64_t MMapEncDefault(int64_t m){
+  return MMapEnc(m, 0, 0);
+}
 int64_t MMapAdd(int64_t u1, int64_t u2, int64_t mid){
   int64_t result = (u1 + u2) % sp.p[mid];
   return result;

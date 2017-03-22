@@ -1,5 +1,6 @@
 #include "llvm/Transforms/SymObf/MatrixBranchProg.h"
 #include "matrix/MatUtils.h"
+#include "mmap/MMap.h"
 
 using namespace llvm;
 using namespace std;
@@ -54,10 +55,6 @@ public:
 
   int64_t GetHeight(){
 	return height;
-  }
-
-  void GradEncode(){
-    //TODO: to be implement
   }
 
   ~MatrixInIR(){
@@ -183,6 +180,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   
   GenIntMatPair(randMat, randMatInv, dim, mod);
   MultIntMatrix(headMat, randMat, headMatRand, 1, dim, dim, dim, mod);
+  EncMatrix(headMatRand,1,dim);
 
   PrintIntMat(headMat, 1, dim);
 
@@ -228,6 +226,9 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
     MultIntMatrix(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim, mod);
     MultIntMatrix(midMat1, randMat2, midMat1Rand, dim, dim, dim, dim, mod);
 
+    EncMatrix(midMat0Rand,dim,dim);
+    EncMatrix(midMat1Rand,dim,dim);
+
 	MatrixInIR*  mat0IR = new MatrixInIR(module, context, pBB, midMat0Rand, dim,dim); //bit
 	MatrixInIR*  mat1IR = new MatrixInIR(module, context, pBB, midMat1Rand, dim,dim); //~bit
 
@@ -256,6 +257,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
 
   CreateIntMat(tailMat, dim, 1, dim-1, 0);
   MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1, mod);
+  EncMatrix(tailMatRand,dim,1);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
   //MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMat, dim, 1); //bit
   //PrintIntMat(tailMat, dim, 1);
@@ -325,7 +327,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   vecMM.push_back(ciDim);
   vecMM.push_back(ciMod);
   ArrayRef<Value*> arMM(vecMM);
-
 
   CallInst* mmCI = CallInst::Create(multArMatFunc, arMM, "", pBB);
 
@@ -431,10 +432,31 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   StoreInst* cmpSI = new StoreInst((Value*) getCmpLI, cmpAI, "", conBB);
   LoadInst* cmpLI = new LoadInst(cmpAI,"",conBB);
 
-  const char strArg1[] = "ICmp Reuslt: %d\n";
-  PrintInIR(module, conBB, strArg1, sizeof(strArg1), cmpLI);
+  ConstantInt* expCI = (ConstantInt*) ConstantInt::getSigned(i64Type, GetExp());
+  AllocaInst* expAI = new AllocaInst(i64Type,"expAI", conBB);
+  StoreInst* expSI = new StoreInst(expCI, expAI, "", conBB);
+  LoadInst* expLI = new LoadInst(expAI,"",conBB);
+  ConstantInt* qCI = (ConstantInt*) ConstantInt::getSigned(i64Type, GetQ());
+  AllocaInst* qAI = new AllocaInst(i64Type,"qAI", conBB);
+  StoreInst* qSI = new StoreInst(qCI, qAI, "", conBB);
+  LoadInst* qLI = new LoadInst(qAI,"",conBB);
+  ConstantInt* pztCI = (ConstantInt*) ConstantInt::getSigned(i64Type, GetPzt());
+  AllocaInst* pztAI = new AllocaInst(i64Type,"pztAI", conBB);
+  StoreInst* pztSI = new StoreInst(pztCI, pztAI, "", conBB);
+  LoadInst* pztLI = new LoadInst(pztAI,"",conBB);
 
-  ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) cmpLI, ci1, "");
+  vector<Value*> vecConZT;
+  vecConZT.push_back(cmpLI);
+  vecConZT.push_back(pztLI);
+  vecConZT.push_back(qLI);
+  vecConZT.push_back(expLI);
+  ArrayRef<Value*> arConZT(vecConZT);
+  CallInst* ztConCI = CallInst::Create(zeroTestFunc, arConZT, "", conBB);
+
+  const char strArg1[] = "ICmp Reuslt: %d\n";
+  PrintInIR(module, conBB, strArg1, sizeof(strArg1), ztConCI);
+
+  ICmpInst* conII = new ICmpInst(*conBB, CmpInst::ICMP_EQ, (Value*) ztConCI, ci1, "");
   BranchInst::Create(trueBB, falseBB, conII, conBB);
 
   free(headMat[0]);
