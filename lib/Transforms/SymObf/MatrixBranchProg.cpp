@@ -77,6 +77,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   Function* pFunc = icmpInst->getFunction();
   BasicBlock* pBB = icmpInst->getParent();
 
+
   ArrayRef<Value*> ar00(vec00);
   ArrayRef<Value*> ar01(vec01);
 
@@ -180,7 +181,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   
   GenIntMatPair(randMat, randMatInv, dim, mod);
   MultIntMatrix(headMat, randMat, headMatRand, 1, dim, dim, dim, mod);
-  EncMatrix(headMatRand,1,dim);
+  EncMatrix(headMatRand,1,dim,0);
 
   PrintIntMat(headMat, 1, dim);
 
@@ -226,8 +227,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
     MultIntMatrix(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim, mod);
     MultIntMatrix(midMat1, randMat2, midMat1Rand, dim, dim, dim, dim, mod);
 
-    EncMatrix(midMat0Rand,dim,dim);
-    EncMatrix(midMat1Rand,dim,dim);
+    EncMatrix(midMat0Rand,dim,dim, i+1);
+    EncMatrix(midMat1Rand,dim,dim, i+1);
 
 	MatrixInIR*  mat0IR = new MatrixInIR(module, context, pBB, midMat0Rand, dim,dim); //bit
 	MatrixInIR*  mat1IR = new MatrixInIR(module, context, pBB, midMat1Rand, dim,dim); //~bit
@@ -257,7 +258,7 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
 
   CreateIntMat(tailMat, dim, 1, dim-1, 0);
   MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1, mod);
-  EncMatrix(tailMatRand,dim,1);
+  EncMatrix(tailMatRand,dim,1,dim);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
   //MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMat, dim, 1); //bit
   //PrintIntMat(tailMat, dim, 1);

@@ -1,11 +1,17 @@
 #include "MMap.h"
 
 int main(int argc, char** argv){
-  MMapInitParam(1,1,1);
-  int64_t a = atoi(argv[1]);
-  mpz_t em;
-  mpz_init(em);
-  MMapEnc(em,a,0,0);
-  printf("%d\n",MMapIsZero(em));
+  int64_t num = atoi(argv[1]);
+  MMapInitParam(num,1,num);
+  mpz_t result;
+  mpz_init_set_ui(result,1);
+  for(int64_t i=0; i<num; i++){
+    mpz_t ei;
+    mpz_init(ei);
+    MMapEnc(ei,i,0,i);
+    mpz_mul(result, ei, result);
+	mpz_mod(result,result,sp.q);
+  }
+  printf("%d\n",MMapIsZero(result));
   return 0;
 }

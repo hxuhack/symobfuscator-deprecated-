@@ -14,7 +14,7 @@ int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t 
 int64_t PrintIntMat(int64_t** mat, int64_t height, int64_t width);
 int64_t CopyIntMat(int64_t** dst, int64_t** src, int64_t height, int64_t width);
 int64_t GenIntMatPair(int64_t** mat, int64_t** matInv, int64_t dim, int64_t mod);
-int64_t EncMatrix(int64_t** mat, int64_t height, int64_t width);
+int64_t EncMatrix(int64_t** mat, int64_t height, int64_t width, int64_t setid);
 
 #endif
 

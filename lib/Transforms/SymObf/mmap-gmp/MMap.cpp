@@ -34,9 +34,9 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
   sp.setid = (vector<int64_t> *) malloc (sizeof(vector<int64_t>) * sp.setnum); 
 
   zLen = 8;
-  hLen = 32;
-  gLen = 32;
-  pLen = 128;
+  hLen = 64;
+  gLen = 64;
+  pLen = 1024;
   sp.lambda = 32;
   alpha = sp.lambda;
   beta = sp.lambda;
@@ -70,9 +70,9 @@ int64_t MMapInitParam(int64_t z, int64_t n, int64_t setnum){
 	mpz_t mid, tail;
 	mpz_init_set_ui(mid,1);
 	mpz_init_set_ui(tail,1);
+	mpz_mul(mid,mid,sp.ginv[i]);
     for(int64_t j=0; j<sp.Z; j++){
 	  //mid = (mid * sp.ginv[i] * sp.z[j]) % sp.p[i] % sp.q;
-	  mpz_mul(mid,mid,sp.ginv[i]);
 	  mpz_mul(mid,mid,sp.z[j]);
 	  mpz_mod(mid,mid,sp.p[i]);
 	  mpz_mod(mid,mid,sp.q);

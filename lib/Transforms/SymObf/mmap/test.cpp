@@ -1,9 +1,12 @@
 #include "MMap.h"
 
 int main(int argc, char** argv){
-  MMapInitParam(1,1,1);
-  int64_t a = atoi(argv[1]);
-  int64_t em = MMapEnc(a,0,0);
-  printf("%d\n",MMapIsZero(em));
+  int num = atoi(argv[1]);
+  MMapInitParam(num,1,num);
+  int64_t result = 1;
+  for(int i=0;i<num;i++){
+    result =  result * MMapEnc(i,0,i) % GetQ();
+  }
+  printf("%d\n",MMapIsZero(result));
   return 0;
 }
