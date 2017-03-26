@@ -80,7 +80,7 @@ int64_t ZeroTest(int64_t u, int64_t pzt, int64_t q, int64_t exp){
   printf("left = %d, right = %d\n", left, right);
   if(left < right){
     printf("Zero test returns true!\n");
-	return 0;
+	return 1;
   }
-  return 1;
+  return 0;
 }

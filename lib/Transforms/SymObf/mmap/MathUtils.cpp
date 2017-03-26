@@ -3,14 +3,14 @@
 class MillerRabin{
 public: MillerRabin();
 private: int iter;
-public: bool testcomposite(long long,long long); // composite testing of a number | eg:- testcomposite(235,3) would result to true/1 which states that 3 is witness for 235 being composite
-		bool testprime(long long);               // Tests if a number is prime | eg:- testprime(19) would result in true/1
-		void printprime(long long start, long long stop); // Prints prime from start to stop | eg:- printprime(2,9) would result in 2 3 5 7
-		int factorize2(long long);                        // Computes the power of 2 as a factor of the input number
-		long long  modulo(long long  a,long long  ,long long  c); // Computes the modulus a^b%c
-		long long mod(long long a,long long  b, long long  c);    // Computes the modulus a^b%c but is very slow for large numbers because its O(b)
-		long long* randgen(long long max, int num);               // Utility Function randgen computes num distinct random numbers from 1 to max-1 
-		bool search(long long *arr, int num);                     // Utility Function used by randgen to compute distinct random numbers by searching arr, if it contains num or not
+public: bool testcomposite(__int128,__int128); // composite testing of a number | eg:- testcomposite(235,3) would result to true/1 which states that 3 is witness for 235 being composite
+		bool testprime(__int128);               // Tests if a number is prime | eg:- testprime(19) would result in true/1
+		void printprime(__int128 start, __int128 stop); // Prints prime from start to stop | eg:- printprime(2,9) would result in 2 3 5 7
+		int factorize2(__int128);                        // Computes the power of 2 as a factor of the input number
+		__int128  modulo(__int128  a,__int128  ,__int128  c); // Computes the modulus a^b%c
+		__int128 mod(__int128 a,__int128  b, __int128  c);    // Computes the modulus a^b%c but is very slow for large numbers because its O(b)
+		__int128* randgen(__int128 max, int num);               // Utility Function randgen computes num distinct random numbers from 1 to max-1 
+		bool search(__int128 *arr, int num);                     // Utility Function used by randgen to compute distinct random numbers by searching arr, if it contains num or not
 		void setiter(int);                                        // Sets the value of private variable iter
 };
 MillerRabin::MillerRabin()
@@ -22,7 +22,7 @@ MillerRabin::MillerRabin()
 }
 
 
-bool MillerRabin::testprime(long long num)
+bool MillerRabin::testprime(__int128 num)
 {
 	if(num<=1)
 		return false;
@@ -30,7 +30,7 @@ bool MillerRabin::testprime(long long num)
 		return false;
     
 	// randarr :- array to store iter distinct random numbers ranging from 1 : num-1
-	long long *randarr=new long long[iter];
+	__int128 *randarr=new __int128[iter];
 	randarr=randgen(num,iter);
 
 	for(int i=0;i<iter;i++)
@@ -41,11 +41,11 @@ bool MillerRabin::testprime(long long num)
 	return true;
 }
 
-bool MillerRabin::testcomposite(long long num,long long witness)
+bool MillerRabin::testcomposite(__int128 num,__int128 witness)
 {
 	int factor=factorize2(num-1); // factor 2 of the number num
 	
-	long long rem=(long long)(num-1)/(int)pow(2.0,factor); // rem:- remainder after (num-1)/2^factor
+	__int128 rem=(__int128)(num-1)/(int)pow(2.0,factor); // rem:- remainder after (num-1)/2^factor
 	
 	double *remain;
 	
@@ -78,13 +78,13 @@ bool MillerRabin::testcomposite(long long num,long long witness)
 }
 
 
-void MillerRabin::printprime(long long start, long long stop)
+void MillerRabin::printprime(__int128 start, __int128 stop)
 {
 
  if(start==stop)
  {
-	 if(testprime(start))
-     std::cout<<start;
+	 //if(testprime(start))
+     //std::cout<<start;
  }
  else
   {
@@ -112,7 +112,7 @@ void MillerRabin::printprime(long long start, long long stop)
  }
 }
 
-int MillerRabin::factorize2(long long num)
+int MillerRabin::factorize2(__int128 num)
 {
 	int count=0;
 
@@ -129,8 +129,8 @@ int MillerRabin::factorize2(long long num)
 	return count;
 }
 
-long long  MillerRabin::modulo(long long  a,long long  b,long long  c){
-    long long p=1,r=a; 
+__int128  MillerRabin::modulo(__int128  a,__int128  b,__int128  c){
+    __int128 p=1,r=a; 
     while(b > 0){
         if(b%2 == 1){
             p=(p*r)%c;
@@ -141,9 +141,9 @@ long long  MillerRabin::modulo(long long  a,long long  b,long long  c){
     return p%c;
 }
 
-long long MillerRabin::mod(long long a, long long b, long long c)
+__int128 MillerRabin::mod(__int128 a, __int128 b, __int128 c)
 {
-	long long mod=a%c;
+	__int128 mod=a%c;
 	for(int i=1;i<b;i++)
 	{
         mod=(mod*a%c)%c;
@@ -151,13 +151,13 @@ long long MillerRabin::mod(long long a, long long b, long long c)
 	return mod;
 }
 
-long long * MillerRabin::randgen(long long max,int num)
+__int128 * MillerRabin::randgen(__int128 max,int num)
 {
-	long long *arr=new long long[num];
+	__int128 *arr=new __int128[num];
 	int ind=0;
 	while(ind<num)
 	{
-		long long a=rand()%(max-1)+1;
+		__int128 a=rand()%(max-1)+1;
 		if(!search(arr,a))
 		{
 			arr[ind]=a;
@@ -169,7 +169,7 @@ long long * MillerRabin::randgen(long long max,int num)
 	return arr;
 }
 
-bool MillerRabin::search(long long *arr, int num)
+bool MillerRabin::search(__int128 *arr, int num)
 {
 	if(arr[0]==NULL)
 		return false;
@@ -190,53 +190,19 @@ void MillerRabin::setiter(int num)
 
 int64_t GetPrime(int64_t mod){
   srand((unsigned)time(NULL));
-  int64_t start = rand() % mod; 
+  int64_t t32 = 4294967295;//2^32-1
+  int64_t start = (rand() * t32 + rand()) % mod; 
   MillerRabin mr;
-  for(int64_t i=start; i < mod; i++){
-    if(mr.testprime(i)){
-	  return i;
-	}
-  }
-  for(int64_t i=start; i > 0; i--){
-    if(mr.testprime(i)){
-	  return i;
-	}
+  while(1){
+    for(int64_t i=start; i < mod; i++){
+      if(mr.testprime(i)){
+	    return i;
+	  }
+    }
   }
 }
 
-int GetPrime(int mod){
-  srand((unsigned)time(NULL));
-  int start = rand() % mod; 
-  MillerRabin mr;
-  for(int i=start; i < mod; i++){
-    if(mr.testprime(i)){
-	  return i;
-	}
-  }
-  for(int i=start; i > 0; i--){
-    if(mr.testprime(i)){
-	  return i;
-	}
-  }
-}
-
-__int128 GetPrime(__int128 mod){
-  srand((unsigned)time(NULL));
-  __int128 start = rand() % mod; 
-  MillerRabin mr;
-  for(__int128 i=start; i < mod; i++){
-    if(mr.testprime(i)){
-	  return i;
-	}
-  }
-  for(__int128 i=start; i > 0; i--){
-    if(mr.testprime(i)){
-	  return i;
-	}
-  }
-}
-
-int InvMod(int p, __int128 mod) {
+int64_t InvMod(int64_t p, int64_t mod) {
 	std::vector<__int128> r;
 	std::vector<__int128> s;
 	std::vector<__int128> t;
