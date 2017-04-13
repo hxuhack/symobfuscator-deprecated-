@@ -350,8 +350,8 @@ struct SymObf : public ModulePass {
     multMatFunc = module.getOrInsertFunction("MultIntMatrix", funcType); 
     multArMatFunc = module.getOrInsertFunction("MultArMatrix", funcType); 
 
-    MMapInitParam(34,1,34);
-
+    //MMapInitParam(34,1,34);
+	/*
     vector<Type*> paramVec2;
     paramVec2.push_back(i64Type);
     paramVec2.push_back(i64Type);
@@ -360,7 +360,7 @@ struct SymObf : public ModulePass {
     ArrayRef<Type*> paramAT(paramVec2);
     FunctionType* funcType2 = FunctionType::get(i64Type, paramAT, false);
     zeroTestFunc = module.getOrInsertFunction("ZeroTest", funcType2); 
-
+	*/
 
 	for(list<Instruction*>::iterator it = taintEngine.taintedInstList.begin(); it!=taintEngine.taintedInstList.end(); it++){
 	  Instruction *inst = *it;

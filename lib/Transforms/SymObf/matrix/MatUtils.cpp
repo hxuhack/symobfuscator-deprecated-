@@ -44,7 +44,7 @@ int64_t MultIntMatrix(int64_t** mat1, int64_t** mat2, int64_t** retMat, int64_t 
 int64_t EncMatrix(int64_t** mat, int64_t height, int64_t width, int64_t setid){
   for(int64_t i=0; i < height; i++){
     for(int64_t j=0; j < width; j++){
-	  mat[i][j] = MMapEncDefault(mat[i][j], setid);
+	  MMapEncDefault(mat[i][j], mat[i][j], setid);
 	}
   }
   return 0;

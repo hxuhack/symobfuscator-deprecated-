@@ -6,11 +6,6 @@
 
 using namespace std;
 
-int zLen = 0;
-int hLen = 0;
-int gLen = 4;
-int pLen = 40;
-
 secparam sp;
 
 std::ostream& operator<<( std::ostream& dest, __int128 value)
@@ -53,6 +48,11 @@ void MMapInitParam(int z, int n, int setnum){
   sp.p = (int64_t *) malloc (sizeof(int64_t) * sp.N); 
   //sp.setid = (vector<int64_t> *) malloc (sizeof(vector<int64_t>) * sp.setnum); 
 
+  int zLen, hLen, pLen, gLen;
+  zLen = 2;
+  hLen = 6;
+  gLen = 10;
+  pLen = 40;
   int64_t zMax = pow(2, zLen); 
   int64_t hMax = pow(2, hLen); 
   int64_t gMax = pow(2, gLen); 
@@ -119,10 +119,11 @@ int64_t GetExp(){
   return sp.lambda * -1;
 }
 
-int64_t MMapIsZero(int64_t u){
+int64_t MMapIsZero(int64_t cp1, int64_t cp2){
+  __int128 u = addmod(cp1,cp2,sp.q);
   __int128 left, right;
   left = mulmod(sp.pzt,u,sp.q);
-  cout << "left = "<< sp.pzt <<" * " << u <<" % "<<sp.q<<endl;
+  cout << "left = "<< sp.pzt <<" * (" << cp1 <<"+"<<cp2<<") % "<<sp.q<<endl;
   right = sp.q * pow(2, sp.lambda * -1);
   cout << "left = "<<left<<", right = " << right <<endl;
   if(left < right){
@@ -133,25 +134,27 @@ int64_t MMapIsZero(int64_t u){
 }
 
 
-void MMapEnc(int64_t& result, int m, int mid, int setid){
-  int64_t set = 1;
-  result = 1;
+void MMapEnc(int64_t& cp1, int64_t& cp2, int m, int mid, int setid){
   //for(int i=0; i<sp.setid[setid].size(); i++){
   int64_t zinv = InvMod(sp.z[setid], sp.p[mid]); 
-  set = set * zinv;
   //}
-  int tmpRi = rand() % 2 + 1;
-  result = (tmpRi * sp.g[mid] + m) * set % sp.p[mid];
+  int64_t tmpRi = rand() % 16 + 1;
+  cp1 = (tmpRi * sp.g[mid]) * zinv % sp.p[mid];
+  cp2 = (m % sp.g[mid]) * zinv % sp.p[mid] % sp.g[mid];
+  cout << "cp1 = " << cp1 <<", cp2 = " << cp2 <<endl;
 }
 
-void MMapEncDefault(int64_t& result, int m, int setid){
-  return MMapEnc(result, m, 0, setid);
+void MMapEncDefault(int64_t& cp1, int64_t& cp2, int m, int setid){
+  return MMapEnc(cp1, cp2, m, 0, setid);
 }
 
-void MMapAdd(int64_t& result, int64_t u1, int64_t u2){
-  result = addmod(u1, u2,  sp.q);
+void MMapAdd(int64_t& cp1, int64_t& cp2, int64_t u1cp1, int64_t u1cp2, int64_t u2cp1, int64_t u2cp2, int mid){
+  cp1 = (u1cp1 + u2cp1) % sp.q;
+  cp2 = (u1cp2 + u2cp2) % sp.q % sp.g[mid];
 }
 
-void MMapMult(int64_t& result, int64_t u1, int64_t u2){
-  result = mulmod(u1,  u2,  sp.q);
+void MMapMult(int64_t& cp1, int64_t& cp2, int64_t u1cp1, int64_t u1cp2, int64_t u2cp1, int64_t u2cp2, int mid){
+  cp1 = mulmod(u1cp1, u2cp1, sp.q) / sp.g[mid];
+  cp2 = mulmod(u1cp2, u2cp2, sp.q) % sp.g[mid];
+  cout << u1cp1 << "*" << u2cp1 <<"/"<<sp.g[mid]<<" = " << cp1 <<endl;
 }

@@ -25,10 +25,10 @@ struct secparam{
 };
 
 void MMapInitParam(int z, int n, int setnum);
-int64_t MMapEnc(int m, int mid, int setid);
-int64_t MMapEncDefault(int m, int setid);
-int64_t MMapAdd(int64_t u1, int64_t u2, int mid);
-int64_t MMapMult(int64_t u1, int64_t u2, int mid);
+void MMapEnc(int64_t& cp1, int m, int mid, int setid);
+void MMapEncDefault(int64_t& result, int m, int setid);
+void MMapAdd(int64_t& result, int64_t u1, int64_t u2);
+void MMapMult(int64_t& result, int64_t u1, int64_t u2);
 int64_t MMapIsZero(int64_t u);
 
 int64_t GetPzt();
