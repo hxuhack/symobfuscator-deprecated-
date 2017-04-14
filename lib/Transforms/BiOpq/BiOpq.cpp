@@ -18,7 +18,7 @@ const int defaultObfRate = 30, defaultObfTime = 1;
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type;
 StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
-Constant *fopenFunc, *mcpyFunc;
+Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc;
 ConstantInt *ci0, *ci1, *ci11, *bFalse, *ci11_64;
 GlobalVariable *fileGV, *attrGV;
 
@@ -137,7 +137,6 @@ namespace {
 	  ioMarkerType->setBody(arMarker, false);
 
 	  fopenFunc = M.getFunction("fopen");
-
 	  if(!fopenFunc){
 		vector<Type*> fopenPV;
 		fopenPV.push_back(i8PT);
@@ -146,7 +145,8 @@ namespace {
 		FunctionType* fopenFT = FunctionType::get(ioFilePT, fopenAR, false);
 		fopenFunc = M.getOrInsertFunction("fopen", fopenFT);
 	  }
-	  mcpyFunc = M.getFunction("memcpy");
+
+	  mcpyFunc = M.getFunction("llvm.memcpy.p0i8.p0i8.i64");
 	  if(!mcpyFunc){
 		vector<Type*> mcpyPV;
 		mcpyPV.push_back(i8PT);
@@ -159,12 +159,24 @@ namespace {
 		//mcpyFunc =Function::Create(mcpyFT, GlobalValue::ExternalLinkage, "llvm.memcpy.p0i8.p0i8.i64", &M);
 		mcpyFunc = M.getOrInsertFunction("llvm.memcpy.p0i8.p0i8.i64", mcpyFT);
 	  }
+
+	  fprintfFunc = M.getFunction("fprintf");
+	  if(!fopenFunc){
+		vector<Type*> fprintfVec;
+		fprintfVec.push_back(ioFilePT);
+		fprintfVec.push_back(i8PT);
+	    ArrayRef<Type*> fprintfAR(fprintfVec);
+		FunctionType* fprintfFT = FunctionType::get(i32Type, fprintfAR, false);
+		fprintfFunc = M.getOrInsertFunction("fprintf", fprintfFT);
+	  }
+
       // If fla annotations
       if(toObfuscate(flag, &F,"bcf")) {
         bogus(F);
         doF(F);
         return true;
       }
+
 
       return false;
     } // end of runOnFunction()
@@ -599,12 +611,11 @@ namespace {
 		ArrayRef<Value*> arFopen(vecFopen);
 		Instruction* fopenI = CallInst::Create(fopenFunc, arFopen, "", inst);
 		StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
-
 		LoadInst* fopenLI = new LoadInst(fpAI, "", inst);
-
 		ConstantPointerNull* nullPtr = ConstantPointerNull::get(ioFilePT);
-
 		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, nullPtr);
+
+		//fopen
 
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
 			((BranchInst*) inst)->getSuccessor(1),(Value *) fpCI,
