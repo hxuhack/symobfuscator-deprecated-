@@ -19,7 +19,7 @@ IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type;
 StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
 Constant *fopenFunc, *mcpyFunc;
-Constant *ci0, *ci1, *ci11, *bFalse;
+ConstantInt *ci0, *ci1, *ci11, *bFalse, *ci11_64;
 GlobalVariable *fileGV, *attrGV;
 
 loglevel_e loglevel = L3_DEBUG;
@@ -69,6 +69,7 @@ namespace {
 	  ci1 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
 	  ci11 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
 	  bFalse = (ConstantInt*) ConstantInt::getSigned(i1Type, 0);
+	  ci11_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
 
 
  	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
@@ -143,7 +144,7 @@ namespace {
 		fopenPV.push_back(i8PT);
 	    ArrayRef<Type*> fopenAR(fopenPV);
 		FunctionType* fopenFT = FunctionType::get(ioFilePT, fopenAR, false);
-		fopenFunc =Function::Create(fopenFT, GlobalValue::ExternalLinkage, "fopen", &M);
+		fopenFunc = M.getOrInsertFunction("fopen", fopenFT);
 	  }
 	  mcpyFunc = M.getFunction("memcpy");
 	  if(!mcpyFunc){
@@ -155,7 +156,8 @@ namespace {
 		mcpyPV.push_back(i1Type);
 	    ArrayRef<Type*> mcpyAR(mcpyPV);
 		FunctionType* mcpyFT = FunctionType::get(Type::getVoidTy(context), mcpyAR, false);
-		fopenFunc =Function::Create(mcpyFT, GlobalValue::ExternalLinkage, "llvm.memcpy.p0i8.p0i8.i64", &M);
+		//mcpyFunc =Function::Create(mcpyFT, GlobalValue::ExternalLinkage, "llvm.memcpy.p0i8.p0i8.i64", &M);
+		mcpyFunc = M.getOrInsertFunction("llvm.memcpy.p0i8.p0i8.i64", mcpyFT);
 	  }
       // If fla annotations
       if(toObfuscate(flag, &F,"bcf")) {
@@ -582,12 +584,12 @@ namespace {
 		vector<Value*> vecMcpy;
 		vecMcpy.push_back(strBCI);
 		vecMcpy.push_back(gvEPI);
-		vecMcpy.push_back(ci11);
+		vecMcpy.push_back(ci11_64);
 		vecMcpy.push_back(ci1);
 		vecMcpy.push_back(bFalse);
 		ArrayRef<Value*> arMcpy(vecMcpy);
 
-		//Instruction* mcpyI = CallInst::Create(mcpyFunc, arMcpy, "", inst);
+		Instruction* mcpyI = CallInst::Create(mcpyFunc, arMcpy, "", inst);
 
 		GetElementPtrInst* fstrEPI = GetElementPtrInst::CreateInBounds(ch11AT, strAI, ar0I0,"", inst);
 		GetElementPtrInst* attrEPI = GetElementPtrInst::CreateInBounds(ch4AT, attrGV, ar0I0,"", inst);
@@ -595,8 +597,8 @@ namespace {
 		vecFopen.push_back(fstrEPI);
 		vecFopen.push_back(attrEPI);
 		ArrayRef<Value*> arFopen(vecFopen);
-		//Instruction* fopenI = CallInst::Create(fopenFunc, arFopen, "", inst);
-		//StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
+		Instruction* fopenI = CallInst::Create(fopenFunc, arFopen, "", inst);
+		StoreInst* fopenSI = new StoreInst(fopenI, fpAI, inst);
 
 		LoadInst* fopenLI = new LoadInst(fpAI, "", inst);
 
