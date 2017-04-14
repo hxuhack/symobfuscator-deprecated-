@@ -20,7 +20,7 @@ StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
 Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc;
 ConstantInt *ci0, *ci1, *ci11, *bFalse, *ci11_64;
-GlobalVariable *fileGV, *attrGV;
+GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
 
 loglevel_e loglevel = L3_DEBUG;
 
@@ -74,16 +74,28 @@ namespace {
 
  	  Constant* fileVal = ConstantDataArray::getString(context, "tmp.covpro\00", true);
 	  Constant* attrVal = ConstantDataArray::getString(context, "ab+\00", true);
+	  Constant* attrVal2 = ConstantDataArray::getString(context, "r\00", true);
+	  Constant* attrVal3 = ConstantDataArray::getString(context, "%d\00", true);
 	  fileGV = new GlobalVariable(M, fileVal->getType(), false, GlobalValue::PrivateLinkage, 0, "file.name");
-	  attrGV = new GlobalVariable(M, attrVal->getType(), false, GlobalValue::PrivateLinkage, 0, "attribute");
+	  attrGV = new GlobalVariable(M, attrVal->getType(), false, GlobalValue::PrivateLinkage, 0, "attribute_rw");
+	  attrGV2 = new GlobalVariable(M, attrVal2->getType(), false, GlobalValue::PrivateLinkage, 0, "attribute_r");
+	  attrGV3 = new GlobalVariable(M, attrVal3->getType(), false, GlobalValue::PrivateLinkage, 0, "attribute_%d");
 	  fileGV->setAlignment(1);
 	  attrGV->setAlignment(1);
+	  attrGV2->setAlignment(1);
+	  attrGV3->setAlignment(1);
 	  fileGV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr(2));
 	  attrGV->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr(2));
+	  attrGV2->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr(2));
+	  attrGV3->setUnnamedAddr(llvm::GlobalValue::UnnamedAddr(2));
 	  fileGV->setConstant(true);
 	  attrGV->setConstant(true);
+	  attrGV2->setConstant(true);
+	  attrGV3->setConstant(true);
 	  fileGV->setInitializer(fileVal);
 	  attrGV->setInitializer(attrVal);
+	  attrGV2->setInitializer(attrVal2);
+	  attrGV3->setInitializer(attrVal3);
 
 	  ioFileType = M.getTypeByName("struct._IO_FILE");
 	  if(!ioFileType){
@@ -161,13 +173,43 @@ namespace {
 	  }
 
 	  fprintfFunc = M.getFunction("fprintf");
-	  if(!fopenFunc){
+	  if(!fprintfFunc){
 		vector<Type*> fprintfVec;
 		fprintfVec.push_back(ioFilePT);
 		fprintfVec.push_back(i8PT);
 	    ArrayRef<Type*> fprintfAR(fprintfVec);
-		FunctionType* fprintfFT = FunctionType::get(i32Type, fprintfAR, false);
+		FunctionType* fprintfFT = FunctionType::get(i32Type, fprintfAR, true);
 		fprintfFunc = M.getOrInsertFunction("fprintf", fprintfFT);
+	/*
+	    SmallVector<AttributeSet, 4> attrVec;
+	    AttributeSet attrSet;
+	    AttrBuilder attrBuilder;
+	    attrBuilder.addAttribute(Attribute::NoUnwind);
+	    attrBuilder.addAttribute(Attribute::UWTable);
+	    attrSet = AttributeSet::get(context, ~0U, attrBuilder);
+ 	    attrVec.push_back(attrSet);
+	    AttributeSet fprintfAttr = AttributeSet::get(context, attrVec);
+	    ((Function *) fprintfFunc)->setAttributes(fprintfAttr);
+		*/
+	  }
+
+	  fscanfFunc = M.getFunction("__isoc99_fscanf");
+	  if(!fscanfFunc){
+		vector<Type*> fscanfVec;
+		fscanfVec.push_back(ioFilePT);
+		fscanfVec.push_back(i8PT);
+	    ArrayRef<Type*> fscanfAR(fscanfVec);
+		FunctionType* fscanfFT = FunctionType::get(i32Type, fscanfAR, true);
+		fscanfFunc = M.getOrInsertFunction("__isoc99_fscanf", fscanfFT);
+	  }
+
+	  fcloseFunc = M.getFunction("fclose");
+	  if(!fcloseFunc){
+		vector<Type*> fcloseVec;
+		fcloseVec.push_back(ioFilePT);
+	    ArrayRef<Type*> fcloseAR(fcloseVec);
+		FunctionType* fcloseFT = FunctionType::get(i32Type, fcloseAR, false);
+		fcloseFunc = M.getOrInsertFunction("fclose", fcloseFT);
 	  }
 
       // If fla annotations
@@ -575,10 +617,19 @@ namespace {
 	
 
 
-	bool InsertFproOpq(Module &M, Instruction* inst){
+	bool InsertFproOpq(Module &M, Instruction* inst, Value* arg){
+		if(!arg->getType()->isIntegerTy())
+		  return false;
+		
+		AllocaInst* jAI = new AllocaInst(i32Type, "", inst);
+		StoreInst* jSI = new StoreInst(arg, jAI, inst);
+		LoadInst* jLI = new LoadInst(jAI, "", inst);
+
 		LLVMContext& context = M.getContext();
 		ArrayType* ch11AT = ArrayType::get(i8Type, 11);
 		ArrayType* ch4AT = ArrayType::get(i8Type, 4);
+		ArrayType* ch3AT = ArrayType::get(i8Type, 3);
+		ArrayType* ch2AT = ArrayType::get(i8Type, 2);
 
 		//StringRef* strRef = new StringRef("tmp.covprop");
 
@@ -605,6 +656,9 @@ namespace {
 
 		GetElementPtrInst* fstrEPI = GetElementPtrInst::CreateInBounds(ch11AT, strAI, ar0I0,"", inst);
 		GetElementPtrInst* attrEPI = GetElementPtrInst::CreateInBounds(ch4AT, attrGV, ar0I0,"", inst);
+		GetElementPtrInst* attrEPI2 = GetElementPtrInst::CreateInBounds(ch2AT, attrGV2, ar0I0,"", inst);
+		GetElementPtrInst* attrEPI3 = GetElementPtrInst::CreateInBounds(ch3AT, attrGV3, ar0I0,"", inst);
+
 		vector<Value*> vecFopen;
 		vecFopen.push_back(fstrEPI);
 		vecFopen.push_back(attrEPI);
@@ -615,10 +669,46 @@ namespace {
 		ConstantPointerNull* nullPtr = ConstantPointerNull::get(ioFilePT);
 		ICmpInst* fpCI = new ICmpInst(inst, ICmpInst::ICMP_EQ, fopenLI, nullPtr);
 
-		//fopen
+
+		vector<Value*> vecFprintf;
+		vecFprintf.push_back(fopenLI);
+		vecFprintf.push_back(attrEPI);
+		vecFprintf.push_back(jLI);
+		ArrayRef<Value*> arFprintf(vecFprintf);
+		Instruction* fprintfCI = CallInst::Create(fprintfFunc, arFprintf, "", inst);
+
+		vector<Value*> vecFclose;
+		vecFclose.push_back(fopenLI);
+		ArrayRef<Value*> arFclose(vecFclose);
+		Instruction* fcloseCI = CallInst::Create(fcloseFunc, arFclose, "", inst);
+
+		vector<Value*> vecFopen2;
+		vecFopen2.push_back(fstrEPI);
+		vecFopen2.push_back(attrEPI2);
+		ArrayRef<Value*> arFopen2(vecFopen2);
+		Instruction* fopenCI2 = CallInst::Create(fopenFunc, arFopen2, "", inst);
+
+		StoreInst* fopenSI2 = new StoreInst(fopenCI2, fpAI, inst);
+		LoadInst* fopenLI2 = new LoadInst(fpAI, "", inst);
+
+		AllocaInst* iAI = new AllocaInst(i32Type, "", inst);
+		vector<Value*> vecFscanf;
+		vecFscanf.push_back(fopenLI2);
+		vecFscanf.push_back(attrEPI3);
+		vecFscanf.push_back(iAI);
+		ArrayRef<Value*> arFscanf(vecFscanf);
+		Instruction* fscanfCI = CallInst::Create(fscanfFunc, arFscanf, "", inst);
+
+		vector<Value*> vecFclose2;
+		vecFclose2.push_back(fopenLI2);
+		ArrayRef<Value*> arFclose2(vecFclose2);
+		Instruction* fcloseCI2 = CallInst::Create(fcloseFunc, arFclose2, "", inst);
+
+		LoadInst* iLI = new LoadInst(iAI, "", inst);
+		ICmpInst* ijCI = new ICmpInst(inst, ICmpInst::ICMP_NE, iLI, jLI);
 
 		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
-			((BranchInst*) inst)->getSuccessor(1),(Value *) fpCI,
+			((BranchInst*) inst)->getSuccessor(1),(Value *) ijCI,
 			((BranchInst*) inst)->getParent());
 		inst->eraseFromParent(); // erase the branch
 	}
@@ -645,12 +735,14 @@ namespace {
 		if(argType->isIntegerTy()){
 			break;
 		}
+		/*
 		if(argType->isFloatingPointTy()){
 			break;
 		}
 		if(argType->isPointerTy()){
 			break;
 		}
+		*/
 	  }
 		
 	  //LOG(L2_DEBUG) << "Argument: " << argValue->getName().str();
@@ -696,7 +788,7 @@ namespace {
 		if(argType->isIntegerTy()){
 		  switch(opqId){
 		    case 0:{
-			  InsertFproOpq(M, inst);
+			  InsertFproOpq(M, inst, argValue);
 			  break;
 		    }
 		    default:{
