@@ -145,8 +145,13 @@ namespace {
 	  vcMarker.push_back(ioFilePT);
 	  vcMarker.push_back(i32Type);
 	  ArrayRef<Type*> arMarker(vcMarker);
-	  ioFileType->setBody(arFile, false);
-	  ioMarkerType->setBody(arMarker, false);
+
+	  if(ioFileType->isOpaque()){
+		ioFileType->setBody(arFile, false);
+	  }
+	  if(ioMarkerType->isOpaque()){
+		ioMarkerType->setBody(arMarker, false);
+	  }
 
 	  fopenFunc = M.getFunction("fopen");
 	  if(!fopenFunc){
