@@ -623,10 +623,11 @@ namespace {
 
 
 	bool InsertFproOpq(Module &M, Instruction* inst, Value* arg){
-		if(!arg->getType()->isIntegerTy())
+		Type* argType = arg->getType();
+		if(!argType->isIntegerTy())
 		  return false;
 		
-		AllocaInst* jAI = new AllocaInst(i32Type, "", inst);
+		AllocaInst* jAI = new AllocaInst(argType, "", inst);
 		StoreInst* jSI = new StoreInst(arg, jAI, inst);
 		LoadInst* jLI = new LoadInst(jAI, "", inst);
 
@@ -696,7 +697,7 @@ namespace {
 		StoreInst* fopenSI2 = new StoreInst(fopenCI2, fpAI, inst);
 		LoadInst* fopenLI2 = new LoadInst(fpAI, "", inst);
 
-		AllocaInst* iAI = new AllocaInst(i32Type, "", inst);
+		AllocaInst* iAI = new AllocaInst(argType, "", inst);
 		vector<Value*> vecFscanf;
 		vecFscanf.push_back(fopenLI2);
 		vecFscanf.push_back(attrEPI3);
