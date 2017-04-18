@@ -58,14 +58,6 @@ public:
   }
 
   ~MatrixInIR(){
-	/*
-	for(int64_t i=0; i<height; i++){
-	  free(ciMat[i]);
-	}
-	if(ciMat != nullptr){
-	  free(ciMat);
-	}
-	*/
   }
 
 };
@@ -184,9 +176,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   ////EncMatrix(headMatRand,1,dim,0);
   MatrixInIR* headMatIR = new MatrixInIR(module, context, pBB, headMatRand, 1, dim); //~bit
 
-  //PrintIntMat(headMat, 1, dim);
-  //MatrixInIR* headMatIR = new MatrixInIR(module, context, pBB, headMat, 1, dim); //~bit
-
   int64_t iRow;
   int64_t iCol4T;
   int64_t iCol4F = len;
@@ -223,6 +212,8 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
     CopyIntMat(midMat1, midMat1Rand, dim, dim); 
 
     GenIntMatPair(randMat2, randMatInv2, dim, mod);
+    PrintIntMat(randMat2, dim, dim);
+    PrintIntMat(randMatInv2, dim, dim);
     MultIntMatrix(midMat0, randMat2, midMat0Rand, dim, dim, dim, dim, mod);
     MultIntMatrix(midMat1, randMat2, midMat1Rand, dim, dim, dim, dim, mod);
 
@@ -231,9 +222,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
 
 	MatrixInIR*  mat0IR = new MatrixInIR(module, context, pBB, midMat0Rand, dim,dim); //bit
 	MatrixInIR*  mat1IR = new MatrixInIR(module, context, pBB, midMat1Rand, dim,dim); //~bit
-
-	//MatrixInIR*  mat0IR = new MatrixInIR(module, context, pBB, midMat0, dim,dim); //bit
-	//MatrixInIR*  mat1IR = new MatrixInIR(module, context, pBB, midMat1, dim,dim); //~bit
     //PrintIntMat(midMat0, dim, dim);
     //PrintIntMat(midMat1, dim, dim);
 
@@ -259,7 +247,6 @@ void ConvertIcmp2Mbp(Module& module, ICmpInst *icmpInst){
   MultIntMatrix(randMatInv2, tailMat, tailMatRand, dim, dim, dim, 1, mod);
   //EncMatrix(tailMatRand,dim,1,dim);
   MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMatRand, dim, 1); //bit
-  //MatrixInIR* tailMatIR = new MatrixInIR(module, context, pBB, tailMat, dim, 1); //bit
   //PrintIntMat(tailMat, dim, 1);
 
   //Init the parameter for the for loop; 

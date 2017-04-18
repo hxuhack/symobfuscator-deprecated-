@@ -35,7 +35,7 @@ Type *doubleType;
 PointerType *fpPT, *i64PT, *ptrPT, *ptrPPT, *ptrPPPT;
 ConstantInt *ci0, *ci1, *ciMod;
 vector<Value*> vec00,vec01;
-int64_t mod;
+int64_t mod = 1024;
 
 namespace{
 
@@ -287,7 +287,6 @@ struct SymObf : public ModulePass {
     const DataLayout &dataLayout = module.getDataLayout();
 	LLVMContext& context = module.getContext();
 
-
     i64Type = IntegerType::getInt64Ty(context);
     i32Type = IntegerType::getInt32Ty(context);
     i8Type = IntegerType::getInt8Ty(context);
@@ -295,13 +294,12 @@ struct SymObf : public ModulePass {
 	doubleType = Type::getDoubleTy(context);
     ci0 = (ConstantInt*) ConstantInt::getSigned(i64Type,0);
     ci1 = (ConstantInt*) ConstantInt::getSigned(i64Type,1);
-    ciMod = (ConstantInt*) ConstantInt::getSigned(i64Type,1024);
+    ciMod = (ConstantInt*) ConstantInt::getSigned(i64Type,mod);
     fpPT = PointerType::getUnqual(doubleType);
     i64PT = PointerType::getUnqual(i64Type);
     ptrPT = PointerType::getUnqual(i64PT);
     ptrPPT = PointerType::getUnqual(ptrPT);
     ptrPPPT = PointerType::getUnqual(ptrPPT);
-	mod = 16;
 
 	vec00.push_back(ci0);
 	vec00.push_back(ci0);
