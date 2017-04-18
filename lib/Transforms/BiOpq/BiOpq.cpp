@@ -18,9 +18,11 @@ const int defaultObfRate = 30, defaultObfTime = 1;
 IntegerType *i1Type, *i8Type, * i16Type, *i32Type, *i64Type;
 StructType *ioMarkerType, *ioFileType;
 PointerType *i8PT, *ioMarkerPT, *ioFilePT;
+ArrayType* l2AT;
 Constant *fopenFunc, *mcpyFunc, *fprintfFunc, *fcloseFunc, *fscanfFunc;
-ConstantInt *ci0, *ci1, *ci11, *bFalse, *ci11_64;
+ConstantInt *ci0, *ci1, *ci2, *ci3, *ci4, *ci5, *ci6, *ci7, *ci8, *ci9, *ci10, *ci11, *bFalse, *ci11_64;
 GlobalVariable *fileGV, *attrGV, *attrGV2, *attrGV3;
+GlobalVariable *l1ArrayGV, *l2ArrayGV;
 
 loglevel_e loglevel = L3_DEBUG;
 
@@ -67,7 +69,17 @@ namespace {
 
 	  ci0 = (ConstantInt*) ConstantInt::getSigned(i32Type, 0);
 	  ci1 = (ConstantInt*) ConstantInt::getSigned(i32Type, 1);
+	  ci2 = (ConstantInt*) ConstantInt::getSigned(i32Type, 2);
+	  ci3 = (ConstantInt*) ConstantInt::getSigned(i32Type, 3);
+	  ci4 = (ConstantInt*) ConstantInt::getSigned(i32Type, 4);
+	  ci5 = (ConstantInt*) ConstantInt::getSigned(i32Type, 5);
+	  ci6 = (ConstantInt*) ConstantInt::getSigned(i32Type, 6);
+	  ci7 = (ConstantInt*) ConstantInt::getSigned(i32Type, 7);
+	  ci8 = (ConstantInt*) ConstantInt::getSigned(i32Type, 8);
+	  ci9 = (ConstantInt*) ConstantInt::getSigned(i32Type, 9);
+	  ci10 = (ConstantInt*) ConstantInt::getSigned(i32Type, 10);
 	  ci11 = (ConstantInt*) ConstantInt::getSigned(i32Type, 11);
+
 	  bFalse = (ConstantInt*) ConstantInt::getSigned(i1Type, 0);
 	  ci11_64 = (ConstantInt*) ConstantInt::getSigned(i64Type, 11);
 
@@ -216,6 +228,23 @@ namespace {
 		FunctionType* fcloseFT = FunctionType::get(i32Type, fcloseAR, false);
 		fcloseFunc = M.getOrInsertFunction("fclose", fcloseFT);
 	  }
+
+      l2AT = ArrayType::get(i32Type, 5);
+	  std::vector<Constant*> l2ArVec;
+	  l2ArVec.push_back(ci0);
+	  l2ArVec.push_back(ci1);
+	  l2ArVec.push_back(ci2);
+	  l2ArVec.push_back(ci3);
+	  l2ArVec.push_back(ci4);
+	  Constant* caL2 = ConstantArray::get(l2AT, l2ArVec);
+	  Constant* caL1 = ConstantArray::get(l2AT, l2ArVec);
+	  l1ArrayGV = new GlobalVariable(M, l2AT, true, GlobalValue::PrivateLinkage, 0, "l1_ary");
+	  l2ArrayGV = new GlobalVariable(M, l2AT, true, GlobalValue::PrivateLinkage, 0, "l2_ary");
+	  l1ArrayGV->setAlignment(16);
+	  l2ArrayGV->setAlignment(16);
+	  l1ArrayGV->setInitializer(caL1);
+	  l2ArrayGV->setInitializer(caL2);
+
 
       // If fla annotations
       if(toObfuscate(flag, &F,"bcf")) {
@@ -719,6 +748,45 @@ namespace {
 		inst->eraseFromParent(); // erase the branch
 	}
 
+	bool InsertArrayOpq(Module &M, Instruction* inst, Value* arg){
+		Type* argType = arg->getType();
+		if(!argType->isIntegerTy())
+		  return false;
+		
+		AllocaInst* jAI = new AllocaInst(argType, "", inst);
+		StoreInst* jSI = new StoreInst(arg, jAI, inst);
+		LoadInst* jLI = new LoadInst(jAI, "", inst);
+		
+		ConstantInt* ciTmp = (ConstantInt*) ConstantInt::getSigned(argType, 5);
+		AllocaInst* tmpAI = new AllocaInst(argType, "", inst);
+		StoreInst* tmpSI = new StoreInst(ciTmp, tmpAI, inst);
+		LoadInst* tmpLI = new LoadInst(tmpAI, "", inst);
+
+		LLVMContext& context = M.getContext();
+		jLI->setAlignment(4);
+		BinaryOperator* remBO = BinaryOperator::Create(Instruction::SRem, jLI, tmpLI, "rem", inst);
+		CastInst* remCI = new SExtInst(remBO, i64Type, "idxprom", inst);
+		std::vector<Value*> l1Vec;
+		l1Vec.push_back(ci0);
+		l1Vec.push_back(remCI);
+		ArrayRef<Value*> l1AR(l1Vec);
+		Instruction* l1EPI = GetElementPtrInst::Create(l2AT, l1ArrayGV, l1AR, "l1_arrayidx", inst);
+		LoadInst* l1LI = new LoadInst(l1EPI, "", false, inst);
+		l1LI->setAlignment(4);
+		CastInst* l2CI = new SExtInst(l1LI, i64Type, "idxprom1", inst);
+		std::vector<Value*> l2Vec;
+		l2Vec.push_back(ci0);
+		l2Vec.push_back(l2CI);
+		ArrayRef<Value*> l2AR(l2Vec);
+		Instruction* l2EPI = GetElementPtrInst::Create(l2AT, l2ArrayGV, l2AR, "l2_arrayidx", inst);
+		LoadInst* l2LI = new LoadInst(l2EPI, "", false, inst);
+		l2LI->setAlignment(4);
+		ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2LI, l1LI, "cmp");
+		BranchInst::Create(((BranchInst*) inst)->getSuccessor(0),
+			((BranchInst*) inst)->getSuccessor(1),(Value *) arCI,
+			((BranchInst*) inst)->getParent());
+		inst->eraseFromParent(); // erase the branch
+	}
     /* doFinalization
      *
      * Overwrite FunctionPass method to apply the transformations to the whole module.
@@ -787,7 +855,7 @@ namespace {
       // Replacing all the branches we found
 	  // TODO: we replace the original simple opaque constant with secure predicates
 	  srand(time(0));
-	  int opq_type_num = 1;
+	  int opq_type_num = 2;
       for(std::vector<Instruction*>::iterator it =toEdit.begin(); it!=toEdit.end(); ++it){
 		Instruction* inst = *it;
 		int opqId = rand() % opq_type_num;
@@ -795,6 +863,10 @@ namespace {
 		  switch(opqId){
 		    case 0:{
 			  InsertFproOpq(M, inst, argValue);
+			  break;
+		    }
+		    case 1:{
+			  InsertArrayOpq(M, inst, argValue);
 			  break;
 		    }
 		    default:{
