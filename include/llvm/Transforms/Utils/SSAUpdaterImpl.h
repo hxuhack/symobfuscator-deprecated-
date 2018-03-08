@@ -22,9 +22,9 @@
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Debug.h"
 
-namespace llvm {
-
 #define DEBUG_TYPE "ssaupdater"
+
+namespace llvm {
 
 class CastInst;
 class PHINode;
@@ -120,9 +120,8 @@ public:
       if (Info->NumPreds == 0)
         Info->Preds = nullptr;
       else
-        Info->Preds = static_cast<BBInfo**>
-          (Allocator.Allocate(Info->NumPreds * sizeof(BBInfo*),
-                              AlignOf<BBInfo*>::Alignment));
+        Info->Preds = static_cast<BBInfo **>(Allocator.Allocate(
+            Info->NumPreds * sizeof(BBInfo *), alignof(BBInfo *)));
 
       for (unsigned p = 0; p != Info->NumPreds; ++p) {
         BlkT *Pred = Preds[p];
@@ -454,8 +453,8 @@ public:
   }
 };
 
+} // end llvm namespace
+
 #undef DEBUG_TYPE // "ssaupdater"
 
-} // End llvm namespace
-
-#endif
+#endif // LLVM_TRANSFORMS_UTILS_SSAUPDATERIMPL_H

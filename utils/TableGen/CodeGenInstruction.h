@@ -206,7 +206,7 @@ template <typename T> class ArrayRef;
   class CodeGenInstruction {
   public:
     Record *TheDef;            // The actual record defining this instruction.
-    std::string Namespace;     // The namespace the instruction is in.
+    StringRef Namespace;       // The namespace the instruction is in.
 
     /// AsmString - The format string used to emit a .s file for the
     /// instruction.
@@ -230,6 +230,7 @@ template <typename T> class ArrayRef;
     bool isSelect : 1;
     bool isBarrier : 1;
     bool isCall : 1;
+    bool isAdd : 1;
     bool canFoldAsLoad : 1;
     bool mayLoad : 1;
     bool mayLoad_Unset : 1;

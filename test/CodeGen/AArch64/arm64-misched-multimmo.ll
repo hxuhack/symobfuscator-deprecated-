@@ -1,5 +1,5 @@
 ; REQUIRES: asserts
-; RUN: llc < %s -mtriple=arm64-linux-gnu -mcpu=cortex-a57 -enable-misched=0 -debug-only=misched -o - 2>&1 > /dev/null | FileCheck %s
+; RUN: llc < %s -mtriple=arm64-linux-gnu -mcpu=cortex-a57 -enable-misched=0 -debug-only=machine-scheduler -o - 2>&1 > /dev/null | FileCheck %s
 
 
 @G1 = common global [100 x i32] zeroinitializer, align 4
@@ -7,7 +7,7 @@
 
 ; Check that no scheduling dependencies are created between the paired loads and the store during post-RA MI scheduling.
 ;
-; CHECK-LABEL: # Machine code for function foo: Properties: <Post SSA
+; CHECK-LABEL: # Machine code for function foo:
 ; CHECK: SU(2):   %W{{[0-9]+}}<def>, %W{{[0-9]+}}<def> = LDPWi
 ; CHECK: Successors:
 ; CHECK-NOT: ch SU(4)

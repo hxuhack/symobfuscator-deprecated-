@@ -13,18 +13,60 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/LoopAccessAnalysis.h"
+#include "llvm/ADT/APInt.h"
+#include "llvm/ADT/DenseMap.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/EquivalenceClasses.h"
+#include "llvm/ADT/PointerIntPair.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SetVector.h"
+#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/iterator_range.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/Analysis/AliasSetTracker.h"
+#include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/LoopPassManager.h"
+#include "llvm/Analysis/MemoryLocation.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
+#include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
+#include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/Analysis/VectorUtils.h"
+#include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Dominators.h"
+#include "llvm/IR/Function.h"
 #include "llvm/IR/IRBuilder.h"
+#include "llvm/IR/InstrTypes.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Instructions.h"
+#include "llvm/IR/Operator.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/IR/Type.h"
+#include "llvm/IR/Value.h"
+#include "llvm/IR/ValueHandle.h"
+#include "llvm/Pass.h"
+#include "llvm/Support/Casting.h"
+#include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <cstdlib>
+#include <iterator>
+#include <utility>
+#include <vector>
+
 using namespace llvm;
 
 #define DEBUG_TYPE "loop-accesses"
@@ -93,17 +135,6 @@ bool VectorizerParams::isInterleaveForced() {
   return ::VectorizationInterleave.getNumOccurrences() > 0;
 }
 
-void LoopAccessReport::emitAnalysis(const LoopAccessReport &Message,
-                                    const Function *TheFunction,
-                                    const Loop *TheLoop,
-                                    const char *PassName) {
-  DebugLoc DL = TheLoop->getStartLoc();
-  if (const Instruction *I = Message.getInstr())
-    DL = I->getDebugLoc();
-  emitOptimizationRemarkAnalysis(TheFunction->getContext(), PassName,
-                                 *TheFunction, DL, Message.str());
-}
-
 Value *llvm::stripIntegerCast(Value *V) {
   if (auto *CI = dyn_cast<CastInst>(V))
     if (CI->getOperand(0)->getType()->isIntegerTy())
@@ -126,11 +157,6 @@ const SCEV *llvm::replaceSymbolicStrideSCEV(PredicatedScalarEvolution &PSE,
     // Strip casts.
     StrideVal = stripIntegerCast(StrideVal);
 
-    // Replace symbolic stride by one.
-    Value *One = ConstantInt::get(StrideVal->getType(), 1);
-    ValueToValueMap RewriteMap;
-    RewriteMap[StrideVal] = One;
-
     ScalarEvolution *SE = PSE.getSE();
     const auto *U = cast<SCEVUnknown>(SE->getSCEV(StrideVal));
     const auto *CT =
@@ -148,6 +174,19 @@ const SCEV *llvm::replaceSymbolicStrideSCEV(PredicatedScalarEvolution &PSE,
   return OrigSCEV;
 }
 
+/// Calculate Start and End points of memory access.
+/// Let's assume A is the first access and B is a memory access on N-th loop
+/// iteration. Then B is calculated as:  
+///   B = A + Step*N . 
+/// Step value may be positive or negative.
+/// N is a calculated back-edge taken count:
+///     N = (TripCount > 0) ? RoundDown(TripCount -1 , VF) : 0
+/// Start and End points are calculated in the following way:
+/// Start = UMIN(A, B) ; End = UMAX(A, B) + SizeOfElt,
+/// where SizeOfElt is the size of single memory access in bytes.
+///
+/// There is no conflict when the intervals are disjoint:
+/// NoConflict = (P2.Start >= P1.End) || (P1.Start >= P2.End)
 void RuntimePointerChecking::insert(Loop *Lp, Value *Ptr, bool WritePtr,
                                     unsigned DepSetId, unsigned ASId,
                                     const ValueToValueMap &Strides,
@@ -176,12 +215,17 @@ void RuntimePointerChecking::insert(Loop *Lp, Value *Ptr, bool WritePtr,
       if (CStep->getValue()->isNegative())
         std::swap(ScStart, ScEnd);
     } else {
-      // Fallback case: the step is not constant, but the we can still
+      // Fallback case: the step is not constant, but we can still
       // get the upper and lower bounds of the interval by using min/max
       // expressions.
       ScStart = SE->getUMinExpr(ScStart, ScEnd);
       ScEnd = SE->getUMaxExpr(AR->getStart(), ScEnd);
     }
+    // Add the size of the pointed element to ScEnd.
+    unsigned EltSize =
+      Ptr->getType()->getPointerElementType()->getScalarSizeInBits() / 8;
+    const SCEV *EltSizeSCEV = SE->getConstant(ScEnd->getType(), EltSize);
+    ScEnd = SE->getAddExpr(ScEnd, EltSizeSCEV);
   }
 
   Pointers.emplace_back(Ptr, ScStart, ScEnd, WritePtr, DepSetId, ASId, Sc);
@@ -445,6 +489,7 @@ void RuntimePointerChecking::print(raw_ostream &OS, unsigned Depth) const {
 }
 
 namespace {
+
 /// \brief Analyses memory accesses in a loop.
 ///
 /// Checks whether run time pointer checks are needed and builds sets for data
@@ -453,7 +498,7 @@ class AccessAnalysis {
 public:
   /// \brief Read or write access location.
   typedef PointerIntPair<Value *, 1, bool> MemAccessInfo;
-  typedef SmallPtrSet<MemAccessInfo, 8> MemAccessInfoSet;
+  typedef SmallVector<MemAccessInfo, 8> MemAccessInfoList;
 
   AccessAnalysis(const DataLayout &Dl, AliasAnalysis *AA, LoopInfo *LI,
                  MemoryDepChecker::DepCandidates &DA,
@@ -505,7 +550,7 @@ public:
     DepChecker.clearDependences();
   }
 
-  MemAccessInfoSet &getDependenciesToCheck() { return CheckDeps; }
+  MemAccessInfoList &getDependenciesToCheck() { return CheckDeps; }
 
 private:
   typedef SetVector<MemAccessInfo> PtrAccessSet;
@@ -519,8 +564,8 @@ private:
 
   const DataLayout &DL;
 
-  /// Set of accesses that need a further dependence check.
-  MemAccessInfoSet CheckDeps;
+  /// List of accesses that need a further dependence check.
+  MemAccessInfoList CheckDeps;
 
   /// Set of pointers that are read only.
   SmallPtrSet<Value*, 16> ReadOnlyPtr;
@@ -777,7 +822,7 @@ void AccessAnalysis::processMemAccesses() {
           // there is no other write to the ptr - this is an optimization to
           // catch "a[i] = a[i] + " without having to do a dependence check).
           if ((IsWrite || IsReadOnlyPtr) && SetHasWrite) {
-            CheckDeps.insert(Access);
+            CheckDeps.push_back(Access);
             IsRTCheckAnalysisNeeded = true;
           }
 
@@ -868,7 +913,7 @@ static bool isNoWrapAddRec(Value *Ptr, const SCEVAddRecExpr *AR,
 /// \brief Check whether the access through \p Ptr has a constant stride.
 int64_t llvm::getPtrStride(PredicatedScalarEvolution &PSE, Value *Ptr,
                            const Loop *Lp, const ValueToValueMap &StridesMap,
-                           bool Assume) {
+                           bool Assume, bool ShouldCheckWrap) {
   Type *Ty = Ptr->getType();
   assert(Ty->isPointerTy() && "Unexpected non-ptr");
 
@@ -907,9 +952,9 @@ int64_t llvm::getPtrStride(PredicatedScalarEvolution &PSE, Value *Ptr,
   // to access the pointer value "0" which is undefined behavior in address
   // space 0, therefore we can also vectorize this case.
   bool IsInBoundsGEP = isInBoundsGep(Ptr);
-  bool IsNoWrapAddRec =
-      PSE.hasNoOverflow(Ptr, SCEVWrapPredicate::IncrementNUSW) ||
-      isNoWrapAddRec(Ptr, AR, PSE, Lp);
+  bool IsNoWrapAddRec = !ShouldCheckWrap ||
+    PSE.hasNoOverflow(Ptr, SCEVWrapPredicate::IncrementNUSW) ||
+    isNoWrapAddRec(Ptr, AR, PSE, Lp);
   bool IsInAddressSpaceZero = PtrTy->getAddressSpace() == 0;
   if (!IsNoWrapAddRec && !IsInBoundsGEP && !IsInAddressSpaceZero) {
     if (Assume) {
@@ -1010,8 +1055,8 @@ bool llvm::isConsecutiveAccess(Value *A, Value *B, const DataLayout &DL,
     return false;
 
   // Make sure that A and B have the same type if required.
-  if(CheckType && PtrA->getType() != PtrB->getType())
-      return false;
+  if (CheckType && PtrA->getType() != PtrB->getType())
+    return false;
 
   unsigned PtrBitWidth = DL.getPointerSizeInBits(ASA);
   Type *Ty = cast<PointerType>(PtrA->getType())->getElementType();
@@ -1140,6 +1185,73 @@ bool MemoryDepChecker::couldPreventStoreLoadForward(uint64_t Distance,
   return false;
 }
 
+/// Given a non-constant (unknown) dependence-distance \p Dist between two 
+/// memory accesses, that have the same stride whose absolute value is given
+/// in \p Stride, and that have the same type size \p TypeByteSize,
+/// in a loop whose takenCount is \p BackedgeTakenCount, check if it is
+/// possible to prove statically that the dependence distance is larger
+/// than the range that the accesses will travel through the execution of
+/// the loop. If so, return true; false otherwise. This is useful for
+/// example in loops such as the following (PR31098):
+///     for (i = 0; i < D; ++i) {
+///                = out[i];
+///       out[i+D] =
+///     }
+static bool isSafeDependenceDistance(const DataLayout &DL, ScalarEvolution &SE,
+                                     const SCEV &BackedgeTakenCount,
+                                     const SCEV &Dist, uint64_t Stride,
+                                     uint64_t TypeByteSize) {
+
+  // If we can prove that
+  //      (**) |Dist| > BackedgeTakenCount * Step
+  // where Step is the absolute stride of the memory accesses in bytes, 
+  // then there is no dependence.
+  //
+  // Ratioanle: 
+  // We basically want to check if the absolute distance (|Dist/Step|) 
+  // is >= the loop iteration count (or > BackedgeTakenCount). 
+  // This is equivalent to the Strong SIV Test (Practical Dependence Testing, 
+  // Section 4.2.1); Note, that for vectorization it is sufficient to prove 
+  // that the dependence distance is >= VF; This is checked elsewhere.
+  // But in some cases we can prune unknown dependence distances early, and 
+  // even before selecting the VF, and without a runtime test, by comparing 
+  // the distance against the loop iteration count. Since the vectorized code 
+  // will be executed only if LoopCount >= VF, proving distance >= LoopCount 
+  // also guarantees that distance >= VF.
+  //
+  const uint64_t ByteStride = Stride * TypeByteSize;
+  const SCEV *Step = SE.getConstant(BackedgeTakenCount.getType(), ByteStride);
+  const SCEV *Product = SE.getMulExpr(&BackedgeTakenCount, Step);
+
+  const SCEV *CastedDist = &Dist;
+  const SCEV *CastedProduct = Product;
+  uint64_t DistTypeSize = DL.getTypeAllocSize(Dist.getType());
+  uint64_t ProductTypeSize = DL.getTypeAllocSize(Product->getType());
+
+  // The dependence distance can be positive/negative, so we sign extend Dist; 
+  // The multiplication of the absolute stride in bytes and the 
+  // backdgeTakenCount is non-negative, so we zero extend Product.
+  if (DistTypeSize > ProductTypeSize)
+    CastedProduct = SE.getZeroExtendExpr(Product, Dist.getType());
+  else
+    CastedDist = SE.getNoopOrSignExtend(&Dist, Product->getType());
+
+  // Is  Dist - (BackedgeTakenCount * Step) > 0 ?
+  // (If so, then we have proven (**) because |Dist| >= Dist)
+  const SCEV *Minus = SE.getMinusSCEV(CastedDist, CastedProduct);
+  if (SE.isKnownPositive(Minus))
+    return true;
+
+  // Second try: Is  -Dist - (BackedgeTakenCount * Step) > 0 ?
+  // (If so, then we have proven (**) because |Dist| >= -1*Dist)
+  const SCEV *NegDist = SE.getNegativeSCEV(CastedDist);
+  Minus = SE.getMinusSCEV(NegDist, CastedProduct);
+  if (SE.isKnownPositive(Minus))
+    return true;
+
+  return false;
+}
+
 /// \brief Check the dependence for two accesses with the same stride \p Stride.
 /// \p Distance is the positive distance and \p TypeByteSize is type size in
 /// bytes.
@@ -1227,21 +1339,26 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
     return Dependence::Unknown;
   }
 
+  Type *ATy = APtr->getType()->getPointerElementType();
+  Type *BTy = BPtr->getType()->getPointerElementType();
+  auto &DL = InnermostLoop->getHeader()->getModule()->getDataLayout();
+  uint64_t TypeByteSize = DL.getTypeAllocSize(ATy);
+  uint64_t Stride = std::abs(StrideAPtr);
   const SCEVConstant *C = dyn_cast<SCEVConstant>(Dist);
   if (!C) {
+    if (TypeByteSize == DL.getTypeAllocSize(BTy) &&
+        isSafeDependenceDistance(DL, *(PSE.getSE()),
+                                 *(PSE.getBackedgeTakenCount()), *Dist, Stride,
+                                 TypeByteSize))
+      return Dependence::NoDep;
+
     DEBUG(dbgs() << "LAA: Dependence because of non-constant distance\n");
     ShouldRetryWithRuntimeCheck = true;
     return Dependence::Unknown;
   }
 
-  Type *ATy = APtr->getType()->getPointerElementType();
-  Type *BTy = BPtr->getType()->getPointerElementType();
-  auto &DL = InnermostLoop->getHeader()->getModule()->getDataLayout();
-  uint64_t TypeByteSize = DL.getTypeAllocSize(ATy);
-
   const APInt &Val = C->getAPInt();
   int64_t Distance = Val.getSExtValue();
-  uint64_t Stride = std::abs(StrideAPtr);
 
   // Attempt to prove strided accesses independent.
   if (std::abs(Distance) > 0 && Stride > 1 && ATy == BTy &&
@@ -1362,12 +1479,14 @@ MemoryDepChecker::isDependent(const MemAccessInfo &A, unsigned AIdx,
 }
 
 bool MemoryDepChecker::areDepsSafe(DepCandidates &AccessSets,
-                                   MemAccessInfoSet &CheckDeps,
+                                   MemAccessInfoList &CheckDeps,
                                    const ValueToValueMap &Strides) {
 
   MaxSafeDepDistBytes = -1;
-  while (!CheckDeps.empty()) {
-    MemAccessInfo CurAccess = *CheckDeps.begin();
+  SmallPtrSet<MemAccessInfo, 8> Visited;
+  for (MemAccessInfo CurAccess : CheckDeps) {
+    if (Visited.count(CurAccess))
+      continue;
 
     // Get the relevant memory access set.
     EquivalenceClasses<MemAccessInfo>::iterator I =
@@ -1381,7 +1500,7 @@ bool MemoryDepChecker::areDepsSafe(DepCandidates &AccessSets,
 
     // Check every access pair.
     while (AI != AE) {
-      CheckDeps.erase(*AI);
+      Visited.insert(*AI);
       EquivalenceClasses<MemAccessInfo>::member_iterator OI = std::next(AI);
       while (OI != AE) {
         // Check every accessing instruction pair in program order.
@@ -1433,7 +1552,7 @@ MemoryDepChecker::getInstructionsForAccess(Value *Ptr, bool isWrite) const {
   auto &IndexVector = Accesses.find(Access)->second;
 
   SmallVector<Instruction *, 4> Insts;
-  std::transform(IndexVector.begin(), IndexVector.end(),
+  transform(IndexVector,
                  std::back_inserter(Insts),
                  [&](unsigned Idx) { return this->InstMap[Idx]; });
   return Insts;
@@ -1460,25 +1579,23 @@ bool LoopAccessInfo::canAnalyzeLoop() {
   // We can only analyze innermost loops.
   if (!TheLoop->empty()) {
     DEBUG(dbgs() << "LAA: loop is not the innermost loop\n");
-    emitAnalysis(LoopAccessReport() << "loop is not the innermost loop");
+    recordAnalysis("NotInnerMostLoop") << "loop is not the innermost loop";
     return false;
   }
 
   // We must have a single backedge.
   if (TheLoop->getNumBackEdges() != 1) {
     DEBUG(dbgs() << "LAA: loop control flow is not understood by analyzer\n");
-    emitAnalysis(
-        LoopAccessReport() <<
-        "loop control flow is not understood by analyzer");
+    recordAnalysis("CFGNotUnderstood")
+        << "loop control flow is not understood by analyzer";
     return false;
   }
 
   // We must have a single exiting block.
   if (!TheLoop->getExitingBlock()) {
     DEBUG(dbgs() << "LAA: loop control flow is not understood by analyzer\n");
-    emitAnalysis(
-        LoopAccessReport() <<
-        "loop control flow is not understood by analyzer");
+    recordAnalysis("CFGNotUnderstood")
+        << "loop control flow is not understood by analyzer";
     return false;
   }
 
@@ -1487,17 +1604,16 @@ bool LoopAccessInfo::canAnalyzeLoop() {
   // instructions in the loop are executed the same number of times.
   if (TheLoop->getExitingBlock() != TheLoop->getLoopLatch()) {
     DEBUG(dbgs() << "LAA: loop control flow is not understood by analyzer\n");
-    emitAnalysis(
-        LoopAccessReport() <<
-        "loop control flow is not understood by analyzer");
+    recordAnalysis("CFGNotUnderstood")
+        << "loop control flow is not understood by analyzer";
     return false;
   }
 
   // ScalarEvolution needs to be able to find the exit count.
   const SCEV *ExitCount = PSE->getBackedgeTakenCount();
   if (ExitCount == PSE->getSE()->getCouldNotCompute()) {
-    emitAnalysis(LoopAccessReport()
-                 << "could not determine number of loop iterations");
+    recordAnalysis("CantComputeNumberOfIterations")
+        << "could not determine number of loop iterations";
     DEBUG(dbgs() << "LAA: SCEV could not compute the loop exit count.\n");
     return false;
   }
@@ -1546,8 +1662,8 @@ void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
 
         auto *Ld = dyn_cast<LoadInst>(&I);
         if (!Ld || (!Ld->isSimple() && !IsAnnotatedParallel)) {
-          emitAnalysis(LoopAccessReport(Ld)
-                       << "read with atomic ordering or volatile read");
+          recordAnalysis("NonSimpleLoad", Ld)
+              << "read with atomic ordering or volatile read";
           DEBUG(dbgs() << "LAA: Found a non-simple load.\n");
           CanVecMem = false;
           return;
@@ -1564,14 +1680,14 @@ void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
       if (I.mayWriteToMemory()) {
         auto *St = dyn_cast<StoreInst>(&I);
         if (!St) {
-          emitAnalysis(LoopAccessReport(St)
-                       << "instruction cannot be vectorized");
+          recordAnalysis("CantVectorizeInstruction", St)
+              << "instruction cannot be vectorized";
           CanVecMem = false;
           return;
         }
         if (!St->isSimple() && !IsAnnotatedParallel) {
-          emitAnalysis(LoopAccessReport(St)
-                       << "write with atomic ordering or volatile write");
+          recordAnalysis("NonSimpleStore", St)
+              << "write with atomic ordering or volatile write";
           DEBUG(dbgs() << "LAA: Found a non-simple store.\n");
           CanVecMem = false;
           return;
@@ -1679,7 +1795,7 @@ void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
   bool CanDoRTIfNeeded = Accesses.canCheckPtrAtRT(*PtrRtChecking, PSE->getSE(),
                                                   TheLoop, SymbolicStrides);
   if (!CanDoRTIfNeeded) {
-    emitAnalysis(LoopAccessReport() << "cannot identify array bounds");
+    recordAnalysis("CantIdentifyArrayBounds") << "cannot identify array bounds";
     DEBUG(dbgs() << "LAA: We can't vectorize because we can't find "
                  << "the array bounds.\n");
     CanVecMem = false;
@@ -1710,8 +1826,8 @@ void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
 
       // Check that we found the bounds for the pointer.
       if (!CanDoRTIfNeeded) {
-        emitAnalysis(LoopAccessReport()
-                     << "cannot check memory dependencies at runtime");
+        recordAnalysis("CantCheckMemDepsAtRunTime")
+            << "cannot check memory dependencies at runtime";
         DEBUG(dbgs() << "LAA: Can't vectorize with memory checks\n");
         CanVecMem = false;
         return;
@@ -1726,12 +1842,11 @@ void LoopAccessInfo::analyzeLoop(AliasAnalysis *AA, LoopInfo *LI,
                  << (PtrRtChecking->Need ? "" : " don't")
                  << " need runtime memory checks.\n");
   else {
-    emitAnalysis(
-        LoopAccessReport()
+    recordAnalysis("UnsafeMemDep")
         << "unsafe dependent memory operations in loop. Use "
            "#pragma loop distribute(enable) to allow loop distribution "
            "to attempt to isolate the offending operations into a separate "
-           "loop");
+           "loop";
     DEBUG(dbgs() << "LAA: unsafe dependent memory operations in loop\n");
   }
 }
@@ -1745,13 +1860,35 @@ bool LoopAccessInfo::blockNeedsPredication(BasicBlock *BB, Loop *TheLoop,
   return !DT->dominates(BB, Latch);
 }
 
-void LoopAccessInfo::emitAnalysis(LoopAccessReport &Message) {
+OptimizationRemarkAnalysis &LoopAccessInfo::recordAnalysis(StringRef RemarkName,
+                                                           Instruction *I) {
   assert(!Report && "Multiple reports generated");
-  Report = Message;
+
+  Value *CodeRegion = TheLoop->getHeader();
+  DebugLoc DL = TheLoop->getStartLoc();
+
+  if (I) {
+    CodeRegion = I->getParent();
+    // If there is no debug location attached to the instruction, revert back to
+    // using the loop's.
+    if (I->getDebugLoc())
+      DL = I->getDebugLoc();
+  }
+
+  Report = make_unique<OptimizationRemarkAnalysis>(DEBUG_TYPE, RemarkName, DL,
+                                                   CodeRegion);
+  return *Report;
 }
 
 bool LoopAccessInfo::isUniform(Value *V) const {
-  return (PSE->getSE()->isLoopInvariant(PSE->getSE()->getSCEV(V), TheLoop));
+  auto *SE = PSE->getSE();
+  // Since we rely on SCEV for uniformity, if the type is not SCEVable, it is
+  // never considered uniform.
+  // TODO: Is this really what we want? Even without FP SCEV, we may want some
+  // trivially loop-invariant FP values to be considered uniform.
+  if (!SE->isSCEVable(V->getType()))
+    return false;
+  return (SE->isLoopInvariant(SE->getSCEV(V), TheLoop));
 }
 
 // FIXME: this function is currently a duplicate of the one in
@@ -1766,6 +1903,7 @@ static Instruction *getFirstInst(Instruction *FirstInst, Value *V,
 }
 
 namespace {
+
 /// \brief IR Values for the lower and upper bounds of a pointer evolution.  We
 /// need to use value-handles because SCEV expansion can invalidate previously
 /// expanded values.  Thus expansion of a pointer can invalidate the bounds for
@@ -1774,6 +1912,7 @@ struct PointerBounds {
   TrackingVH<Value> Start;
   TrackingVH<Value> End;
 };
+
 } // end anonymous namespace
 
 /// \brief Expand code for the lower and upper bound of the pointer group \p CG
@@ -1785,18 +1924,27 @@ expandBounds(const RuntimePointerChecking::CheckingPtrGroup *CG, Loop *TheLoop,
   Value *Ptr = PtrRtChecking.Pointers[CG->Members[0]].PointerValue;
   const SCEV *Sc = SE->getSCEV(Ptr);
 
+  unsigned AS = Ptr->getType()->getPointerAddressSpace();
+  LLVMContext &Ctx = Loc->getContext();
+
+  // Use this type for pointer arithmetic.
+  Type *PtrArithTy = Type::getInt8PtrTy(Ctx, AS);
+
   if (SE->isLoopInvariant(Sc, TheLoop)) {
     DEBUG(dbgs() << "LAA: Adding RT check for a loop invariant ptr:" << *Ptr
                  << "\n");
-    return {Ptr, Ptr};
+    // Ptr could be in the loop body. If so, expand a new one at the correct
+    // location.
+    Instruction *Inst = dyn_cast<Instruction>(Ptr);
+    Value *NewPtr = (Inst && TheLoop->contains(Inst))
+                        ? Exp.expandCodeFor(Sc, PtrArithTy, Loc)
+                        : Ptr;
+    // We must return a half-open range, which means incrementing Sc.
+    const SCEV *ScPlusOne = SE->getAddExpr(Sc, SE->getOne(PtrArithTy));
+    Value *NewPtrPlusOne = Exp.expandCodeFor(ScPlusOne, PtrArithTy, Loc);
+    return {NewPtr, NewPtrPlusOne};
   } else {
-    unsigned AS = Ptr->getType()->getPointerAddressSpace();
-    LLVMContext &Ctx = Loc->getContext();
-
-    // Use this type for pointer arithmetic.
-    Type *PtrArithTy = Type::getInt8PtrTy(Ctx, AS);
     Value *Start = nullptr, *End = nullptr;
-
     DEBUG(dbgs() << "LAA: Adding RT check for range:\n");
     Start = Exp.expandCodeFor(CG->Low, PtrArithTy, Loc);
     End = Exp.expandCodeFor(CG->High, PtrArithTy, Loc);
@@ -1815,9 +1963,8 @@ static SmallVector<std::pair<PointerBounds, PointerBounds>, 4> expandBounds(
 
   // Here we're relying on the SCEV Expander's cache to only emit code for the
   // same bounds once.
-  std::transform(
-      PointerChecks.begin(), PointerChecks.end(),
-      std::back_inserter(ChecksWithBounds),
+  transform(
+      PointerChecks, std::back_inserter(ChecksWithBounds),
       [&](const RuntimePointerChecking::PointerCheck &Check) {
         PointerBounds
           First = expandBounds(Check.first, L, Loc, Exp, SE, PtrRtChecking),
@@ -1863,9 +2010,17 @@ std::pair<Instruction *, Instruction *> LoopAccessInfo::addRuntimeChecks(
     Value *End0 =   ChkBuilder.CreateBitCast(A.End,   PtrArithTy1, "bc");
     Value *End1 =   ChkBuilder.CreateBitCast(B.End,   PtrArithTy0, "bc");
 
-    Value *Cmp0 = ChkBuilder.CreateICmpULE(Start0, End1, "bound0");
+    // [A|B].Start points to the first accessed byte under base [A|B].
+    // [A|B].End points to the last accessed byte, plus one.
+    // There is no conflict when the intervals are disjoint:
+    // NoConflict = (B.Start >= A.End) || (A.Start >= B.End)
+    //
+    // bound0 = (B.Start < A.End)
+    // bound1 = (A.Start < B.End)
+    //  IsConflict = bound0 & bound1
+    Value *Cmp0 = ChkBuilder.CreateICmpULT(Start0, End1, "bound0");
     FirstInst = getFirstInst(FirstInst, Cmp0, Loc);
-    Value *Cmp1 = ChkBuilder.CreateICmpULE(Start1, End0, "bound1");
+    Value *Cmp1 = ChkBuilder.CreateICmpULT(Start1, End0, "bound1");
     FirstInst = getFirstInst(FirstInst, Cmp1, Loc);
     Value *IsConflict = ChkBuilder.CreateAnd(Cmp0, Cmp1, "found.conflict");
     FirstInst = getFirstInst(FirstInst, IsConflict, Loc);
@@ -1941,7 +2096,7 @@ void LoopAccessInfo::print(raw_ostream &OS, unsigned Depth) const {
   }
 
   if (Report)
-    OS.indent(Depth) << "Report: " << Report->str() << "\n";
+    OS.indent(Depth) << "Report: " << Report->getMsg() << "\n";
 
   if (auto *Dependences = DepChecker->getDependences()) {
     OS.indent(Depth) << "Dependences:\n";
@@ -2020,41 +2175,17 @@ INITIALIZE_PASS_DEPENDENCY(DominatorTreeWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(LoopInfoWrapperPass)
 INITIALIZE_PASS_END(LoopAccessLegacyAnalysis, LAA_NAME, laa_name, false, true)
 
-char LoopAccessAnalysis::PassID;
+AnalysisKey LoopAccessAnalysis::Key;
 
-LoopAccessInfo LoopAccessAnalysis::run(Loop &L, AnalysisManager<Loop> &AM) {
-  const AnalysisManager<Function> &FAM =
-      AM.getResult<FunctionAnalysisManagerLoopProxy>(L).getManager();
-  Function &F = *L.getHeader()->getParent();
-  auto *SE = FAM.getCachedResult<ScalarEvolutionAnalysis>(F);
-  auto *TLI = FAM.getCachedResult<TargetLibraryAnalysis>(F);
-  auto *AA = FAM.getCachedResult<AAManager>(F);
-  auto *DT = FAM.getCachedResult<DominatorTreeAnalysis>(F);
-  auto *LI = FAM.getCachedResult<LoopAnalysis>(F);
-  if (!SE)
-    report_fatal_error(
-        "ScalarEvolution must have been cached at a higher level");
-  if (!AA)
-    report_fatal_error("AliasAnalysis must have been cached at a higher level");
-  if (!DT)
-    report_fatal_error("DominatorTree must have been cached at a higher level");
-  if (!LI)
-    report_fatal_error("LoopInfo must have been cached at a higher level");
-  return LoopAccessInfo(&L, SE, TLI, AA, DT, LI);
-}
-
-PreservedAnalyses LoopAccessInfoPrinterPass::run(Loop &L,
-                                                 AnalysisManager<Loop> &AM) {
-  Function &F = *L.getHeader()->getParent();
-  auto &LAI = AM.getResult<LoopAccessAnalysis>(L);
-  OS << "Loop access info in function '" << F.getName() << "':\n";
-  OS.indent(2) << L.getHeader()->getName() << ":\n";
-  LAI.print(OS, 4);
-  return PreservedAnalyses::all();
+LoopAccessInfo LoopAccessAnalysis::run(Loop &L, LoopAnalysisManager &AM,
+                                       LoopStandardAnalysisResults &AR) {
+  return LoopAccessInfo(&L, &AR.SE, &AR.TLI, &AR.AA, &AR.DT, &AR.LI);
 }
 
 namespace llvm {
+
   Pass *createLAAPass() {
     return new LoopAccessLegacyAnalysis();
   }
-}
+
+} // end namespace llvm

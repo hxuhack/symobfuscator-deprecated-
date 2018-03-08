@@ -11,9 +11,10 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Frontend/CompilerInstance.h"
-#include "clang/CodeGen/CodeGenAction.h"
 #include "clang/CodeGen/BackendUtil.h"
+#include "clang/CodeGen/CodeGenAction.h"
+#include "clang/Frontend/CompilerInstance.h"
+#include "clang/Lex/PreprocessorOptions.h"
 #include "gtest/gtest.h"
 
 using namespace llvm;
@@ -40,16 +41,16 @@ public:
 
 
 TEST(CodeGenTest, TestNullCodeGen) {
-  CompilerInvocation *Invocation = new CompilerInvocation;
+  auto Invocation = std::make_shared<CompilerInvocation>();
   Invocation->getPreprocessorOpts().addRemappedFile(
       "test.cc",
       MemoryBuffer::getMemBuffer("").release());
   Invocation->getFrontendOpts().Inputs.push_back(
-      FrontendInputFile("test.cc", IK_CXX));
+      FrontendInputFile("test.cc", InputKind::CXX));
   Invocation->getFrontendOpts().ProgramAction = EmitLLVM;
   Invocation->getTargetOpts().Triple = "i386-unknown-linux-gnu";
   CompilerInstance Compiler;
-  Compiler.setInvocation(Invocation);
+  Compiler.setInvocation(std::move(Invocation));
   Compiler.createDiagnostics();
   EXPECT_TRUE(Compiler.hasDiagnostics());
 

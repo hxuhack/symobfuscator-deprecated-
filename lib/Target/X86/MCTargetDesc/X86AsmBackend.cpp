@@ -10,6 +10,8 @@
 #include "MCTargetDesc/X86BaseInfo.h"
 #include "MCTargetDesc/X86FixupKinds.h"
 #include "llvm/ADT/StringSwitch.h"
+#include "llvm/BinaryFormat/ELF.h"
+#include "llvm/BinaryFormat/MachO.h"
 #include "llvm/MC/MCAsmBackend.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
@@ -22,9 +24,7 @@
 #include "llvm/MC/MCSectionELF.h"
 #include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCSubtargetInfo.h"
-#include "llvm/Support/ELF.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/MachO.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
 using namespace llvm;
@@ -76,12 +76,12 @@ class X86AsmBackend : public MCAsmBackend {
 public:
   X86AsmBackend(const Target &T, StringRef CPU)
       : MCAsmBackend(), CPU(CPU),
-        MaxNopLength((CPU == "slm" || CPU == "lakemont") ? 7 : 15) {
+        MaxNopLength((CPU == "slm") ? 7 : 15) {
     HasNopl = CPU != "generic" && CPU != "i386" && CPU != "i486" &&
               CPU != "i586" && CPU != "pentium" && CPU != "pentium-mmx" &&
               CPU != "i686" && CPU != "k6" && CPU != "k6-2" && CPU != "k6-3" &&
               CPU != "geode" && CPU != "winchip-c6" && CPU != "winchip2" &&
-              CPU != "c3" && CPU != "c3-2";
+              CPU != "c3" && CPU != "c3-2" && CPU != "lakemont";
   }
 
   unsigned getNumFixupKinds() const override {
@@ -108,12 +108,12 @@ public:
     return Infos[Kind - FirstTargetFixupKind];
   }
 
-  void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
-                  uint64_t Value, bool IsPCRel) const override {
+  void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
+                  const MCValue &Target, MutableArrayRef<char> Data,
+                  uint64_t Value, bool IsResolved) const override {
     unsigned Size = 1 << getFixupKindLog2Size(Fixup.getKind());
 
-    assert(Fixup.getOffset() + Size <= DataSize &&
-           "Invalid fixup offset!");
+    assert(Fixup.getOffset() + Size <= Data.size() && "Invalid fixup offset!");
 
     // Check that uppper bits are either all zeros or all ones.
     // Specifically ignore overflow/underflow as long as the leakage is
@@ -546,8 +546,12 @@ protected:
         //     .cfi_def_cfa_register %rbp
         //
         HasFP = true;
-        assert(MRI.getLLVMRegNum(Inst.getRegister(), true) ==
-               (Is64Bit ? X86::RBP : X86::EBP) && "Invalid frame pointer!");
+
+        // If the frame pointer is other than esp/rsp, we do not have a way to
+        // generate a compact unwinding representation, so bail out.
+        if (MRI.getLLVMRegNum(Inst.getRegister(), true) !=
+            (Is64Bit ? X86::RBP : X86::EBP))
+          return 0;
 
         // Reset the counts.
         memset(SavedRegs, 0, sizeof(SavedRegs));
@@ -837,7 +841,8 @@ public:
 MCAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
                                            const MCRegisterInfo &MRI,
                                            const Triple &TheTriple,
-                                           StringRef CPU) {
+                                           StringRef CPU,
+                                           const MCTargetOptions &Options) {
   if (TheTriple.isOSBinFormatMachO())
     return new DarwinX86_32AsmBackend(T, MRI, CPU);
 
@@ -855,7 +860,8 @@ MCAsmBackend *llvm::createX86_32AsmBackend(const Target &T,
 MCAsmBackend *llvm::createX86_64AsmBackend(const Target &T,
                                            const MCRegisterInfo &MRI,
                                            const Triple &TheTriple,
-                                           StringRef CPU) {
+                                           StringRef CPU,
+                                           const MCTargetOptions &Options) {
   if (TheTriple.isOSBinFormatMachO()) {
     MachO::CPUSubTypeX86 CS =
         StringSwitch<MachO::CPUSubTypeX86>(TheTriple.getArchName())

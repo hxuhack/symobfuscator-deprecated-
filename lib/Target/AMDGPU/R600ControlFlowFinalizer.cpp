@@ -12,17 +12,33 @@
 /// computing their address on the fly ; it also sets STACK_SIZE info.
 //===----------------------------------------------------------------------===//
 
-#include "llvm/Support/Debug.h"
 #include "AMDGPU.h"
 #include "AMDGPUSubtarget.h"
 #include "R600Defines.h"
 #include "R600InstrInfo.h"
 #include "R600MachineFunctionInfo.h"
 #include "R600RegisterInfo.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/StringRef.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
+#include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/IR/CallingConv.h"
+#include "llvm/IR/DebugLoc.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cassert>
+#include <cstdint>
+#include <new>
+#include <set>
+#include <utility>
+#include <vector>
 
 using namespace llvm;
 
@@ -43,13 +59,12 @@ struct CFStack {
   std::vector<StackItem> BranchStack;
   std::vector<StackItem> LoopStack;
   unsigned MaxStackSize;
-  unsigned CurrentEntries;
-  unsigned CurrentSubEntries;
+  unsigned CurrentEntries = 0;
+  unsigned CurrentSubEntries = 0;
 
   CFStack(const R600Subtarget *st, CallingConv::ID cc) : ST(st),
       // We need to reserve a stack entry for CALL_FS in vertex shaders.
-      MaxStackSize(cc == CallingConv::AMDGPU_VS ? 1 : 0),
-      CurrentEntries(0), CurrentSubEntries(0) { }
+      MaxStackSize(cc == CallingConv::AMDGPU_VS ? 1 : 0) {}
 
   unsigned getLoopDepth();
   bool branchStackContains(CFStack::StackItem);
@@ -198,9 +213,8 @@ void CFStack::popLoop() {
 }
 
 class R600ControlFlowFinalizer : public MachineFunctionPass {
-
 private:
-  typedef std::pair<MachineInstr *, std::vector<MachineInstr *> > ClauseFile;
+  typedef std::pair<MachineInstr *, std::vector<MachineInstr *>> ClauseFile;
 
   enum ControlFlowInstruction {
     CF_TC,
@@ -217,10 +231,10 @@ private:
   };
 
   static char ID;
-  const R600InstrInfo *TII;
-  const R600RegisterInfo *TRI;
+  const R600InstrInfo *TII = nullptr;
+  const R600RegisterInfo *TRI = nullptr;
   unsigned MaxFetchInst;
-  const R600Subtarget *ST;
+  const R600Subtarget *ST = nullptr;
 
   bool IsTrivialInst(MachineInstr &MI) const {
     switch (MI.getOpcode()) {
@@ -354,10 +368,10 @@ private:
       if (Src.first->getReg() != AMDGPU::ALU_LITERAL_X)
         continue;
       int64_t Imm = Src.second;
-      std::vector<MachineOperand*>::iterator It =
-          std::find_if(Lits.begin(), Lits.end(),
-                    [&](MachineOperand* val)
-                        { return val->isImm() && (val->getImm() == Imm);});
+      std::vector<MachineOperand *>::iterator It =
+          llvm::find_if(Lits, [&](MachineOperand *val) {
+            return val->isImm() && (val->getImm() == Imm);
+          });
 
       // Get corresponding Operand
       MachineOperand &Operand = MI.getOperand(
@@ -450,27 +464,24 @@ private:
     return ClauseFile(&ClauseHead, std::move(ClauseContent));
   }
 
-  void
-  EmitFetchClause(MachineBasicBlock::iterator InsertPos, ClauseFile &Clause,
-      unsigned &CfCount) {
+  void EmitFetchClause(MachineBasicBlock::iterator InsertPos,
+                       const DebugLoc &DL, ClauseFile &Clause,
+                       unsigned &CfCount) {
     CounterPropagateAddr(*Clause.first, CfCount);
     MachineBasicBlock *BB = Clause.first->getParent();
-    BuildMI(BB, InsertPos->getDebugLoc(), TII->get(AMDGPU::FETCH_CLAUSE))
-        .addImm(CfCount);
+    BuildMI(BB, DL, TII->get(AMDGPU::FETCH_CLAUSE)).addImm(CfCount);
     for (unsigned i = 0, e = Clause.second.size(); i < e; ++i) {
       BB->splice(InsertPos, BB, Clause.second[i]);
     }
     CfCount += 2 * Clause.second.size();
   }
 
-  void
-  EmitALUClause(MachineBasicBlock::iterator InsertPos, ClauseFile &Clause,
-      unsigned &CfCount) {
+  void EmitALUClause(MachineBasicBlock::iterator InsertPos, const DebugLoc &DL,
+                     ClauseFile &Clause, unsigned &CfCount) {
     Clause.first->getOperand(0).setImm(0);
     CounterPropagateAddr(*Clause.first, CfCount);
     MachineBasicBlock *BB = Clause.first->getParent();
-    BuildMI(BB, InsertPos->getDebugLoc(), TII->get(AMDGPU::ALU_CLAUSE))
-        .addImm(CfCount);
+    BuildMI(BB, DL, TII->get(AMDGPU::ALU_CLAUSE)).addImm(CfCount);
     for (unsigned i = 0, e = Clause.second.size(); i < e; ++i) {
       BB->splice(InsertPos, BB, Clause.second[i]);
     }
@@ -488,8 +499,7 @@ private:
   }
 
 public:
-  R600ControlFlowFinalizer(TargetMachine &tm)
-      : MachineFunctionPass(ID), TII(nullptr), TRI(nullptr), ST(nullptr) {}
+  R600ControlFlowFinalizer() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override {
     ST = &MF.getSubtarget<R600Subtarget>();
@@ -504,7 +514,7 @@ public:
         ++MB) {
       MachineBasicBlock &MBB = *MB;
       unsigned CfCount = 0;
-      std::vector<std::pair<unsigned, std::set<MachineInstr *> > > LoopStack;
+      std::vector<std::pair<unsigned, std::set<MachineInstr *>>> LoopStack;
       std::vector<MachineInstr * > IfThenElseStack;
       if (MF.getFunction()->getCallingConv() == CallingConv::AMDGPU_VS) {
         BuildMI(MBB, MBB.begin(), MBB.findDebugLoc(MBB.begin()),
@@ -545,7 +555,7 @@ public:
             CFStack.pushBranch(AMDGPU::CF_PUSH_EG);
           } else
             CFStack.pushBranch(AMDGPU::CF_ALU_PUSH_BEFORE);
-
+          LLVM_FALLTHROUGH;
         case AMDGPU::CF_ALU:
           I = MI;
           AluClauses.push_back(MakeALUClause(MBB, I));
@@ -557,7 +567,7 @@ public:
           MachineInstr *MIb = BuildMI(MBB, MI, MBB.findDebugLoc(MI),
               getHWInstrDesc(CF_WHILE_LOOP))
               .addImm(1);
-          std::pair<unsigned, std::set<MachineInstr *> > Pair(CfCount,
+          std::pair<unsigned, std::set<MachineInstr *>> Pair(CfCount,
               std::set<MachineInstr *>());
           Pair.second.insert(MIb);
           LoopStack.push_back(std::move(Pair));
@@ -567,7 +577,7 @@ public:
         }
         case AMDGPU::ENDLOOP: {
           CFStack.popLoop();
-          std::pair<unsigned, std::set<MachineInstr *> > Pair =
+          std::pair<unsigned, std::set<MachineInstr *>> Pair =
               std::move(LoopStack.back());
           LoopStack.pop_back();
           CounterPropagateAddr(Pair.second, CfCount);
@@ -644,17 +654,18 @@ public:
           break;
         }
         case AMDGPU::RETURN: {
-          BuildMI(MBB, MI, MBB.findDebugLoc(MI), getHWInstrDesc(CF_END));
+          DebugLoc DL = MBB.findDebugLoc(MI);
+          BuildMI(MBB, MI, DL, getHWInstrDesc(CF_END));
           CfCount++;
           if (CfCount % 2) {
-            BuildMI(MBB, I, MBB.findDebugLoc(MI), TII->get(AMDGPU::PAD));
+            BuildMI(MBB, I, DL, TII->get(AMDGPU::PAD));
             CfCount++;
           }
           MI->eraseFromParent();
           for (unsigned i = 0, e = FetchClauses.size(); i < e; i++)
-            EmitFetchClause(I, FetchClauses[i], CfCount);
+            EmitFetchClause(I, DL, FetchClauses[i], CfCount);
           for (unsigned i = 0, e = AluClauses.size(); i < e; i++)
-            EmitALUClause(I, AluClauses[i], CfCount);
+            EmitALUClause(I, DL, AluClauses[i], CfCount);
           break;
         }
         default:
@@ -680,13 +691,13 @@ public:
             .addImm(Alu->getOperand(8).getImm());
         Alu->eraseFromParent();
       }
-      MFI->StackSize = CFStack.MaxStackSize;
+      MFI->CFStackSize = CFStack.MaxStackSize;
     }
 
     return false;
   }
 
-  const char *getPassName() const override {
+  StringRef getPassName() const override {
     return "R600 Control Flow Finalizer Pass";
   }
 };
@@ -695,7 +706,6 @@ char R600ControlFlowFinalizer::ID = 0;
 
 } // end anonymous namespace
 
-
-llvm::FunctionPass *llvm::createR600ControlFlowFinalizer(TargetMachine &TM) {
-  return new R600ControlFlowFinalizer(TM);
+FunctionPass *llvm::createR600ControlFlowFinalizer() {
+  return new R600ControlFlowFinalizer();
 }

@@ -22,7 +22,7 @@
 #include "llvm-readobj.h"
 #include "Error.h"
 #include "ObjDumper.h"
-#include "llvm/DebugInfo/CodeView/MemoryTypeTableBuilder.h"
+#include "llvm/DebugInfo/CodeView/TypeTableBuilder.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/COFFImportFile.h"
 #include "llvm/Object/ELFObjectFile.h"
@@ -34,6 +34,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/ManagedStatic.h"
+#include "llvm/Support/Path.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/ScopedPrinter.h"
 #include "llvm/Support/Signals.h"
@@ -50,6 +51,13 @@ namespace opts {
     cl::desc("<input object files>"),
     cl::ZeroOrMore);
 
+  // -wide, -W
+  cl::opt<bool> WideOutput("wide",
+    cl::desc("Ignored for compatibility with GNU readelf"));
+  cl::alias WideOutputShort("W",
+    cl::desc("Alias for --wide"),
+    cl::aliasopt(WideOutput));
+
   // -file-headers, -h
   cl::opt<bool> FileHeaders("file-headers",
     cl::desc("Display file headers "));
@@ -57,10 +65,14 @@ namespace opts {
     cl::desc("Alias for --file-headers"),
     cl::aliasopt(FileHeaders));
 
-  // -sections, -s
+  // -sections, -s, -S
+  // Note: In GNU readelf, -s means --symbols!
   cl::opt<bool> Sections("sections",
     cl::desc("Display all sections."));
   cl::alias SectionsShort("s",
+    cl::desc("Alias for --sections"),
+    cl::aliasopt(Sections));
+  cl::alias SectionsShortUpper("S",
     cl::desc("Alias for --sections"),
     cl::aliasopt(Sections));
 
@@ -92,6 +104,10 @@ namespace opts {
     cl::desc("Alias for --relocations"),
     cl::aliasopt(Relocations));
 
+  // -notes, -n
+  cl::opt<bool> Notes("notes", cl::desc("Display the ELF notes in the file"));
+  cl::alias NotesShort("n", cl::desc("Alias for --notes"), cl::aliasopt(Notes));
+
   // -dyn-relocations
   cl::opt<bool> DynRelocs("dyn-relocations",
     cl::desc("Display the dynamic relocation entries in the file"));
@@ -120,6 +136,8 @@ namespace opts {
   // -dynamic-table
   cl::opt<bool> DynamicTable("dynamic-table",
     cl::desc("Display the ELF .dynamic section table"));
+  cl::alias DynamicTableShort("d", cl::desc("Alias for --dynamic-table"),
+                              cl::aliasopt(DynamicTable));
 
   // -needed-libs
   cl::opt<bool> NeededLibraries("needed-libs",
@@ -128,6 +146,8 @@ namespace opts {
   // -program-headers
   cl::opt<bool> ProgramHeaders("program-headers",
     cl::desc("Display ELF program headers"));
+  cl::alias ProgramHeadersShort("l", cl::desc("Alias for --program-headers"),
+                                cl::aliasopt(ProgramHeaders));
 
   // -hash-table
   cl::opt<bool> HashTable("hash-table",
@@ -158,7 +178,7 @@ namespace opts {
   // -arm-attributes, -a
   cl::opt<bool> ARMAttributes("arm-attributes",
                               cl::desc("Display the ARM attributes section"));
-  cl::alias ARMAttributesShort("-a", cl::desc("Alias for --arm-attributes"),
+  cl::alias ARMAttributesShort("a", cl::desc("Alias for --arm-attributes"),
                                cl::aliasopt(ARMAttributes));
 
   // -mips-plt-got
@@ -177,6 +197,11 @@ namespace opts {
   // -mips-options
   cl::opt<bool> MipsOptions("mips-options",
                             cl::desc("Display the MIPS .MIPS.options section"));
+
+  // -amdgpu-code-object-metadata
+  cl::opt<bool> AMDGPUCodeObjectMetadata(
+      "amdgpu-code-object-metadata",
+      cl::desc("Display AMDGPU code object metadata"));
 
   // -coff-imports
   cl::opt<bool>
@@ -200,6 +225,15 @@ namespace opts {
   cl::opt<bool>
   COFFDebugDirectory("coff-debug-directory",
                      cl::desc("Display the PE/COFF debug directory"));
+
+  // -coff-resources
+  cl::opt<bool> COFFResources("coff-resources",
+                              cl::desc("Display the PE/COFF .rsrc section"));
+
+  // -coff-load-config
+  cl::opt<bool>
+  COFFLoadConfig("coff-load-config",
+                 cl::desc("Display the PE/COFF load config"));
 
   // -macho-data-in-code
   cl::opt<bool>
@@ -256,7 +290,7 @@ namespace opts {
   cl::opt<OutputStyleTy>
       Output("elf-output-style", cl::desc("Specify ELF dump style"),
              cl::values(clEnumVal(LLVM, "LLVM default style"),
-                        clEnumVal(GNU, "GNU readelf style"), clEnumValEnd),
+                        clEnumVal(GNU, "GNU readelf style")),
              cl::init(LLVM));
 } // namespace opts
 
@@ -268,10 +302,16 @@ LLVM_ATTRIBUTE_NORETURN void reportError(Twine Msg) {
   exit(1);
 }
 
+void error(Error EC) {
+  if (!EC)
+    return;
+  handleAllErrors(std::move(EC),
+                  [&](const ErrorInfoBase &EI) { reportError(EI.message()); });
+}
+
 void error(std::error_code EC) {
   if (!EC)
     return;
-
   reportError(EC.message());
 }
 
@@ -286,13 +326,6 @@ static void reportError(StringRef Input, std::error_code EC) {
     Input = "<stdin>";
 
   reportError(Twine(Input) + ": " + EC.message());
-}
-
-static void reportError(StringRef Input, StringRef Message) {
-  if (Input == "-")
-    Input = "<stdin>";
-
-  reportError(Twine(Input) + ": " + Message);
 }
 
 static void reportError(StringRef Input, Error Err) {
@@ -317,8 +350,17 @@ static bool isMipsArch(unsigned Arch) {
     return false;
   }
 }
+namespace {
+struct ReadObjTypeTableBuilder {
+  ReadObjTypeTableBuilder()
+      : Allocator(), IDTable(Allocator), TypeTable(Allocator) {}
 
-static llvm::codeview::MemoryTypeTableBuilder CVTypes;
+  llvm::BumpPtrAllocator Allocator;
+  llvm::codeview::TypeTableBuilder IDTable;
+  llvm::codeview::TypeTableBuilder TypeTable;
+};
+}
+static ReadObjTypeTableBuilder CVTypes;
 
 /// @brief Creates an format-specific object file dumper.
 static std::error_code createDumper(const ObjectFile *Obj,
@@ -333,6 +375,8 @@ static std::error_code createDumper(const ObjectFile *Obj,
     return createELFDumper(Obj, Writer, Result);
   if (Obj->isMachO())
     return createMachODumper(Obj, Writer, Result);
+  if (Obj->isWasm())
+    return createWasmDumper(Obj, Writer, Result);
 
   return readobj_error::unsupported_obj_file_format;
 }
@@ -394,10 +438,15 @@ static void dumpObject(const ObjectFile *Obj) {
       if (opts::MipsOptions)
         Dumper->printMipsOptions();
     }
+    if (Obj->getArch() == llvm::Triple::amdgcn)
+      if (opts::AMDGPUCodeObjectMetadata)
+        Dumper->printAMDGPUCodeObjectMetadata();
     if (opts::SectionGroups)
       Dumper->printGroupSections();
     if (opts::HashHistogram)
       Dumper->printHashHistogram();
+    if (opts::Notes)
+      Dumper->printNotes();
   }
   if (Obj->isCOFF()) {
     if (opts::COFFImports)
@@ -410,10 +459,14 @@ static void dumpObject(const ObjectFile *Obj) {
       Dumper->printCOFFBaseReloc();
     if (opts::COFFDebugDirectory)
       Dumper->printCOFFDebugDirectory();
+    if (opts::COFFResources)
+      Dumper->printCOFFResources();
+    if (opts::COFFLoadConfig)
+      Dumper->printCOFFLoadConfig();
     if (opts::CodeView)
       Dumper->printCodeViewDebugInfo();
     if (opts::CodeViewMergedTypes)
-      Dumper->mergeCodeViewTypes(CVTypes);
+      Dumper->mergeCodeViewTypes(CVTypes.IDTable, CVTypes.TypeTable);
   }
   if (Obj->isMachO()) {
     if (opts::MachODataInCode)
@@ -435,21 +488,19 @@ static void dumpObject(const ObjectFile *Obj) {
 
 /// @brief Dumps each object file in \a Arc;
 static void dumpArchive(const Archive *Arc) {
-  Error Err;
+  Error Err = Error::success();
   for (auto &Child : Arc->children(Err)) {
     Expected<std::unique_ptr<Binary>> ChildOrErr = Child.getAsBinary();
     if (!ChildOrErr) {
       if (auto E = isNotObjectErrorInvalidFileType(ChildOrErr.takeError())) {
-        std::string Buf;
-        raw_string_ostream OS(Buf);
-        logAllUnhandledErrors(ChildOrErr.takeError(), OS, "");
-        OS.flush();
-        reportError(Arc->getFileName(), Buf);
+        reportError(Arc->getFileName(), ChildOrErr.takeError());
       }
       continue;
     }
     if (ObjectFile *Obj = dyn_cast<ObjectFile>(&*ChildOrErr.get()))
       dumpObject(Obj);
+    else if (COFFImportFile *Imp = dyn_cast<COFFImportFile>(&*ChildOrErr.get()))
+      dumpCOFFImportFile(Imp);
     else
       reportError(Arc->getFileName(), readobj_error::unrecognized_file_format);
   }
@@ -464,11 +515,7 @@ static void dumpMachOUniversalBinary(const MachOUniversalBinary *UBinary) {
     if (ObjOrErr)
       dumpObject(&*ObjOrErr.get());
     else if (auto E = isNotObjectErrorInvalidFileType(ObjOrErr.takeError())) {
-      std::string Buf;
-      raw_string_ostream OS(Buf);
-      logAllUnhandledErrors(ObjOrErr.takeError(), OS, "");
-      OS.flush();
-      reportError(UBinary->getFileName(), Buf);
+      reportError(UBinary->getFileName(), ObjOrErr.takeError());
     }
     else if (Expected<std::unique_ptr<Archive>> AOrErr = Obj.getAsArchive())
       dumpArchive(&*AOrErr.get());
@@ -481,7 +528,7 @@ static void dumpInput(StringRef File) {
   // Attempt to open the binary.
   Expected<OwningBinary<Binary>> BinaryOrErr = createBinary(File);
   if (!BinaryOrErr)
-    reportError(File, errorToErrorCode(BinaryOrErr.takeError()));
+    reportError(File, BinaryOrErr.takeError());
   Binary &Binary = *BinaryOrErr.get().getBinary();
 
   if (Archive *Arc = dyn_cast<Archive>(&Binary))
@@ -498,12 +545,18 @@ static void dumpInput(StringRef File) {
 }
 
 int main(int argc, const char *argv[]) {
-  sys::PrintStackTraceOnErrorSignal(argv[0]);
+  StringRef ToolName = argv[0];
+  sys::PrintStackTraceOnErrorSignal(ToolName);
   PrettyStackTraceProgram X(argc, argv);
   llvm_shutdown_obj Y;
 
   // Register the target printer for --version.
   cl::AddExtraVersionPrinter(TargetRegistry::printRegisteredTargetsForVersion);
+
+  opts::WideOutput.setHiddenFlag(cl::Hidden);
+
+  if (sys::path::stem(ToolName).find("readelf") != StringRef::npos)
+    opts::Output = opts::GNU;
 
   cl::ParseCommandLineOptions(argc, argv, "LLVM Object Reader\n");
 
@@ -516,7 +569,7 @@ int main(int argc, const char *argv[]) {
 
   if (opts::CodeViewMergedTypes) {
     ScopedPrinter W(outs());
-    dumpCodeViewMergedTypes(W, CVTypes);
+    dumpCodeViewMergedTypes(W, CVTypes.IDTable, CVTypes.TypeTable);
   }
 
   return 0;

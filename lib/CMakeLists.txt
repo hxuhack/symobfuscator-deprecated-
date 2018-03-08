@@ -1,8 +1,10 @@
-# `Support' and `TableGen' libraries are added on the top-level CMakeLists.txt
+# `Demangle', `Support' and `TableGen' libraries are added on the top-level
+# CMakeLists.txt
 
 add_subdirectory(IR)
 add_subdirectory(IRReader)
 add_subdirectory(CodeGen)
+add_subdirectory(BinaryFormat)
 add_subdirectory(Bitcode)
 add_subdirectory(Transforms)
 add_subdirectory(Linker)
@@ -20,4 +22,6 @@ add_subdirectory(LineEditor)
 add_subdirectory(ProfileData)
 add_subdirectory(Fuzzer)
 add_subdirectory(Passes)
-add_subdirectory(LibDriver)
+add_subdirectory(ToolDrivers)
+add_subdirectory(XRay)
+add_subdirectory(Testing)

@@ -7,13 +7,13 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/ProfileData/SampleProf.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Metadata.h"
 #include "llvm/IR/Module.h"
 #include "llvm/ProfileData/ProfileCommon.h"
-#include "llvm/ProfileData/SampleProf.h"
 #include "llvm/ProfileData/SampleProfReader.h"
 #include "llvm/ProfileData/SampleProfWriter.h"
 #include "llvm/Support/Casting.h"
@@ -124,15 +124,13 @@ struct SampleProfTest : ::testing::Test {
         return PE.Cutoff == Cutoff;
       };
       std::vector<ProfileSummaryEntry> &Details = Summary.getDetailedSummary();
-      auto EightyPerc = std::find_if(Details.begin(), Details.end(), Predicate);
+      auto EightyPerc = find_if(Details, Predicate);
       Cutoff = 900000;
-      auto NinetyPerc = std::find_if(Details.begin(), Details.end(), Predicate);
+      auto NinetyPerc = find_if(Details, Predicate);
       Cutoff = 950000;
-      auto NinetyFivePerc =
-          std::find_if(Details.begin(), Details.end(), Predicate);
+      auto NinetyFivePerc = find_if(Details, Predicate);
       Cutoff = 990000;
-      auto NinetyNinePerc =
-          std::find_if(Details.begin(), Details.end(), Predicate);
+      auto NinetyNinePerc = find_if(Details, Predicate);
       ASSERT_EQ(60000u, EightyPerc->MinCount);
       ASSERT_EQ(60000u, NinetyPerc->MinCount);
       ASSERT_EQ(60000u, NinetyFivePerc->MinCount);

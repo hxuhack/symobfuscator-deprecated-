@@ -79,11 +79,7 @@
 name:            f
 alignment:       1
 exposesReturnsTwice: false
-hasInlineAsm:    false
-allVRegsAllocated: true
-isSSA:           false
 tracksRegLiveness: true
-tracksSubRegLiveness: false
 liveins:
   - { reg: '%r0' }
   - { reg: '%r1' }
@@ -122,7 +118,6 @@ stack:
   - { id: 1, type: spill-slot, offset: -8, size: 4, alignment: 4, callee-saved-register: '%r7' }
 body:             |
   bb.0.entry:
-    successors: %bb.1, %bb.2.if.end
     liveins: %r0, %r1, %r2, %r3, %lr, %r7
 
     DBG_VALUE debug-use %r0, debug-use _, !18, !27, debug-location !28
@@ -144,9 +139,9 @@ body:             |
     liveins: %r0, %r2, %r3, %r7, %lr
 
     %sp = frame-setup t2STMDB_UPD %sp, 14, _, killed %r7, killed %lr
-    frame-setup CFI_INSTRUCTION .cfi_def_cfa_offset 8
-    frame-setup CFI_INSTRUCTION .cfi_offset %lr, -4
-    frame-setup CFI_INSTRUCTION .cfi_offset %r7, -8
+    frame-setup CFI_INSTRUCTION def_cfa_offset 8
+    frame-setup CFI_INSTRUCTION offset %lr, -4
+    frame-setup CFI_INSTRUCTION offset %r7, -8
     DBG_VALUE debug-use %r0, debug-use _, !18, !27, debug-location !28
     DBG_VALUE debug-use %r1, debug-use _, !19, !27, debug-location !28
     DBG_VALUE debug-use %r2, debug-use _, !20, !27, debug-location !28

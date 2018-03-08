@@ -11,11 +11,12 @@
 #define LLVM_CLANG_FRONTEND_COMPILERINSTANCE_H_
 
 #include "clang/AST/ASTConsumer.h"
-#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Basic/SourceManager.h"
 #include "clang/Frontend/CompilerInvocation.h"
+#include "clang/Frontend/PCHContainerOperations.h"
 #include "clang/Frontend/Utils.h"
+#include "clang/Lex/HeaderSearchOptions.h"
 #include "clang/Lex/ModuleLoader.h"
 #include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
@@ -35,7 +36,6 @@ class TimerGroup;
 
 namespace clang {
 class ASTContext;
-class ASTConsumer;
 class ASTReader;
 class CodeCompleteConsumer;
 class DiagnosticsEngine;
@@ -44,6 +44,7 @@ class ExternalASTSource;
 class FileEntry;
 class FileManager;
 class FrontendAction;
+class MemoryBufferCache;
 class Module;
 class Preprocessor;
 class Sema;
@@ -70,7 +71,7 @@ class TargetInfo;
 /// and a long form that takes explicit instances of any required objects.
 class CompilerInstance : public ModuleLoader {
   /// The options used in this compiler instance.
-  IntrusiveRefCntPtr<CompilerInvocation> Invocation;
+  std::shared_ptr<CompilerInvocation> Invocation;
 
   /// The diagnostics engine instance.
   IntrusiveRefCntPtr<DiagnosticsEngine> Diagnostics;
@@ -90,11 +91,17 @@ class CompilerInstance : public ModuleLoader {
   /// The source manager.
   IntrusiveRefCntPtr<SourceManager> SourceMgr;
 
+  /// The cache of PCM files.
+  IntrusiveRefCntPtr<MemoryBufferCache> PCMCache;
+
   /// The preprocessor.
-  IntrusiveRefCntPtr<Preprocessor> PP;
+  std::shared_ptr<Preprocessor> PP;
 
   /// The AST context.
   IntrusiveRefCntPtr<ASTContext> Context;
+
+  /// An optional sema source that will be attached to sema.
+  IntrusiveRefCntPtr<ExternalSemaSource> ExternalSemaSrc;
 
   /// The AST consumer.
   std::unique_ptr<ASTConsumer> Consumer;
@@ -129,6 +136,13 @@ class CompilerInstance : public ModuleLoader {
   /// along with the module map
   llvm::DenseMap<const IdentifierInfo *, Module *> KnownModules;
 
+  /// \brief The set of top-level modules that has already been built on the
+  /// fly as part of this overall compilation action.
+  std::map<std::string, std::string> BuiltModules;
+
+  /// Should we delete the BuiltModules when we're done?
+  bool DeleteBuiltModules = true;
+
   /// \brief The location of the module-import keyword for the last module
   /// import. 
   SourceLocation LastModuleImportLoc;
@@ -139,13 +153,13 @@ class CompilerInstance : public ModuleLoader {
 
   /// \brief Whether we should (re)build the global module index once we
   /// have finished with this translation unit.
-  bool BuildGlobalModuleIndex;
+  bool BuildGlobalModuleIndex = false;
 
   /// \brief We have a full global module index, with all modules.
-  bool HaveFullGlobalModuleIndex;
+  bool HaveFullGlobalModuleIndex = false;
 
   /// \brief One or more modules failed to build.
-  bool ModuleBuildFailed;
+  bool ModuleBuildFailed = false;
 
   /// \brief Holds information about the output file.
   ///
@@ -175,7 +189,7 @@ public:
   explicit CompilerInstance(
       std::shared_ptr<PCHContainerOperations> PCHContainerOps =
           std::make_shared<PCHContainerOperations>(),
-      bool BuildingModule = false);
+      MemoryBufferCache *SharedPCMCache = nullptr);
   ~CompilerInstance() override;
 
   /// @name High-Level Operations
@@ -225,7 +239,7 @@ public:
   }
 
   /// setInvocation - Replace the current invocation.
-  void setInvocation(CompilerInvocation *Value);
+  void setInvocation(std::shared_ptr<CompilerInvocation> Value);
 
   /// \brief Indicates whether we should (re)build the global module index.
   bool shouldBuildGlobalModuleIndex() const;
@@ -284,6 +298,9 @@ public:
   }
   const HeaderSearchOptions &getHeaderSearchOpts() const {
     return Invocation->getHeaderSearchOpts();
+  }
+  std::shared_ptr<HeaderSearchOptions> getHeaderSearchOptsPtr() const {
+    return Invocation->getHeaderSearchOptsPtr();
   }
 
   LangOptions &getLangOpts() {
@@ -430,13 +447,14 @@ public:
     return *PP;
   }
 
+  std::shared_ptr<Preprocessor> getPreprocessorPtr() { return PP; }
+
   void resetAndLeakPreprocessor() {
-    BuryPointer(PP.get());
-    PP.resetWithoutRelease();
+    BuryPointer(new std::shared_ptr<Preprocessor>(PP));
   }
 
   /// Replace the current preprocessor.
-  void setPreprocessor(Preprocessor *Value);
+  void setPreprocessor(std::shared_ptr<Preprocessor> Value);
 
   /// }
   /// @name ASTContext
@@ -650,7 +668,9 @@ public:
       StringRef Path, StringRef Sysroot, bool DisablePCHValidation,
       bool AllowPCHWithCompilerErrors, Preprocessor &PP, ASTContext &Context,
       const PCHContainerReader &PCHContainerRdr,
-      ArrayRef<IntrusiveRefCntPtr<ModuleFileExtension>> Extensions,
+      ArrayRef<std::shared_ptr<ModuleFileExtension>> Extensions,
+      DependencyFileGenerator *DependencyFile,
+      ArrayRef<std::shared_ptr<DependencyCollector>> DependencyCollectors,
       void *DeserializationListener, bool OwnDeserializationListener,
       bool Preamble, bool UseGlobalModuleIndex);
 
@@ -760,6 +780,9 @@ public:
                               Module::NameVisibilityKind Visibility,
                               bool IsInclusionDirective) override;
 
+  void loadModuleFromSource(SourceLocation ImportLoc, StringRef ModuleName,
+                            StringRef Source) override;
+
   void makeModuleVisible(Module *Mod, Module::NameVisibilityKind Visibility,
                          SourceLocation ImportLoc) override;
 
@@ -774,6 +797,10 @@ public:
   void addDependencyCollector(std::shared_ptr<DependencyCollector> Listener) {
     DependencyCollectors.push_back(std::move(Listener));
   }
+
+  void setExternalSemaSource(IntrusiveRefCntPtr<ExternalSemaSource> ESS);
+
+  MemoryBufferCache &getPCMCache() const { return *PCMCache; }
 };
 
 } // end namespace clang

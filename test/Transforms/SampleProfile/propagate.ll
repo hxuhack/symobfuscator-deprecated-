@@ -85,8 +85,8 @@ for.body:                                         ; preds = %for.cond
   %div = sdiv i64 %7, 3, !dbg !43
   %cmp2 = icmp sgt i64 %6, %div, !dbg !44
   br i1 %cmp2, label %if.then3, label %if.end, !dbg !45
-; CHECK:  edge for.body -> if.then3 probability is 0x51451451 / 0x80000000 = 63.49%
-; CHECK:  edge for.body -> if.end probability is 0x2ebaebaf / 0x80000000 = 36.51%
+; CHECK:  edge for.body -> if.then3 probability is 0x51292fa6 / 0x80000000 = 63.41%
+; CHECK:  edge for.body -> if.end probability is 0x2ed6d05a / 0x80000000 = 36.59%
 
 if.then3:                                         ; preds = %for.body
   %8 = load i32, i32* %x.addr, align 4, !dbg !46
@@ -100,8 +100,8 @@ if.end:                                           ; preds = %if.then3, %for.body
   %div4 = sdiv i64 %10, 4, !dbg !51
   %cmp5 = icmp sgt i64 %9, %div4, !dbg !52
   br i1 %cmp5, label %if.then6, label %if.else7, !dbg !53
-; CHECK:  edge if.end -> if.then6 probability is 0x5dbaa1dc / 0x80000000 = 73.23%
-; CHECK:  edge if.end -> if.else7 probability is 0x22455e24 / 0x80000000 = 26.77%
+; CHECK:  edge if.end -> if.then6 probability is 0x5d89d89e / 0x80000000 = 73.08%
+; CHECK:  edge if.end -> if.else7 probability is 0x22762762 / 0x80000000 = 26.92%
 
 if.then6:                                         ; preds = %if.end
   %11 = load i32, i32* %y.addr, align 4, !dbg !54
@@ -121,8 +121,8 @@ for.cond8:                                        ; preds = %for.inc, %if.else7
   %13 = load i64, i64* %j, align 8, !dbg !64
   %cmp9 = icmp slt i64 %13, 100, !dbg !67
   br i1 %cmp9, label %for.body10, label %for.end, !dbg !68
-; CHECK: edge for.cond8 -> for.body10 probability is 0x7e985735 / 0x80000000 = 98.90% [HOT edge]
-; CHECK: edge for.cond8 -> for.end probability is 0x0167a8cb / 0x80000000 = 1.10%
+; CHECK: edge for.cond8 -> for.body10 probability is 0x7e941a89 / 0x80000000 = 98.89% [HOT edge]
+; CHECK: edge for.cond8 -> for.end probability is 0x016be577 / 0x80000000 = 1.11%
 
 
 for.body10:                                       ; preds = %for.cond8
@@ -244,7 +244,7 @@ attributes #3 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !31 = !DILocation(line: 7, column: 15, scope: !29)
 !32 = !DILocation(line: 7, column: 10, scope: !29)
 !33 = !DILocation(line: 7, column: 22, scope: !34)
-!34 = !DILexicalBlockFile(scope: !35, file: !1, discriminator: 1)
+!34 = !DILexicalBlockFile(scope: !35, file: !1, discriminator: 2)
 !35 = distinct !DILexicalBlock(scope: !29, file: !1, line: 7, column: 5)
 !36 = !DILocation(line: 7, column: 26, scope: !34)
 !37 = !DILocation(line: 7, column: 24, scope: !34)
@@ -275,7 +275,7 @@ attributes #3 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !62 = !DILocation(line: 14, column: 24, scope: !59)
 !63 = !DILocation(line: 14, column: 14, scope: !59)
 !64 = !DILocation(line: 14, column: 31, scope: !65)
-!65 = !DILexicalBlockFile(scope: !66, file: !1, discriminator: 1)
+!65 = !DILexicalBlockFile(scope: !66, file: !1, discriminator: 2)
 !66 = distinct !DILexicalBlock(scope: !59, file: !1, line: 14, column: 9)
 !67 = !DILocation(line: 14, column: 33, scope: !65)
 !68 = !DILocation(line: 14, column: 9, scope: !65)
@@ -285,11 +285,11 @@ attributes #3 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !72 = !DILocation(line: 16, column: 13, scope: !70)
 !73 = !DILocation(line: 17, column: 9, scope: !70)
 !74 = !DILocation(line: 14, column: 41, scope: !75)
-!75 = !DILexicalBlockFile(scope: !66, file: !1, discriminator: 2)
+!75 = !DILexicalBlockFile(scope: !66, file: !1, discriminator: 4)
 !76 = !DILocation(line: 14, column: 9, scope: !75)
 !77 = !DILocation(line: 19, column: 5, scope: !41)
 !78 = !DILocation(line: 7, column: 30, scope: !79)
-!79 = !DILexicalBlockFile(scope: !35, file: !1, discriminator: 2)
+!79 = !DILexicalBlockFile(scope: !35, file: !1, discriminator: 4)
 !80 = !DILocation(line: 7, column: 5, scope: !79)
 !81 = !DILocation(line: 21, column: 10, scope: !6)
 !82 = !DILocation(line: 21, column: 14, scope: !6)
@@ -313,5 +313,5 @@ attributes #3 = { "disable-tail-calls"="false" "less-precise-fpmad"="false" "no-
 !100 = !DILocation(line: 28, column: 57, scope: !86)
 !101 = !DILocation(line: 28, column: 47, scope: !86)
 !102 = !DILocation(line: 28, column: 3, scope: !103)
-!103 = !DILexicalBlockFile(scope: !86, file: !1, discriminator: 1)
+!103 = !DILexicalBlockFile(scope: !86, file: !1, discriminator: 2)
 !104 = !DILocation(line: 29, column: 3, scope: !86)

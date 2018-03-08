@@ -1,4 +1,4 @@
-// RUN: %clang_cc1 -Wall -Werror -triple thumbv7-eabi -target-cpu cortex-a8 -emit-llvm -o - %s | opt -S -mem2reg | FileCheck %s
+// RUN: %clang_cc1 -Wall -Werror -triple thumbv7-eabi -target-cpu cortex-a8 -disable-O0-optnone -emit-llvm -o - %s | opt -S -mem2reg | FileCheck %s
 
 #include <stdint.h>
 
@@ -68,7 +68,7 @@ void test_barrier() {
   __builtin_arm_isb(3); //CHECK: call {{.*}} @llvm.arm.isb(i32 3)
 }
 
-// CHECK: call {{.*}} @llvm.arm.rbit(i32 %a)
+// CHECK: call {{.*}} @llvm.bitreverse.i32(i32 %a)
 
 unsigned rbit(unsigned a) {
   return __builtin_arm_rbit(a);

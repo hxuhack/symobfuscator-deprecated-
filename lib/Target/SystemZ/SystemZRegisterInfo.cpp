@@ -7,8 +7,8 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "SystemZInstrInfo.h"
 #include "SystemZRegisterInfo.h"
+#include "SystemZInstrInfo.h"
 #include "SystemZSubtarget.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
@@ -59,6 +59,11 @@ SystemZRegisterInfo::getReservedRegs(const MachineFunction &MF) const {
   Reserved.set(SystemZ::R15L);
   Reserved.set(SystemZ::R15H);
   Reserved.set(SystemZ::R14Q);
+
+  // A0 and A1 hold the thread pointer.
+  Reserved.set(SystemZ::A0);
+  Reserved.set(SystemZ::A1);
+
   return Reserved;
 }
 

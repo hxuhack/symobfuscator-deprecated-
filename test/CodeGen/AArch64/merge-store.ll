@@ -1,11 +1,10 @@
-; RUN: llc -mtriple=aarch64-unknown-unknown %s -mcpu=cyclone -o - | FileCheck %s --check-prefix=CYCLONE --check-prefix=CHECK
-; RUN: llc -march aarch64 %s -mattr=-slow-misaligned-128store -o - | FileCheck %s --check-prefix=MISALIGNED --check-prefix=CHECK
+; RUN: llc < %s -mtriple=aarch64-unknown-unknown -mcpu=cyclone | FileCheck %s --check-prefix=CYCLONE --check-prefix=CHECK
+; RUN: llc < %s -mtriple=aarch64-eabi -mattr=-slow-misaligned-128store | FileCheck %s --check-prefix=MISALIGNED --check-prefix=CHECK
 
 @g0 = external global <3 x float>, align 16
 @g1 = external global <3 x float>, align 4
 
-; CHECK: ldr s[[R0:[0-9]+]], {{\[}}[[R1:x[0-9]+]]{{\]}}, #4
-; CHECK: ld1{{\.?s?}} { v[[R0]]{{\.?s?}} }[1], {{\[}}[[R1]]{{\]}}
+; CHECK: ldr q[[R0:[0-9]+]], {{\[}}[[R1:x[0-9]+]], :lo12:g0
 ; CHECK: str d[[R0]]
 
 define void @blam() {

@@ -14,9 +14,9 @@
 #ifndef LLVM_LIB_EXECUTIONENGINE_RUNTIMEDYLD_TARGETS_RUNTIMEDYLDCOFF86_64_H
 #define LLVM_LIB_EXECUTIONENGINE_RUNTIMEDYLD_TARGETS_RUNTIMEDYLDCOFF86_64_H
 
-#include "llvm/Object/COFF.h"
-#include "llvm/Support/COFF.h"
 #include "../RuntimeDyldCOFF.h"
+#include "llvm/BinaryFormat/COFF.h"
+#include "llvm/Object/COFF.h"
 
 #define DEBUG_TYPE "dyld"
 
@@ -33,7 +33,7 @@ private:
 
 public:
   RuntimeDyldCOFFX86_64(RuntimeDyld::MemoryManager &MM,
-                        RuntimeDyld::SymbolResolver &Resolver)
+                        JITSymbolResolver &Resolver)
     : RuntimeDyldCOFF(MM, Resolver) {}
 
   unsigned getMaxStubSize() override {
@@ -193,9 +193,6 @@ public:
       RegisteredEHFrameSections.push_back(EHFrameSID);
     }
     UnregisteredEHFrameSections.clear();
-  }
-  void deregisterEHFrames() override {
-    // Stub
   }
   Error finalizeLoad(const ObjectFile &Obj,
                      ObjSectionToIDMap &SectionMap) override {

@@ -65,7 +65,7 @@ public:
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &);
 
 private:
-  void BuildRankMap(Function &F);
+  void BuildRankMap(Function &F, ReversePostOrderTraversal<Function *> &RPOT);
   unsigned getRank(Value *V);
   void canonicalizeOperands(Instruction *I);
   void ReassociateExpression(BinaryOperator *I);
@@ -82,8 +82,6 @@ private:
   bool CombineXorOpnd(Instruction *I, reassociate::XorOpnd *Opnd1,
                       reassociate::XorOpnd *Opnd2, APInt &ConstOpnd,
                       Value *&Res);
-  bool collectMultiplyFactors(SmallVectorImpl<reassociate::ValueEntry> &Ops,
-                              SmallVectorImpl<reassociate::Factor> &Factors);
   Value *buildMinimalMultiplyDAG(IRBuilder<> &Builder,
                                  SmallVectorImpl<reassociate::Factor> &Factors);
   Value *OptimizeMul(BinaryOperator *I,

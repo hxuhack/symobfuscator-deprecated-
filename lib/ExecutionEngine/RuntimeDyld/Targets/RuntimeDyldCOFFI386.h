@@ -14,9 +14,9 @@
 #ifndef LLVM_LIB_EXECUTIONENGINE_RUNTIMEDYLD_TARGETS_RUNTIMEDYLDCOFFI386_H
 #define LLVM_LIB_EXECUTIONENGINE_RUNTIMEDYLD_TARGETS_RUNTIMEDYLDCOFFI386_H
 
-#include "llvm/Object/COFF.h"
-#include "llvm/Support/COFF.h"
 #include "../RuntimeDyldCOFF.h"
+#include "llvm/BinaryFormat/COFF.h"
+#include "llvm/Object/COFF.h"
 
 #define DEBUG_TYPE "dyld"
 
@@ -25,7 +25,7 @@ namespace llvm {
 class RuntimeDyldCOFFI386 : public RuntimeDyldCOFF {
 public:
   RuntimeDyldCOFFI386(RuntimeDyld::MemoryManager &MM,
-                      RuntimeDyld::SymbolResolver &Resolver)
+                      JITSymbolResolver &Resolver)
       : RuntimeDyldCOFF(MM, Resolver) {}
 
   unsigned getMaxStubSize() override {
@@ -217,7 +217,6 @@ public:
   }
 
   void registerEHFrames() override {}
-  void deregisterEHFrames() override {}
 };
 
 }

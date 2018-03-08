@@ -59,16 +59,20 @@ public:
     mips64,         // MIPS64: mips64
     mips64el,       // MIPS64EL: mips64el
     msp430,         // MSP430: msp430
+    nios2,          // NIOSII: nios2
     ppc,            // PPC: powerpc
     ppc64,          // PPC64: powerpc64, ppu
     ppc64le,        // PPC64LE: powerpc64le
     r600,           // R600: AMD GPUs HD2XXX - HD6XXX
     amdgcn,         // AMDGCN: AMD GCN GPUs
+    riscv32,        // RISC-V (32-bit): riscv32
+    riscv64,        // RISC-V (64-bit): riscv64
     sparc,          // Sparc: sparc
     sparcv9,        // Sparcv9: Sparcv9
     sparcel,        // Sparc: (endianness = little). NB: 'Sparcle' is a CPU variant
     systemz,        // SystemZ: s390x
     tce,            // TCE (http://tce.cs.tut.fi/): tce
+    tcele,          // TCE little endian (http://tce.cs.tut.fi/): tcele
     thumb,          // Thumb (little endian): thumb, thumbv.*
     thumbeb,        // Thumb (big endian): thumbeb
     x86,            // X86: i[3-9]86
@@ -99,6 +103,7 @@ public:
     ARMSubArch_v8_2a,
     ARMSubArch_v8_1a,
     ARMSubArch_v8,
+    ARMSubArch_v8r,
     ARMSubArch_v8m_baseline,
     ARMSubArch_v8m_mainline,
     ARMSubArch_v7,
@@ -106,6 +111,7 @@ public:
     ARMSubArch_v7m,
     ARMSubArch_v7s,
     ARMSubArch_v7k,
+    ARMSubArch_v7ve,
     ARMSubArch_v6,
     ARMSubArch_v6m,
     ARMSubArch_v6k,
@@ -135,15 +141,18 @@ public:
     Myriad,
     AMD,
     Mesa,
-    LastVendorType = Mesa
+    SUSE,
+    LastVendorType = SUSE
   };
   enum OSType {
     UnknownOS,
 
+    Ananas,
     CloudABI,
     Darwin,
     DragonFly,
     FreeBSD,
+    Fuchsia,
     IOS,
     KFreeBSD,
     Linux,
@@ -168,7 +177,8 @@ public:
     TvOS,       // Apple tvOS
     WatchOS,    // Apple watchOS
     Mesa3D,
-    LastOSType = Mesa3D
+    Contiki,
+    LastOSType = Contiki
   };
   enum EnvironmentType {
     UnknownEnvironment,
@@ -191,7 +201,8 @@ public:
     Cygnus,
     AMDOpenCL,
     CoreCLR,
-    LastEnvironmentType = CoreCLR
+    OpenCL,
+    LastEnvironmentType = OpenCL
   };
   enum ObjectFormatType {
     UnknownObjectFormat,
@@ -199,6 +210,7 @@ public:
     COFF,
     ELF,
     MachO,
+    Wasm,
   };
 
 private:
@@ -228,7 +240,9 @@ public:
 
   /// Default constructor is the same as an empty string and leaves all
   /// triple fields unknown.
-  Triple() : Data(), Arch(), Vendor(), OS(), Environment(), ObjectFormat() {}
+  Triple()
+      : Data(), Arch(), SubArch(), Vendor(), OS(), Environment(),
+        ObjectFormat() {}
 
   explicit Triple(const Twine &Str);
   Triple(const Twine &ArchStr, const Twine &VendorStr, const Twine &OSStr);
@@ -240,6 +254,10 @@ public:
            Vendor == Other.Vendor && OS == Other.OS &&
            Environment == Other.Environment &&
            ObjectFormat == Other.ObjectFormat;
+  }
+
+  bool operator!=(const Triple &Other) const {
+    return !(*this == Other);
   }
 
   /// @}
@@ -461,6 +479,10 @@ public:
     return getOS() == Triple::FreeBSD;
   }
 
+  bool isOSFuchsia() const {
+    return getOS() == Triple::Fuchsia;
+  }
+
   bool isOSDragonFly() const { return getOS() == Triple::DragonFly; }
 
   bool isOSSolaris() const {
@@ -480,6 +502,10 @@ public:
     return Env == Triple::GNU || Env == Triple::GNUABI64 ||
            Env == Triple::GNUEABI || Env == Triple::GNUEABIHF ||
            Env == Triple::GNUX32;
+  }
+
+  bool isOSContiki() const {
+    return getOS() == Triple::Contiki;
   }
 
   /// Checks if the environment could be MSVC.
@@ -543,7 +569,8 @@ public:
 
   /// Tests whether the OS uses glibc.
   bool isOSGlibc() const {
-    return getOS() == Triple::Linux || getOS() == Triple::KFreeBSD;
+    return (getOS() == Triple::Linux || getOS() == Triple::KFreeBSD) &&
+           !isAndroid();
   }
 
   /// Tests whether the OS uses the ELF binary format.
@@ -561,6 +588,11 @@ public:
     return getObjectFormat() == Triple::MachO;
   }
 
+  /// Tests whether the OS uses the Wasm binary format.
+  bool isOSBinFormatWasm() const {
+    return getObjectFormat() == Triple::Wasm;
+  }
+
   /// Tests whether the target is the PS4 CPU
   bool isPS4CPU() const {
     return getArch() == Triple::x86_64 &&
@@ -576,6 +608,19 @@ public:
 
   /// Tests whether the target is Android
   bool isAndroid() const { return getEnvironment() == Triple::Android; }
+
+  bool isAndroidVersionLT(unsigned Major) const {
+    assert(isAndroid() && "Not an Android triple!");
+
+    unsigned Env[3];
+    getEnvironmentVersion(Env[0], Env[1], Env[2]);
+
+    // 64-bit targets did not exist before API level 21 (Lollipop).
+    if (isArch64Bit() && Env[0] < 21)
+      Env[0] = 21;
+
+    return Env[0] < Major;
+  }
 
   /// Tests whether the environment is musl-libc
   bool isMusl() const {
@@ -685,12 +730,18 @@ public:
   /// \returns true if the triple is little endian, false otherwise.
   bool isLittleEndian() const;
 
+  /// Test whether target triples are compatible.
+  bool isCompatibleWith(const Triple &Other) const;
+
+  /// Merge target triples.
+  std::string merge(const Triple &Other) const;
+
   /// @}
   /// @name Static helpers for IDs.
   /// @{
 
   /// getArchTypeName - Get the canonical name for the \p Kind architecture.
-  static const char *getArchTypeName(ArchType Kind);
+  static StringRef getArchTypeName(ArchType Kind);
 
   /// getArchTypePrefix - Get the "prefix" canonical name for the \p Kind
   /// architecture. This is the prefix used by the architecture specific
@@ -698,17 +749,17 @@ public:
   /// Intrinsic::getIntrinsicForGCCBuiltin().
   ///
   /// \return - The architecture prefix, or 0 if none is defined.
-  static const char *getArchTypePrefix(ArchType Kind);
+  static StringRef getArchTypePrefix(ArchType Kind);
 
   /// getVendorTypeName - Get the canonical name for the \p Kind vendor.
-  static const char *getVendorTypeName(VendorType Kind);
+  static StringRef getVendorTypeName(VendorType Kind);
 
   /// getOSTypeName - Get the canonical name for the \p Kind operating system.
-  static const char *getOSTypeName(OSType Kind);
+  static StringRef getOSTypeName(OSType Kind);
 
   /// getEnvironmentTypeName - Get the canonical name for the \p Kind
   /// environment.
-  static const char *getEnvironmentTypeName(EnvironmentType Kind);
+  static StringRef getEnvironmentTypeName(EnvironmentType Kind);
 
   /// @}
   /// @name Static helpers for converting alternate architecture names.

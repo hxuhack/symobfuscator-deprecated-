@@ -11,13 +11,13 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm-c/TargetMachine.h"
 #include "llvm-c/Core.h"
 #include "llvm-c/Target.h"
+#include "llvm-c/TargetMachine.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/LegacyPassManager.h"
+#include "llvm/IR/Module.h"
 #include "llvm/Support/CodeGenCWrappers.h"
 #include "llvm/Support/FileSystem.h"
 #include "llvm/Support/FormattedStream.h"
@@ -59,9 +59,8 @@ LLVMTargetRef LLVMGetNextTarget(LLVMTargetRef T) {
 
 LLVMTargetRef LLVMGetTargetFromName(const char *Name) {
   StringRef NameRef = Name;
-  auto I = std::find_if(
-      TargetRegistry::targets().begin(), TargetRegistry::targets().end(),
-      [&](const Target &T) { return T.getName() == NameRef; });
+  auto I = find_if(TargetRegistry::targets(),
+                   [&](const Target &T) { return T.getName() == NameRef; });
   return I != TargetRegistry::targets().end() ? wrap(&*I) : nullptr;
 }
 
@@ -102,7 +101,7 @@ LLVMBool LLVMTargetHasAsmBackend(LLVMTargetRef T) {
 }
 
 LLVMTargetMachineRef LLVMCreateTargetMachine(LLVMTargetRef T,
-        const char* Triple, const char* CPU, const char* Features,
+        const char *Triple, const char *CPU, const char *Features,
         LLVMCodeGenOptLevel Level, LLVMRelocMode Reloc,
         LLVMCodeModel CodeModel) {
   Optional<Reloc::Model> RM;
@@ -140,7 +139,7 @@ LLVMTargetMachineRef LLVMCreateTargetMachine(LLVMTargetRef T,
 
   TargetOptions opt;
   return wrap(unwrap(T)->createTargetMachine(Triple, CPU, Features, opt, RM,
-    CM, OL));
+                                             CM, OL));
 }
 
 void LLVMDisposeTargetMachine(LLVMTargetMachineRef T) { delete unwrap(T); }

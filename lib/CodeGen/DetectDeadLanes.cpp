@@ -63,7 +63,7 @@ public:
   static char ID;
   DetectDeadLanes() : MachineFunctionPass(ID) {}
 
-  const char *getPassName() const override { return "Detect Dead Lanes"; }
+  StringRef getPassName() const override { return "Detect Dead Lanes"; }
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
@@ -132,8 +132,7 @@ private:
 char DetectDeadLanes::ID = 0;
 char &llvm::DetectDeadLanesID = DetectDeadLanes::ID;
 
-INITIALIZE_PASS(DetectDeadLanes, "detect-dead-lanes", "Detect Dead Lanes",
-                false, false)
+INITIALIZE_PASS(DetectDeadLanes, DEBUG_TYPE, "Detect Dead Lanes", false, false)
 
 /// Returns true if \p MI will get lowered to a series of COPY instructions.
 /// We call this a COPY-like instruction.
@@ -210,7 +209,7 @@ void DetectDeadLanes::addUsedLanesOnOperand(const MachineOperand &MO,
   VRegInfo &MORegInfo = VRegInfos[MORegIdx];
   LaneBitmask PrevUsedLanes = MORegInfo.UsedLanes;
   // Any change at all?
-  if ((UsedLanes & ~PrevUsedLanes) == 0)
+  if ((UsedLanes & ~PrevUsedLanes).none())
     return;
 
   // Set UsedLanes and remember instruction for further propagation.
@@ -303,7 +302,7 @@ void DetectDeadLanes::transferDefinedLanesStep(const MachineOperand &Use,
   VRegInfo &RegInfo = VRegInfos[DefRegIdx];
   LaneBitmask PrevDefinedLanes = RegInfo.DefinedLanes;
   // Any change at all?
-  if ((DefinedLanes & ~PrevDefinedLanes) == 0)
+  if ((DefinedLanes & ~PrevDefinedLanes).none())
     return;
 
   RegInfo.DefinedLanes = PrevDefinedLanes | DefinedLanes;
@@ -356,7 +355,7 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
   // Live-In or unused registers have no definition but are considered fully
   // defined.
   if (!MRI->hasOneDef(Reg))
-    return ~0u;
+    return LaneBitmask::getAll();
 
   const MachineOperand &Def = *MRI->def_begin(Reg);
   const MachineInstr &DefMI = *Def.getParent();
@@ -368,7 +367,7 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
     PutInWorklist(RegIdx);
 
     if (Def.isDead())
-      return 0;
+      return LaneBitmask::getNone();
 
     // COPY/PHI can copy across unrelated register classes (example: float/int)
     // with incompatible subregister structure. Do not include these in the
@@ -376,7 +375,7 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
     const TargetRegisterClass *DefRC = MRI->getRegClass(Reg);
 
     // Determine initially DefinedLanes.
-    LaneBitmask DefinedLanes = 0;
+    LaneBitmask DefinedLanes;
     for (const MachineOperand &MO : DefMI.uses()) {
       if (!MO.isReg() || !MO.readsReg())
         continue;
@@ -386,9 +385,9 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
 
       LaneBitmask MODefinedLanes;
       if (TargetRegisterInfo::isPhysicalRegister(MOReg)) {
-        MODefinedLanes = ~0u;
+        MODefinedLanes = LaneBitmask::getAll();
       } else if (isCrossCopy(*MRI, DefMI, DefRC, MO)) {
-        MODefinedLanes = ~0u;
+        MODefinedLanes = LaneBitmask::getAll();
       } else {
         assert(TargetRegisterInfo::isVirtualRegister(MOReg));
         if (MRI->hasOneDef(MOReg)) {
@@ -410,7 +409,7 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
     return DefinedLanes;
   }
   if (DefMI.isImplicitDef() || Def.isDead())
-    return 0;
+    return LaneBitmask::getNone();
 
   assert(Def.getSubReg() == 0 &&
          "Should not have subregister defs in machine SSA phase");
@@ -418,7 +417,7 @@ LaneBitmask DetectDeadLanes::determineInitialDefinedLanes(unsigned Reg) {
 }
 
 LaneBitmask DetectDeadLanes::determineInitialUsedLanes(unsigned Reg) {
-  LaneBitmask UsedLanes = 0;
+  LaneBitmask UsedLanes = LaneBitmask::getNone();
   for (const MachineOperand &MO : MRI->use_nodbg_operands(Reg)) {
     if (!MO.readsReg())
       continue;
@@ -441,7 +440,7 @@ LaneBitmask DetectDeadLanes::determineInitialUsedLanes(unsigned Reg) {
           const TargetRegisterClass *DstRC = MRI->getRegClass(DefReg);
           CrossCopy = isCrossCopy(*MRI, UseMI, DstRC, MO);
           if (CrossCopy)
-            DEBUG(dbgs() << "Copy accross incompatible classes: " << UseMI);
+            DEBUG(dbgs() << "Copy across incompatible classes: " << UseMI);
         }
 
         if (!CrossCopy)
@@ -462,7 +461,7 @@ bool DetectDeadLanes::isUndefRegAtInput(const MachineOperand &MO,
                                         const VRegInfo &RegInfo) const {
   unsigned SubReg = MO.getSubReg();
   LaneBitmask Mask = TRI->getSubRegIndexLaneMask(SubReg);
-  return (RegInfo.DefinedLanes & RegInfo.UsedLanes & Mask) == 0;
+  return (RegInfo.DefinedLanes & RegInfo.UsedLanes & Mask).none();
 }
 
 bool DetectDeadLanes::isUndefInput(const MachineOperand &MO,
@@ -482,7 +481,7 @@ bool DetectDeadLanes::isUndefInput(const MachineOperand &MO,
 
   const VRegInfo &DefRegInfo = VRegInfos[DefRegIdx];
   LaneBitmask UsedLanes = transferUsedLanes(MI, DefRegInfo.UsedLanes, MO);
-  if (UsedLanes != 0)
+  if (UsedLanes.any())
     return false;
 
   unsigned MOReg = MO.getReg();
@@ -546,7 +545,7 @@ bool DetectDeadLanes::runOnce(MachineFunction &MF) {
           continue;
         unsigned RegIdx = TargetRegisterInfo::virtReg2Index(Reg);
         const VRegInfo &RegInfo = VRegInfos[RegIdx];
-        if (MO.isDef() && !MO.isDead() && RegInfo.UsedLanes == 0) {
+        if (MO.isDef() && !MO.isDead() && RegInfo.UsedLanes.none()) {
           DEBUG(dbgs() << "Marking operand '" << MO << "' as dead in " << MI);
           MO.setIsDead();
         }
@@ -577,12 +576,12 @@ bool DetectDeadLanes::runOnMachineFunction(MachineFunction &MF) {
   // register coalescer cannot deal with hidden dead defs. However without
   // subregister liveness enabled, the expected benefits of this pass are small
   // so we safe the compile time.
-  if (!MF.getSubtarget().enableSubRegLiveness()) {
+  MRI = &MF.getRegInfo();
+  if (!MRI->subRegLivenessEnabled()) {
     DEBUG(dbgs() << "Skipping Detect dead lanes pass\n");
     return false;
   }
 
-  MRI = &MF.getRegInfo();
   TRI = MRI->getTargetRegisterInfo();
 
   unsigned NumVirtRegs = MRI->getNumVirtRegs();

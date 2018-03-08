@@ -1,6 +1,6 @@
-=======================
-Clang 3.9 Release Notes
-=======================
+=========================
+Clang 5.0.0 Release Notes
+=========================
 
 .. contents::
    :local:
@@ -12,7 +12,7 @@ Introduction
 ============
 
 This document contains the release notes for the Clang C/C++/Objective-C
-frontend, part of the LLVM Compiler Infrastructure, release 3.9. Here we
+frontend, part of the LLVM Compiler Infrastructure, release 5.0.0. Here we
 describe the status of Clang in some detail, including major
 improvements from the previous release and new feature work. For the
 general LLVM release notes, see `the LLVM
@@ -20,13 +20,12 @@ documentation <http://llvm.org/docs/ReleaseNotes.html>`_. All LLVM
 releases may be downloaded from the `LLVM releases web
 site <http://llvm.org/releases/>`_.
 
-For more information about Clang or LLVM, including information about
-the latest release, please check out the main please see the `Clang Web
-Site <http://clang.llvm.org>`_ or the `LLVM Web
-Site <http://llvm.org>`_.
+For more information about Clang or LLVM, including information about the
+latest release, please see the `Clang Web Site <http://clang.llvm.org>`_ or the
+`LLVM Web Site <http://llvm.org>`_.
 
-What's New in Clang 3.9?
-========================
+What's New in Clang 5.0.0?
+==========================
 
 Some of the major new features and improvements to Clang are listed
 here. Generic improvements to Clang as a whole or to its underlying
@@ -36,223 +35,326 @@ sections with improvements to Clang's support for those languages.
 Major New Features
 ------------------
 
-- Clang will no longer pass ``--build-id`` by default to the linker. In modern
-  linkers that is a relatively expensive option. It can be passed explicitly
-  with ``-Wl,--build-id``. To have clang always pass it, build clang with
-  ``-DENABLE_LINKER_BUILD_ID``.
-- On Itanium ABI targets, attribute abi_tag is now supported for compatibility
-  with GCC. Clang's implementation of abi_tag is mostly compatible with GCC ABI
-  version 10.
+C++ coroutines
+^^^^^^^^^^^^^^
+`C++ coroutines TS
+<http://open-std.org/jtc1/sc22/wg21/docs/papers/2017/n4680.pdf>`_
+implementation has landed. Use ``-fcoroutines-ts -stdlib=libc++`` to enable
+coroutine support. Here is `an example
+<https://wandbox.org/permlink/Dth1IO5q8Oe31ew2>`_ to get you started.
+
 
 Improvements to Clang's diagnostics
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Clang's diagnostics are constantly being improved to catch more issues,
-explain them more clearly, and provide more accurate source information
-about them. The improvements since the 3.8 release include:
+-  ``-Wcast-qual`` was implemented for C++. C-style casts are now properly
+   diagnosed.
 
-- ``-Wcomma`` is a new warning to show most uses of the builtin comma operator.
+-  ``-Wunused-lambda-capture`` warns when a variable explicitly captured
+   by a lambda is not used in the body of the lambda.
 
-- ``-Wfloat-conversion`` has two new sub-warnings to give finer grain control for
-  floating point to integer conversion warnings.
+-  ``-Wstrict-prototypes`` is a new warning that warns about non-prototype
+   function and block declarations and types in C and Objective-C.
 
-  - ``-Wfloat-overflow-conversion`` detects when a constant floating point value
-    is converted to an integer type and will overflow the target type.
+-  ``-Wunguarded-availability`` is a new warning that warns about uses of new
+   APIs that were introduced in a system whose version is newer than the
+   deployment target version. A new Objective-C expression ``@available`` has
+   been introduced to perform system version checking at runtime. This warning
+   is off by default to prevent unexpected warnings in existing projects.
+   However, its less strict sibling ``-Wunguarded-availability-new`` is on by
+   default. It warns about unguarded uses of APIs only when they were introduced
+   in or after macOS 10.13, iOS 11, tvOS 11 or watchOS 4.
 
-  - ``-Wfloat-zero-conversion`` detects when a non-zero floating point value is
-    converted to a zero integer value.
+-  The ``-Wdocumentation`` warning now allows the use of ``\param`` and
+   ``\returns`` documentation directives in the documentation comments for
+   declarations with a function or a block pointer type.
+
+-  The compiler no longer warns about unreachable ``__builtin_unreachable``
+   statements.
+
+New Compiler Flags
+------------------
+
+- ``--autocomplete`` was implemented to obtain a list of flags and its arguments.
+  This is used for shell autocompletion.
+
+Deprecated Compiler Flags
+-------------------------
+
+The following options are deprecated and ignored. They will be removed in
+future versions of Clang.
+
+- ``-fslp-vectorize-aggressive`` used to enable the BB vectorizing pass. They have been superseeded
+  by the normal SLP vectorizer.
+- ``-fno-slp-vectorize-aggressive`` used to be the default behavior of clang.
+
+New Pragmas in Clang
+-----------------------
+
+- Clang now supports the ``clang attribute`` pragma that allows users to apply
+  an attribute to multiple declarations.
+
+- ``pragma pack`` directives that are included in a precompiled header are now
+  applied correctly to the declarations in the compilation unit that includes
+  that precompiled header.
 
 Attribute Changes in Clang
 --------------------------
 
-- The ``nodebug`` attribute may now be applied to static, global, and local
-  variables (but not parameters or non-static data members). This will suppress
-  all debugging information for the variable (and its type, if there are no
-  other uses of the type).
-
-
-Windows Support
----------------
-
-TLS is enabled for Cygwin and defaults to -femulated-tls.
-
-Proper support, including correct mangling and overloading, added for
-MS-specific "__unaligned" type qualifier.
-
-clang-cl now has limited support for the precompiled header flags /Yc, /Yu, and
-/Fp.  If the precompiled header is passed on the compile command with /FI, then
-the precompiled header flags are honored.  But if the precompiled header is
-included by an ``#include <stdafx.h>`` in each source file instead of by a
-``/FIstdafx.h`` flag, these flag continue to be ignored.
-
-clang-cl has a new flag, ``/imsvc <dir>``, for adding a directory to the system
-include search path (where warnings are disabled by default) without having to
-set ``%INCLUDE%``.
+-  The ``overloadable`` attribute now allows at most one function with a given
+   name to lack the ``overloadable`` attribute. This unmarked function will not
+   have its name mangled.
+-  The ``ms_abi`` attribute and the ``__builtin_ms_va_list`` types and builtins
+   are now supported on AArch64.
 
 C Language Changes in Clang
 ---------------------------
-The -faltivec and -maltivec flags no longer silently include altivec.h on Power platforms.
 
-`RenderScript
-<https://developer.android.com/guide/topics/renderscript/compute.html>`_
-support has been added to the frontend and enabled by the '-x renderscript'
-option or the '.rs' file extension.
+- Added near complete support for implicit scalar to vector conversion, a GNU
+  C/C++ language extension. With this extension, the following code is
+  considered valid:
+
+.. code-block:: c
+
+    typedef unsigned v4i32 __attribute__((vector_size(16)));
+
+    v4i32 foo(v4i32 a) {
+      // Here 5 is implicitly casted to an unsigned value and replicated into a
+      // vector with as many elements as 'a'.
+      return a + 5;
+    }
+
+The implicit conversion of a scalar value to a vector value--in the context of
+a vector expression--occurs when:
+
+- The type of the vector is that of a ``__attribute__((vector_size(size)))``
+  vector, not an OpenCL ``__attribute__((ext_vector_type(size)))`` vector type.
+
+- The scalar value can be casted to that of the vector element's type without
+  the loss of precision based on the type of the scalar and the type of the
+  vector's elements.
+
+- For compile time constant values, the above rule is weakened to consider the
+  value of the scalar constant rather than the constant's type. However,
+  for compatibility with GCC, floating point constants with precise integral
+  representations are not implicitly converted to integer values.
+
+Currently the basic integer and floating point types with the following
+operators are supported: ``+``, ``/``, ``-``, ``*``, ``%``, ``>``, ``<``,
+``>=``, ``<=``, ``==``, ``!=``, ``&``, ``|``, ``^`` and the corresponding
+assignment operators where applicable.
 
 
 C++ Language Changes in Clang
 -----------------------------
 
-- Clang now enforces the rule that a *using-declaration* cannot name an enumerator of a
-  scoped enumeration.
+- We expect this to be the last Clang release that defaults to ``-std=gnu++98``
+  when using the GCC-compatible ``clang++`` driver. From Clang 6 onwards we
+  expect to use ``-std=gnu++14`` or a later standard by default, to match the
+  behavior of recent GCC releases. Users are encouraged to change their build
+  files to explicitly specify their desired C++ standard.
 
-  .. code-block:: c++
+- Support for the C++17 standard has been completed. This mode can be enabled
+  using ``-std=c++17`` (the old flag ``-std=c++1z`` is still supported for
+  compatibility).
 
-    namespace Foo { enum class E { e }; }
-    namespace Bar {
-      using Foo::E::e; // error
-      constexpr auto e = Foo::E::e; // ok
-    }
+- When targeting a platform that uses the Itanium C++ ABI, Clang implements a
+  `recent change to the ABI`__ that passes objects of class type indirectly if they
+  have a non-trivial move constructor. Previous versions of Clang only
+  considered the copy constructor, resulting in an ABI change in rare cases,
+  but GCC has already implemented this change for several releases.
+  This affects all targets other than Windows and PS4. You can opt out of this
+  ABI change with ``-fclang-abi-compat=4.0``.
 
-- Clang now enforces the rule that an enumerator of an unscoped enumeration declared at
-  class scope can only be named by a *using-declaration* in a derived class.
+- As mentioned in `C Language Changes in Clang`_, Clang's support for
+  implicit scalar to vector conversions also applies to C++. Additionally
+  the following operators are also supported: ``&&`` and ``||``.
 
-  .. code-block:: c++
+.. __: https://github.com/itanium-cxx-abi/cxx-abi/commit/7099637aba11fed6bdad7ee65bf4fd3f97fbf076
 
-    class Foo { enum E { e }; }
-    using Foo::e; // error
-    static constexpr auto e = Foo::e; // ok
+Objective-C Language Changes in Clang
+-------------------------------------
 
+- Clang now guarantees that a ``readwrite`` property is synthesized when an
+  ambiguous property (i.e. a property that's declared in multiple protocols)
+  is synthesized. The ``-Wprotocol-property-synthesis-ambiguity`` warning that
+  warns about incompatible property types is now promoted to an error when
+  there's an ambiguity between ``readwrite`` and ``readonly`` properties.
 
-C++1z Feature Support
-^^^^^^^^^^^^^^^^^^^^^
-
-Clang's experimental support for the upcoming C++1z standard can be enabled with ``-std=c++1z``.
-Changes to C++1z features since Clang 3.8:
-
-- The ``[[fallthrough]]``, ``[[nodiscard]]``, and ``[[maybe_unused]]`` attributes are
-  supported in C++11 onwards, and are largely synonymous with Clang's existing attributes
-  ``[[clang::fallthrough]]``, ``[[gnu::warn_unused_result]]``, and ``[[gnu::unused]]``.
-  Use ``-Wimplicit-fallthrough`` to warn on unannotated fallthrough within ``switch``
-  statements.
-
-- In C++1z mode, aggregate initialization can be performed for classes with base classes:
-
-  .. code-block:: c++
-
-    struct A { int n; };
-    struct B : A { int x, y; };
-    B b = { 1, 2, 3 }; // b.n == 1, b.x == 2, b.y == 3
-
-- The range in a range-based ``for`` statement can have different types for its ``begin``
-  and ``end`` iterators. This is permitted as an extension in C++11 onwards.
-
-- Lambda-expressions can explicitly capture ``*this`` (to capture the surrounding object
-  by copy). This is permitted as an extension in C++11 onwards.
-
-- Objects of enumeration type can be direct-list-initialized from a value of the underlying
-  type. ``E{n}`` is equivalent to ``E(n)``, except that it implies a check for a narrowing
-  conversion.
-
-- Unary *fold-expression*\s over an empty pack are now rejected for all operators
-  other than ``&&``, ``||``, and ``,``.
+- Clang now prohibits synthesis of ambiguous properties with incompatible
+  explicit property attributes. The following property attributes are
+  checked for differences: ``copy``, ``retain``/``strong``, ``atomic``,
+  ``getter`` and ``setter``.
 
 OpenCL C Language Changes in Clang
 ----------------------------------
 
-Clang now has support for all OpenCL 2.0 features.  In particular, the following
-features have been completed since the previous release:
+Various bug fixes and improvements:
 
-- Pipe builtin functions (s6.13.16.2-4).
-- Dynamic parallelism support via the ``enqueue_kernel`` Clang builtin function,
-  as well as the kernel query functions from s6.13.17.6. 
-- Address space conversion functions ``to_{global/local/private}``.
-- ``nosvm`` attribute support.
-- Improved diagnostic and generation of Clang Blocks used in OpenCL kernel code.
-- ``opencl_unroll_hint`` pragma.
+-  Extended OpenCL-related Clang tests.
 
-Several miscellaneous improvements have been made:
+-  Improved diagnostics across several areas: scoped address space
+   qualified variables, function pointers, atomics, type rank for overloading,
+   block captures, ``reserve_id_t``.
 
-- Supported extensions are now part of the target representation to give correct
-  diagnostics for unsupported target features during compilation. For example,
-  when compiling for a target that does not support the double precision
-  floating point extension, Clang will give an error when encountering the
-  ``cl_khr_fp64`` pragma. Several missing extensions were added covering up to
-  and including OpenCL 2.0.
-- Clang now comes with the OpenCL standard headers declaring builtin types and
-  functions up to and including OpenCL 2.0 in ``lib/Headers/opencl-c.h``. By
-  default, Clang will not include this header. It can be included either using
-  the regular ``-I<path to header location>`` directive or (if the default one
-  from installation is to be used) using the ``-finclude-default-header``
-  frontend flag.
+-  Several address space related fixes for constant address space function scope variables,
+   IR generation, mangling of ``generic`` and alloca (post-fix from general Clang
+   refactoring of address spaces).
 
-  Example:
+-  Several improvements in extensions: fixed OpenCL version for ``cl_khr_mipmap_image``,
+   added missing ``cl_khr_3d_image_writes``.
 
-  .. code-block:: none
+-  Improvements in ``enqueue_kernel``, especially the implementation of ``ndrange_t`` and blocks.
 
-    echo "bool is_wg_uniform(int i){return get_enqueued_local_size(i)==get_local_size(i);}" > test.cl
-    clang -cc1 -finclude-default-header -cl-std=CL2.0 test.cl
+-  OpenCL type related fixes: global samplers, the ``pipe_t`` size, internal type redefinition,
+   and type compatibility checking in ternary and other operations.
 
-  All builtin function declarations from OpenCL 2.0 will be automatically
-  visible in test.cl.
-- Image types have been improved with better diagnostics for access qualifiers.
-  Images with one access qualifier type cannot be used in declarations for
-  another type. Also qualifiers are now propagated from the frontend down to
-  libraries and backends.
-- Diagnostic improvements for OpenCL types, address spaces and vectors.
-- Half type literal support has been added. For example, ``1.0h`` represents a
-  floating point literal in half precision, i.e., the value ``0xH3C00``.
-- The Clang driver now accepts OpenCL compiler options ``-cl-*`` (following the
-  OpenCL Spec v1.1-1.2 s5.8). For example, the ``-cl-std=CL1.2`` option from the
-  spec enables compilation for OpenCL 1.2, or ``-cl-mad-enable`` will enable
-  fusing multiply-and-add operations.
-- Clang now uses function metadata instead of module metadata to propagate
-  information related to OpenCL kernels e.g. kernel argument information.
+-  The OpenCL header has been extended with missing extension guards, and direct mapping of ``as_type``
+   to ``__builtin_astype``.
 
-OpenMP Support in Clang
-----------------------------------
+-  Fixed ``kernel_arg_type_qual`` and OpenCL/SPIR version in metadata.
 
-Added support for all non-offloading features from OpenMP 4.5, including using
-data members in private clauses of non-static member functions. Additionally,
-data members can be used as loop control variables in loop-based directives.
+-  Added proper use of the kernel calling convention to various targets.
 
-Currently Clang supports OpenMP 3.1 and all non-offloading features of
-OpenMP 4.0/4.5. Offloading features are under development. Clang defines macro
-_OPENMP and sets it to OpenMP 3.1 (in accordance with OpenMP standard) by
-default. User may change this value using ``-fopenmp-version=[31|40|45]`` option.
+The following new functionalities have been added:
 
-The codegen for OpenMP constructs was significantly improved to produce much
-more stable and faster code.
+-  Added documentation on OpenCL to Clang user manual.
 
-AST Matchers
+-  Extended Clang builtins with required ``cl_khr_subgroups`` support.
+
+-  Add ``intel_reqd_sub_group_size`` attribute support.
+
+-  Added OpenCL types to ``CIndex``.
+
+
+clang-format
 ------------
 
-- has and hasAnyArgument: Matchers no longer ignore parentheses and implicit
-  casts on the argument before applying the inner matcher. The fix was done to
-  allow for greater control by the user. In all existing checkers that use this
-  matcher all instances of code ``hasAnyArgument(<inner matcher>)`` or
-  ``has(<inner matcher>)`` must be changed to
-  ``hasAnyArgument(ignoringParenImpCasts(<inner matcher>))`` or
-  ``has(ignoringParenImpCasts(<inner matcher>))``.
+* Option **BreakBeforeInheritanceComma** added to break before ``:`` and ``,``  in case of
+  multiple inheritance in a class declaration. Enabled by default in the Mozilla coding style.
+
+  +---------------------+----------------------------------------+
+  | true                | false                                  |
+  +=====================+========================================+
+  | .. code-block:: c++ | .. code-block:: c++                    |
+  |                     |                                        |
+  |   class MyClass     |   class MyClass : public X, public Y { |
+  |       : public X    |   };                                   |
+  |       , public Y {  |                                        |
+  |   };                |                                        |
+  +---------------------+----------------------------------------+
+
+* Align block comment decorations.
+
+  +----------------------+---------------------+
+  | Before               | After               |
+  +======================+=====================+
+  |  .. code-block:: c++ | .. code-block:: c++ |
+  |                      |                     |
+  |    /* line 1         |   /* line 1         |
+  |      * line 2        |    * line 2         |
+  |     */               |    */               |
+  +----------------------+---------------------+
+
+* The :doc:`ClangFormatStyleOptions` documentation provides detailed examples for most options.
+
+* Namespace end comments are now added or updated automatically.
+
+  +---------------------+---------------------+
+  | Before              | After               |
+  +=====================+=====================+
+  | .. code-block:: c++ | .. code-block:: c++ |
+  |                     |                     |
+  |   namespace A {     |   namespace A {     |
+  |   int i;            |   int i;            |
+  |   int j;            |   int j;            |
+  |   }                 |   } // namespace A  |
+  +---------------------+---------------------+
+
+* Comment reflow support added. Overly long comment lines will now be reflown with the rest of
+  the paragraph instead of just broken. Option **ReflowComments** added and enabled by default.
+
+libclang
+--------
+
+- Libclang now provides code-completion results for more C++ constructs
+  and keywords. The following keywords/identifiers are now included in the
+  code-completion results: ``static_assert``, ``alignas``, ``constexpr``,
+  ``final``, ``noexcept``, ``override`` and ``thread_local``.
+
+- Libclang now provides code-completion results for members from dependent
+  classes. For example:
+
+  .. code-block:: c++
+
+    template<typename T>
+    void appendValue(std::vector<T> &dest, const T &value) {
+        dest. // Relevant completion results are now shown after '.'
+    }
+
+  Note that code-completion results are still not provided when the member
+  expression includes a dependent base expression. For example:
+
+  .. code-block:: c++
+
+    template<typename T>
+    void appendValue(std::vector<std::vector<T>> &dest, const T &value) {
+        dest.at(0). // Libclang fails to provide completion results after '.'
+    }
 
 Static Analyzer
 ---------------
 
-The analyzer now checks for incorrect usage of MPI APIs in C and C++. This
-check can be enabled by passing the following command to scan-build:
-``-enable-checker optin.mpi.MPI-Checker.``
+- The static analyzer now supports using the
+  `z3 theorem prover <https://github.com/z3prover/z3>`_ from Microsoft Research
+  as an external constraint solver. This allows reasoning over more complex
+  queries, but performance is ~15x slower than the default range-based
+  constraint solver. To enable the z3 solver backend, clang must be built with
+  the ``CLANG_ANALYZER_BUILD_Z3=ON`` option, and the
+  ``-Xanalyzer -analyzer-constraints=z3`` arguments passed at runtime.
 
-The analyzer now checks for improper instance cleanup up in Objective-C
-``-dealloc`` methods under manual retain/release.
+Undefined Behavior Sanitizer (UBSan)
+------------------------------------
 
-On Windows, checks for memory leaks, double frees, and use-after-free problems
-are now enabled by default.
+- The Undefined Behavior Sanitizer has a new check for pointer overflow. This
+  check is on by default. The flag to control this functionality is
+  ``-fsanitize=pointer-overflow``.
 
-The analyzer now includes scan-build-py, an experimental reimplementation of
-scan-build in Python that also creates compilation databases.
+  Pointer overflow is an indicator of undefined behavior: when a pointer
+  indexing expression wraps around the address space, or produces other
+  unexpected results, its result may not point to a valid object.
 
-The scan-build tool now supports a ``--force-analyze-debug-code`` flag that
-forces projects to analyze in debug mode. This flag leaves in assertions and so
-typically results in fewer false positives.
+- UBSan has several new checks which detect violations of nullability
+  annotations. These checks are off by default. The flag to control this group
+  of checks is ``-fsanitize=nullability``. The checks can be individially enabled
+  by ``-fsanitize=nullability-arg`` (which checks calls),
+  ``-fsanitize=nullability-assign`` (which checks assignments), and
+  ``-fsanitize=nullability-return`` (which checks return statements).
+
+- UBSan can now detect invalid loads from bitfields and from ObjC BOOLs.
+
+- UBSan can now avoid emitting unnecessary type checks in C++ class methods and
+  in several other cases where the result is known at compile-time. UBSan can
+  also avoid emitting unnecessary overflow checks in arithmetic expressions
+  with promoted integer operands.
+
+
+Python Binding Changes
+----------------------
+
+Python bindings now support both Python 2 and Python 3.
+
+The following methods have been added:
+
+- ``is_scoped_enum`` has been added to ``Cursor``.
+
+- ``exception_specification_kind`` has been added to ``Cursor``.
+
+- ``get_address_space`` has been added to ``Type``.
+
+- ``get_typedef_name`` has been added to ``Type``.
+
+- ``get_exception_specification_kind`` has been added to ``Type``.
 
 
 Additional Information

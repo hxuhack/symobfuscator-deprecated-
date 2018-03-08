@@ -114,7 +114,7 @@ static bool IsAcceptableTarget(Instruction *Inst, BasicBlock *SuccToSinkTo,
   if (SuccToSinkTo->getUniquePredecessor() != Inst->getParent()) {
     // We cannot sink a load across a critical edge - there may be stores in
     // other code paths.
-    if (!isSafeToSpeculativelyExecute(Inst))
+    if (isa<LoadInst>(Inst))
       return false;
 
     // We don't want to sink across a critical edge if we don't dominate the
@@ -164,13 +164,14 @@ static bool SinkInstruction(Instruction *Inst,
 
   // Instructions can only be sunk if all their uses are in blocks
   // dominated by one of the successors.
-  // Look at all the postdominators and see if we can sink it in one.
+  // Look at all the dominated blocks and see if we can sink it in one.
   DomTreeNode *DTN = DT.getNode(Inst->getParent());
   for (DomTreeNode::iterator I = DTN->begin(), E = DTN->end();
       I != E && SuccToSinkTo == nullptr; ++I) {
     BasicBlock *Candidate = (*I)->getBlock();
-    if ((*I)->getIDom()->getBlock() == Inst->getParent() &&
-        IsAcceptableTarget(Inst, Candidate, DT, LI))
+    // A node always immediate-dominates its children on the dominator
+    // tree.
+    if (IsAcceptableTarget(Inst, Candidate, DT, LI))
       SuccToSinkTo = Candidate;
   }
 
@@ -254,7 +255,7 @@ static bool iterativelySinkInstructions(Function &F, DominatorTree &DT,
   return EverMadeChange;
 }
 
-PreservedAnalyses SinkingPass::run(Function &F, AnalysisManager<Function> &AM) {
+PreservedAnalyses SinkingPass::run(Function &F, FunctionAnalysisManager &AM) {
   auto &DT = AM.getResult<DominatorTreeAnalysis>(F);
   auto &LI = AM.getResult<LoopAnalysis>(F);
   auto &AA = AM.getResult<AAManager>(F);
@@ -262,9 +263,8 @@ PreservedAnalyses SinkingPass::run(Function &F, AnalysisManager<Function> &AM) {
   if (!iterativelySinkInstructions(F, DT, LI, AA))
     return PreservedAnalyses::all();
 
-  auto PA = PreservedAnalyses();
-  PA.preserve<DominatorTreeAnalysis>();
-  PA.preserve<LoopAnalysis>();
+  PreservedAnalyses PA;
+  PA.preserveSet<CFGAnalyses>();
   return PA;
 }
 

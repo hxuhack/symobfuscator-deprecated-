@@ -1,4 +1,4 @@
-; RUN: llc -march=arm64 < %s | FileCheck %s
+; RUN: llc -mtriple=arm64-eabi < %s | FileCheck %s
 ; rdar://10232252
 
 @object = external hidden global i64, section "__DATA, __objc_ivar", align 8
@@ -112,8 +112,8 @@ define void @t10(i64 %a) {
 
 define void @t11(i64 %a) {
 ; CHECK-LABEL: t11:
-; CHECK: mov w[[NUM:[0-9]+]], #19070976
-; CHECK: movk w[[NUM:[0-9]+]], #17767
+; CHECK: mov w[[NUM:[0-9]+]], #17767
+; CHECK: movk w[[NUM:[0-9]+]], #291
 ; CHECK-NEXT: ldr xzr, [x0, x[[NUM]]]
   %1 = add i64 %a, 19088743   ;0x1234567
   %2 = inttoptr i64 %1 to i64*

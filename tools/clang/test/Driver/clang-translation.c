@@ -11,18 +11,35 @@
 // I386: "hidden"
 // I386: "-o"
 // I386: clang-translation
+
 // RUN: %clang -target i386-apple-darwin9 -### -S %s -o %t.s 2>&1 | \
+// RUN: FileCheck -check-prefix=YONAH %s
+// RUN: %clang -target i386-apple-macosx10.11 -### -S %s -o %t.s 2>&1 | \
 // RUN: FileCheck -check-prefix=YONAH %s
 // YONAH: "-target-cpu"
 // YONAH: "yonah"
+
 // RUN: %clang -target x86_64-apple-darwin9 -### -S %s -o %t.s 2>&1 | \
+// RUN: FileCheck -check-prefix=CORE2 %s
+// RUN: %clang -target x86_64-apple-macosx10.11 -### -S %s -o %t.s 2>&1 | \
 // RUN: FileCheck -check-prefix=CORE2 %s
 // CORE2: "-target-cpu"
 // CORE2: "core2"
+
 // RUN: %clang -target x86_64h-apple-darwin -### -S %s -o %t.s 2>&1 | \
+// RUN: FileCheck -check-prefix=AVX2 %s
+// RUN: %clang -target x86_64h-apple-macosx10.12 -### -S %s -o %t.s 2>&1 | \
 // RUN: FileCheck -check-prefix=AVX2 %s
 // AVX2: "-target-cpu"
 // AVX2: "core-avx2"
+
+// RUN: %clang -target i386-apple-macosx10.12 -### -S %s -o %t.s 2>&1 | \
+// RUN: FileCheck -check-prefix=PENRYN %s
+// RUN: %clang -target x86_64-apple-macosx10.12 -### -S %s -o %t.s 2>&1 | \
+// RUN: FileCheck -check-prefix=PENRYN %s
+// PENRYN: "-target-cpu"
+// PENRYN: "penryn"
+
 
 // RUN: %clang -target x86_64-apple-darwin10 -### -S %s -arch armv7 2>&1 | \
 // RUN: FileCheck -check-prefix=ARMV7_DEFAULT %s
@@ -51,6 +68,18 @@
 // ARMV7_HARDFLOAT: "-mfloat-abi" "hard"
 // ARMV7_HARDFLOAT-NOT: "-msoft-float"
 // ARMV7_HARDFLOAT: "-x" "c"
+
+// RUN: %clang -target arm64-apple-ios10 -### -S %s -arch arm64 2>&1 | \
+// RUN: FileCheck -check-prefix=ARM64-APPLE %s
+// ARM64-APPLE: -munwind-table
+
+// RUN: %clang -target arm64-apple-ios10 -fno-exceptions -### -S %s -arch arm64 2>&1 | \
+// RUN: FileCheck -check-prefix=ARM64-APPLE-EXCEP %s
+// ARM64-APPLE-EXCEP-NOT: -munwind-table
+
+// RUN: %clang -target armv7k-apple-watchos4.0 -### -S %s -arch armv7k 2>&1 | \
+// RUN: FileCheck -check-prefix=ARMV7K-APPLE %s
+// ARMV7K-APPLE: -munwind-table
 
 // RUN: %clang -target arm-linux -### -S %s -march=armv5e 2>&1 | \
 // RUN: FileCheck -check-prefix=ARMV5E %s

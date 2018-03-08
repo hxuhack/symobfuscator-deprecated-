@@ -16,11 +16,13 @@
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
-#include "llvm/LibDriver/LibDriver.h"
+#include "llvm/ToolDrivers/llvm-dlltool/DlltoolDriver.h"
+#include "llvm/ToolDrivers/llvm-lib/LibDriver.h"
 #include "llvm/Object/Archive.h"
 #include "llvm/Object/ArchiveWriter.h"
 #include "llvm/Object/MachO.h"
 #include "llvm/Object/ObjectFile.h"
+#include "llvm/Support/Chrono.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/FileSystem.h"
@@ -51,7 +53,7 @@ static StringRef ToolName;
 
 // Show the error message and exit.
 LLVM_ATTRIBUTE_NORETURN static void fail(Twine Error) {
-  outs() << ToolName << ": " << Error << ".\n";
+  errs() << ToolName << ": " << Error << ".\n";
   exit(1);
 }
 
@@ -86,14 +88,15 @@ static cl::opt<bool> MRI("M", cl::desc(""));
 static cl::opt<std::string> Plugin("plugin", cl::desc("plugin (ignored for compatibility"));
 
 namespace {
-enum Format { Default, GNU, BSD };
+enum Format { Default, GNU, BSD, DARWIN };
 }
 
 static cl::opt<Format>
     FormatOpt("format", cl::desc("Archive format to create"),
               cl::values(clEnumValN(Default, "default", "default"),
                          clEnumValN(GNU, "gnu", "gnu"),
-                         clEnumValN(BSD, "bsd", "bsd"), clEnumValEnd));
+                         clEnumValN(DARWIN, "darwin", "darwin"),
+                         clEnumValN(BSD, "bsd", "bsd")));
 
 static std::string Options;
 
@@ -116,6 +119,7 @@ static cl::extrahelp MoreHelp(
   "  [o] - preserve original dates\n"
   "  [s] - create an archive index (cf. ranlib)\n"
   "  [S] - do not build a symbol table\n"
+  "  [T] - create a thin archive\n"
   "  [u] - update only files newer than archive contents\n"
   "\nMODIFIERS (generic):\n"
   "  [c] - do not warn if the library had to be created\n"
@@ -165,7 +169,7 @@ LLVM_ATTRIBUTE_NORETURN static void
 show_help(const std::string &msg) {
   errs() << ToolName << ": " << msg << "\n\n";
   cl::PrintHelpMessage();
-  std::exit(1);
+  exit(1);
 }
 
 // Extract the member filename from the command line for the [relpos] argument
@@ -317,8 +321,8 @@ static void doPrint(StringRef Name, const object::Archive::Child &C) {
   if (Verbose)
     outs() << "Printing " << Name << "\n";
 
-  ErrorOr<StringRef> DataOrErr = C.getBuffer();
-  failIfError(DataOrErr.getError());
+  Expected<StringRef> DataOrErr = C.getBuffer();
+  failIfError(DataOrErr.takeError());
   StringRef Data = *DataOrErr;
   outs().write(Data.data(), Data.size());
 }
@@ -337,17 +341,30 @@ static void printMode(unsigned mode) {
 // modification time are also printed.
 static void doDisplayTable(StringRef Name, const object::Archive::Child &C) {
   if (Verbose) {
-    sys::fs::perms Mode = C.getAccessMode();
+    Expected<sys::fs::perms> ModeOrErr = C.getAccessMode();
+    failIfError(ModeOrErr.takeError());
+    sys::fs::perms Mode = ModeOrErr.get();
     printMode((Mode >> 6) & 007);
     printMode((Mode >> 3) & 007);
     printMode(Mode & 007);
-    outs() << ' ' << C.getUID();
-    outs() << '/' << C.getGID();
-    ErrorOr<uint64_t> Size = C.getSize();
-    failIfError(Size.getError());
+    Expected<unsigned> UIDOrErr = C.getUID();
+    failIfError(UIDOrErr.takeError());
+    outs() << ' ' << UIDOrErr.get();
+    Expected<unsigned> GIDOrErr = C.getGID();
+    failIfError(GIDOrErr.takeError());
+    outs() << '/' << GIDOrErr.get();
+    Expected<uint64_t> Size = C.getSize();
+    failIfError(Size.takeError());
     outs() << ' ' << format("%6llu", Size.get());
-    outs() << ' ' << C.getLastModified().str();
+    auto ModTimeOrErr = C.getLastModified();
+    failIfError(ModTimeOrErr.takeError());
+    outs() << ' ' << ModTimeOrErr.get();
     outs() << ' ';
+  }
+
+  if (C.getParent()->isThin()) {
+    outs() << sys::path::parent_path(ArchiveName);
+    outs() << '/';
   }
   outs() << Name << "\n";
 }
@@ -356,16 +373,22 @@ static void doDisplayTable(StringRef Name, const object::Archive::Child &C) {
 // system.
 static void doExtract(StringRef Name, const object::Archive::Child &C) {
   // Retain the original mode.
-  sys::fs::perms Mode = C.getAccessMode();
+  Expected<sys::fs::perms> ModeOrErr = C.getAccessMode();
+  failIfError(ModeOrErr.takeError());
+  sys::fs::perms Mode = ModeOrErr.get();
 
   int FD;
-  failIfError(sys::fs::openFileForWrite(Name, FD, sys::fs::F_None, Mode), Name);
+  failIfError(sys::fs::openFileForWrite(sys::path::filename(Name), FD,
+                                        sys::fs::F_None, Mode),
+              Name);
 
   {
     raw_fd_ostream file(FD, false);
 
     // Get the data and its length
-    StringRef Data = *C.getBuffer();
+    Expected<StringRef> BufOrErr = C.getBuffer();
+    failIfError(BufOrErr.takeError());
+    StringRef Data = BufOrErr.get();
 
     // Write the data.
     file.write(Data.data(), Data.size());
@@ -373,9 +396,12 @@ static void doExtract(StringRef Name, const object::Archive::Child &C) {
 
   // If we're supposed to retain the original modification times, etc. do so
   // now.
-  if (OriginalDates)
+  if (OriginalDates) {
+    auto ModTimeOrErr = C.getLastModified();
+    failIfError(ModTimeOrErr.takeError());
     failIfError(
-        sys::fs::setLastModificationAndAccessTime(FD, C.getLastModified()));
+        sys::fs::setLastModificationAndAccessTime(FD, ModTimeOrErr.get()));
+  }
 
   if (close(FD))
     fail("Could not close the file");
@@ -406,14 +432,14 @@ static void performReadOperation(ArchiveOperation Operation,
 
   bool Filter = !Members.empty();
   {
-    Error Err;
+    Error Err = Error::success();
     for (auto &C : OldArchive->children(Err)) {
-      ErrorOr<StringRef> NameOrErr = C.getName();
-      failIfError(NameOrErr.getError());
+      Expected<StringRef> NameOrErr = C.getName();
+      failIfError(NameOrErr.takeError());
       StringRef Name = NameOrErr.get();
 
       if (Filter) {
-        auto I = std::find(Members.begin(), Members.end(), Name);
+        auto I = find(Members, Name);
         if (I == Members.end())
           continue;
         Members.erase(I);
@@ -440,7 +466,7 @@ static void performReadOperation(ArchiveOperation Operation,
     return;
   for (StringRef Name : Members)
     errs() << Name << " was not found\n";
-  std::exit(1);
+  exit(1);
 }
 
 static void addMember(std::vector<NewArchiveMember> &Members,
@@ -448,6 +474,10 @@ static void addMember(std::vector<NewArchiveMember> &Members,
   Expected<NewArchiveMember> NMOrErr =
       NewArchiveMember::getFile(FileName, Deterministic);
   failIfError(NMOrErr.takeError(), FileName);
+
+  // Use the basename of the object path for the member name.
+  NMOrErr->MemberName = sys::path::filename(NMOrErr->MemberName);
+
   if (Pos == -1)
     Members.push_back(std::move(*NMOrErr));
   else
@@ -469,7 +499,7 @@ static void addMember(std::vector<NewArchiveMember> &Members,
 
 enum InsertAction {
   IA_AddOldMember,
-  IA_AddNewMeber,
+  IA_AddNewMember,
   IA_Delete,
   IA_MoveOldMember,
   IA_MoveNewMember
@@ -482,10 +512,9 @@ static InsertAction computeInsertAction(ArchiveOperation Operation,
   if (Operation == QuickAppend || Members.empty())
     return IA_AddOldMember;
 
-  auto MI =
-      std::find_if(Members.begin(), Members.end(), [Name](StringRef Path) {
-        return Name == sys::path::filename(Path);
-      });
+  auto MI = find_if(Members, [Name](StringRef Path) {
+    return Name == sys::path::filename(Path);
+  });
 
   if (MI == Members.end())
     return IA_AddOldMember;
@@ -502,7 +531,7 @@ static InsertAction computeInsertAction(ArchiveOperation Operation,
     StringRef PosName = sys::path::filename(RelPos);
     if (!OnlyUpdate) {
       if (PosName.empty())
-        return IA_AddNewMeber;
+        return IA_AddNewMember;
       return IA_MoveNewMember;
     }
 
@@ -510,14 +539,16 @@ static InsertAction computeInsertAction(ArchiveOperation Operation,
     // operation.
     sys::fs::file_status Status;
     failIfError(sys::fs::status(*MI, Status), *MI);
-    if (Status.getLastModificationTime() < Member.getLastModified()) {
+    auto ModTimeOrErr = Member.getLastModified();
+    failIfError(ModTimeOrErr.takeError());
+    if (Status.getLastModificationTime() < ModTimeOrErr.get()) {
       if (PosName.empty())
         return IA_AddOldMember;
       return IA_MoveOldMember;
     }
 
     if (PosName.empty())
-      return IA_AddNewMeber;
+      return IA_AddNewMember;
     return IA_MoveNewMember;
   }
   llvm_unreachable("No such operation");
@@ -533,11 +564,11 @@ computeNewArchiveMembers(ArchiveOperation Operation,
   int InsertPos = -1;
   StringRef PosName = sys::path::filename(RelPos);
   if (OldArchive) {
-    Error Err;
+    Error Err = Error::success();
     for (auto &Child : OldArchive->children(Err)) {
       int Pos = Ret.size();
-      ErrorOr<StringRef> NameOrErr = Child.getName();
-      failIfError(NameOrErr.getError());
+      Expected<StringRef> NameOrErr = Child.getName();
+      failIfError(NameOrErr.takeError());
       StringRef Name = NameOrErr.get();
       if (Name == PosName) {
         assert(AddAfter || AddBefore);
@@ -554,7 +585,7 @@ computeNewArchiveMembers(ArchiveOperation Operation,
       case IA_AddOldMember:
         addMember(Ret, Child);
         break;
-      case IA_AddNewMeber:
+      case IA_AddNewMember:
         addMember(Ret, *MemberI);
         break;
       case IA_Delete:
@@ -600,8 +631,9 @@ computeNewArchiveMembers(ArchiveOperation Operation,
 }
 
 static object::Archive::Kind getDefaultForHost() {
-  return Triple(sys::getProcessTriple()).isOSDarwin() ? object::Archive::K_BSD
-                                                      : object::Archive::K_GNU;
+  return Triple(sys::getProcessTriple()).isOSDarwin()
+             ? object::Archive::K_DARWIN
+             : object::Archive::K_GNU;
 }
 
 static object::Archive::Kind getKindFromMember(const NewArchiveMember &Member) {
@@ -610,7 +642,7 @@ static object::Archive::Kind getKindFromMember(const NewArchiveMember &Member) {
 
   if (OptionalObject)
     return isa<object::MachOObjectFile>(**OptionalObject)
-               ? object::Archive::K_BSD
+               ? object::Archive::K_DARWIN
                : object::Archive::K_GNU;
 
   // squelch the error in case we had a non-object file
@@ -648,6 +680,11 @@ performWriteOperation(ArchiveOperation Operation,
     if (Thin)
       fail("Only the gnu format has a thin mode");
     Kind = object::Archive::K_BSD;
+    break;
+  case DARWIN:
+    if (Thin)
+      fail("Only the gnu format has a thin mode");
+    Kind = object::Archive::K_DARWIN;
     break;
   }
 
@@ -705,7 +742,7 @@ static int performOperation(ArchiveOperation Operation,
     fail("error opening '" + ArchiveName + "': " + EC.message() + "!");
 
   if (!EC) {
-    Error Err;
+    Error Err = Error::success();
     object::Archive Archive(Buf.get()->getMemBufferRef(), Err);
     EC = errorToErrorCode(std::move(Err));
     failIfError(EC,
@@ -767,7 +804,7 @@ static void runMRIScript() {
       Archives.push_back(std::move(*LibOrErr));
       object::Archive &Lib = *Archives.back();
       {
-        Error Err;
+        Error Err = Error::success();
         for (auto &Member : Lib.children(Err))
           addMember(NewMembers, Member);
         failIfError(std::move(Err));
@@ -827,6 +864,9 @@ int main(int argc, char **argv) {
   llvm::InitializeAllAsmParsers();
 
   StringRef Stem = sys::path::stem(ToolName);
+  if (Stem.find("dlltool") != StringRef::npos)
+    return dlltoolDriverMain(makeArrayRef(argv, argc));
+
   if (Stem.find("ranlib") == StringRef::npos &&
       Stem.find("lib") != StringRef::npos)
     return libDriverMain(makeArrayRef(argv, argc));
@@ -842,5 +882,5 @@ int main(int argc, char **argv) {
     return ranlib_main();
   if (Stem.find("ar") != StringRef::npos)
     return ar_main();
-  fail("Not ranlib, ar or lib!");
+  fail("Not ranlib, ar, lib or dlltool!");
 }

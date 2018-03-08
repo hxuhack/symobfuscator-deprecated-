@@ -11,9 +11,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "SparcTargetMachine.h"
-#include "SparcTargetObjectFile.h"
-#include "Sparc.h"
 #include "LeonPasses.h"
+#include "Sparc.h"
+#include "SparcTargetObjectFile.h"
 #include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
 #include "llvm/IR/LegacyPassManager.h"
@@ -22,9 +22,9 @@ using namespace llvm;
 
 extern "C" void LLVMInitializeSparcTarget() {
   // Register the target.
-  RegisterTargetMachine<SparcV8TargetMachine> X(TheSparcTarget);
-  RegisterTargetMachine<SparcV9TargetMachine> Y(TheSparcV9Target);
-  RegisterTargetMachine<SparcelTargetMachine> Z(TheSparcelTarget);
+  RegisterTargetMachine<SparcV8TargetMachine> X(getTheSparcTarget());
+  RegisterTargetMachine<SparcV9TargetMachine> Y(getTheSparcV9Target());
+  RegisterTargetMachine<SparcelTargetMachine> Z(getTheSparcelTarget());
 }
 
 static std::string computeDataLayout(const Triple &T, bool is64Bit) {
@@ -76,7 +76,7 @@ SparcTargetMachine::SparcTargetMachine(const Target &T, const Triple &TT,
 
 SparcTargetMachine::~SparcTargetMachine() {}
 
-const SparcSubtarget *
+const SparcSubtarget * 
 SparcTargetMachine::getSubtargetImpl(const Function &F) const {
   Attribute CPUAttr = F.getFnAttribute("target-cpu");
   Attribute FSAttr = F.getFnAttribute("target-features");
@@ -95,7 +95,7 @@ SparcTargetMachine::getSubtargetImpl(const Function &F) const {
       F.hasFnAttribute("use-soft-float") &&
       F.getFnAttribute("use-soft-float").getValueAsString() == "true";
 
-  if (softFloat)
+  if (softFloat)         
     FS += FS.empty() ? "+soft-float" : ",+soft-float";
 
   auto &I = SubtargetMap[CPU + FS];
@@ -114,8 +114,8 @@ namespace {
 /// Sparc Code Generator Pass Configuration Options.
 class SparcPassConfig : public TargetPassConfig {
 public:
-  SparcPassConfig(SparcTargetMachine *TM, PassManagerBase &PM)
-      : TargetPassConfig(TM, PM) {}
+  SparcPassConfig(SparcTargetMachine &TM, PassManagerBase &PM)
+    : TargetPassConfig(TM, PM) {}
 
   SparcTargetMachine &getSparcTargetMachine() const {
     return getTM<SparcTargetMachine>();
@@ -128,11 +128,11 @@ public:
 } // namespace
 
 TargetPassConfig *SparcTargetMachine::createPassConfig(PassManagerBase &PM) {
-  return new SparcPassConfig(this, PM);
+  return new SparcPassConfig(*this, PM);
 }
 
 void SparcPassConfig::addIRPasses() {
-  addPass(createAtomicExpandPass(&getSparcTargetMachine()));
+  addPass(createAtomicExpandPass());
 
   TargetPassConfig::addIRPasses();
 }
@@ -142,46 +142,31 @@ bool SparcPassConfig::addInstSelector() {
   return false;
 }
 
-void SparcPassConfig::addPreEmitPass() {
-  addPass(createSparcDelaySlotFillerPass(getSparcTargetMachine()));
-  if (this->getSparcTargetMachine().getSubtargetImpl()->ignoreZeroFlag()) {
-    addPass(new IgnoreZeroFlag(getSparcTargetMachine()));
+void SparcPassConfig::addPreEmitPass(){
+  addPass(createSparcDelaySlotFillerPass());
+
+  if (this->getSparcTargetMachine().getSubtargetImpl()->insertNOPLoad())
+  {
+    addPass(new InsertNOPLoad());
   }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->performSDIVReplace()) {
-    addPass(new ReplaceSDIV(getSparcTargetMachine()));
+  if (this->getSparcTargetMachine().getSubtargetImpl()->fixFSMULD())
+  {
+    addPass(new FixFSMULD());
   }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->fixCallImmediates()) {
-    addPass(new FixCALL(getSparcTargetMachine()));
+  if (this->getSparcTargetMachine().getSubtargetImpl()->replaceFMULS())
+  {
+    addPass(new ReplaceFMULS());
   }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->fixFSMULD()) {
-    addPass(new FixFSMULD(getSparcTargetMachine()));
+  if (this->getSparcTargetMachine().getSubtargetImpl()->detectRoundChange()) {
+    addPass(new DetectRoundChange());
   }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->replaceFMULS()) {
-    addPass(new ReplaceFMULS(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->preventRoundChange()) {
-    addPass(new PreventRoundChange(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->fixAllFDIVSQRT()) {
-    addPass(new FixAllFDIVSQRT(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->insertNOPsLoadStore()) {
-    addPass(new InsertNOPsLoadStore(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->insertNOPLoad()) {
-    addPass(new InsertNOPLoad(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine().getSubtargetImpl()->flushCacheLineSWAP()) {
-    addPass(new FlushCacheLineSWAP(getSparcTargetMachine()));
-  }
-  if (this->getSparcTargetMachine()
-          .getSubtargetImpl()
-          ->insertNOPDoublePrecision()) {
-    addPass(new InsertNOPDoublePrecision(getSparcTargetMachine()));
+  if (this->getSparcTargetMachine().getSubtargetImpl()->fixAllFDIVSQRT())
+  {
+    addPass(new FixAllFDIVSQRT());
   }
 }
 
-void SparcV8TargetMachine::anchor() {}
+void SparcV8TargetMachine::anchor() { }
 
 SparcV8TargetMachine::SparcV8TargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
@@ -191,7 +176,7 @@ SparcV8TargetMachine::SparcV8TargetMachine(const Target &T, const Triple &TT,
                                            CodeGenOpt::Level OL)
     : SparcTargetMachine(T, TT, CPU, FS, Options, RM, CM, OL, false) {}
 
-void SparcV9TargetMachine::anchor() {}
+void SparcV9TargetMachine::anchor() { }
 
 SparcV9TargetMachine::SparcV9TargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,

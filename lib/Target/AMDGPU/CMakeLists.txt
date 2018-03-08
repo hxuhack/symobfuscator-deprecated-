@@ -11,11 +11,18 @@ tablegen(LLVM AMDGPUGenDFAPacketizer.inc -gen-dfa-packetizer)
 tablegen(LLVM AMDGPUGenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM AMDGPUGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM AMDGPUGenDisassemblerTables.inc -gen-disassembler)
+tablegen(LLVM AMDGPUGenMCPseudoLowering.inc -gen-pseudo-lowering)
+if(LLVM_BUILD_GLOBAL_ISEL)
+  tablegen(LLVM AMDGPUGenRegisterBank.inc -gen-register-bank)
+endif()
 add_public_tablegen_target(AMDGPUCommonTableGen)
 
 # List of all GlobalISel files.
 set(GLOBAL_ISEL_FILES
   AMDGPUCallLowering.cpp
+  AMDGPUInstructionSelector.cpp
+  AMDGPULegalizerInfo.cpp
+  AMDGPURegisterBankInfo.cpp
   )
 
 # Add GlobalISel files to the dependencies if the user wants to build it.
@@ -29,6 +36,7 @@ endif()
 
 add_llvm_target(AMDGPUCodeGen
   AMDILCFGStructurizer.cpp
+  AMDGPUAliasAnalysis.cpp
   AMDGPUAlwaysInlinePass.cpp
   AMDGPUAnnotateKernelFeatures.cpp
   AMDGPUAnnotateUniformValues.cpp
@@ -38,8 +46,12 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUTargetObjectFile.cpp
   AMDGPUIntrinsicInfo.cpp
   AMDGPUISelDAGToDAG.cpp
+  AMDGPULowerIntrinsics.cpp
+  AMDGPUMacroFusion.cpp
   AMDGPUMCInstLower.cpp
+  AMDGPUMachineCFGStructurizer.cpp
   AMDGPUMachineFunction.cpp
+  AMDGPUUnifyMetadata.cpp
   AMDGPUOpenCLImageTypeLoweringPass.cpp
   AMDGPUSubtarget.cpp
   AMDGPUTargetMachine.cpp
@@ -47,8 +59,11 @@ add_llvm_target(AMDGPUCodeGen
   AMDGPUISelLowering.cpp
   AMDGPUInstrInfo.cpp
   AMDGPUPromoteAlloca.cpp
+  AMDGPURegAsmNames.inc.cpp
   AMDGPURegisterInfo.cpp
+  AMDGPUUnifyDivergentExitNodes.cpp
   GCNHazardRecognizer.cpp
+  GCNSchedStrategy.cpp
   R600ClauseMergePass.cpp
   R600ControlFlowFinalizer.cpp
   R600EmitClauseMarkers.cpp
@@ -65,9 +80,12 @@ add_llvm_target(AMDGPUCodeGen
   SIDebuggerInsertNops.cpp
   SIFixControlFlowLiveIntervals.cpp
   SIFixSGPRCopies.cpp
+  SIFixVGPRCopies.cpp
   SIFoldOperands.cpp
   SIFrameLowering.cpp
+  SIInsertSkips.cpp
   SIInsertWaits.cpp
+  SIInsertWaitcnts.cpp
   SIInstrInfo.cpp
   SIISelLowering.cpp
   SILoadStoreOptimizer.cpp
@@ -75,10 +93,14 @@ add_llvm_target(AMDGPUCodeGen
   SILowerI1Copies.cpp
   SIMachineFunctionInfo.cpp
   SIMachineScheduler.cpp
+  SIOptimizeExecMasking.cpp
+  SIPeepholeSDWA.cpp
   SIRegisterInfo.cpp
   SIShrinkInstructions.cpp
-  SITypeRewriter.cpp
   SIWholeQuadMode.cpp
+  GCNIterativeScheduler.cpp
+  GCNMinRegStrategy.cpp
+  GCNRegPressure.cpp
   ${GLOBAL_ISEL_BUILD_FILES}
   )
 

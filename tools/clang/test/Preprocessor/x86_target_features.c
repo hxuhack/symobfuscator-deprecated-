@@ -196,6 +196,7 @@
 // RUN: %clang -target i386-unknown-unknown -march=atom -mavx512vbmi -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=AVX512VBMI %s
 
 // AVX512VBMI: #define __AVX2__ 1
+// AVX512VBMI: #define __AVX512BW__ 1
 // AVX512VBMI: #define __AVX512F__ 1
 // AVX512VBMI: #define __AVX512VBMI__ 1
 // AVX512VBMI: #define __AVX__ 1
@@ -207,6 +208,11 @@
 // AVX512VBMI: #define __SSE_MATH__ 1
 // AVX512VBMI: #define __SSE__ 1
 // AVX512VBMI: #define __SSSE3__ 1
+
+// RUN: %clang -target i386-unknown-unknown -march=atom -mavx512vbmi -mno-avx512bw -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=AVX512VBMINOAVX512BW %s
+
+// AVX512VBMINOAVX512BW-NOT: #define __AVX512BW__ 1
+// AVX512VBMINOAVX512BW-NOT: #define __AVX512VBMI__ 1
 
 // RUN: %clang -target i386-unknown-unknown -march=atom -msse4.2 -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=SSE42POPCNT %s
 
@@ -265,6 +271,14 @@
 // AESNOSSE2-NOT: #define __AES__ 1
 // AESNOSSE2-NOT: #define __SSE2__ 1
 // AESNOSSE2-NOT: #define __SSE3__ 1
+
+// RUN: %clang -target i386-unknown-unknown -march=pentiumpro -mlwp -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=LWP %s
+
+// LWP: #define __LWP__ 1
+
+// RUN: %clang -target i386-unknown-unknown -march=bdver1 -mno-lwp -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=NOLWP %s
+
+// NOLWP-NOT: #define __LWP__ 1
 
 // RUN: %clang -target i386-unknown-unknown -march=pentiumpro -msha -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=SHA %s
 
@@ -346,3 +360,7 @@
 
 // NOXSAVE-NOT: #define __XSAVEOPT__ 1
 // NOXSAVE-NOT: #define __XSAVE__ 1
+
+// RUN: %clang -target i386-unknown-unknown -march=atom -mclflushopt -x c -E -dM -o - %s | FileCheck -match-full-lines --check-prefix=CLFLUSHOPT %s
+
+// CLFLUSHOPT: #define __CLFLUSHOPT__ 1

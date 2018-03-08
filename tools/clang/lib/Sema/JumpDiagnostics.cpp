@@ -287,6 +287,15 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S,
     IndirectJumpTargets.push_back(cast<AddrLabelExpr>(S)->getLabel());
     break;
 
+  case Stmt::ObjCForCollectionStmtClass: {
+    auto *CS = cast<ObjCForCollectionStmt>(S);
+    unsigned Diag = diag::note_protected_by_objc_fast_enumeration;
+    unsigned NewParentScope = Scopes.size();
+    Scopes.push_back(GotoScope(ParentScope, Diag, 0, S->getLocStart()));
+    BuildScopeInformation(CS->getBody(), NewParentScope);
+    return;
+  }
+
   case Stmt::IndirectGotoStmtClass:
     // "goto *&&lbl;" is a special case which we treat as equivalent
     // to a normal goto.  In addition, we don't calculate scope in the
@@ -325,30 +334,27 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S,
 
   case Stmt::IfStmtClass: {
     IfStmt *IS = cast<IfStmt>(S);
-    if (!IS->isConstexpr())
+    if (!(IS->isConstexpr() || IS->isObjCAvailabilityCheck()))
       break;
+
+    unsigned Diag = IS->isConstexpr() ? diag::note_protected_by_constexpr_if
+                                      : diag::note_protected_by_if_available;
 
     if (VarDecl *Var = IS->getConditionVariable())
       BuildScopeInformation(Var, ParentScope);
 
     // Cannot jump into the middle of the condition.
     unsigned NewParentScope = Scopes.size();
-    Scopes.push_back(GotoScope(ParentScope,
-                               diag::note_protected_by_constexpr_if, 0,
-                               IS->getLocStart()));
+    Scopes.push_back(GotoScope(ParentScope, Diag, 0, IS->getLocStart()));
     BuildScopeInformation(IS->getCond(), NewParentScope);
 
     // Jumps into either arm of an 'if constexpr' are not allowed.
     NewParentScope = Scopes.size();
-    Scopes.push_back(GotoScope(ParentScope,
-                               diag::note_protected_by_constexpr_if, 0,
-                               IS->getLocStart()));
+    Scopes.push_back(GotoScope(ParentScope, Diag, 0, IS->getLocStart()));
     BuildScopeInformation(IS->getThen(), NewParentScope);
     if (Stmt *Else = IS->getElse()) {
       NewParentScope = Scopes.size();
-      Scopes.push_back(GotoScope(ParentScope,
-                                 diag::note_protected_by_constexpr_if, 0,
-                                 IS->getLocStart()));
+      Scopes.push_back(GotoScope(ParentScope, Diag, 0, IS->getLocStart()));
       BuildScopeInformation(Else, NewParentScope);
     }
     return;
@@ -553,10 +559,8 @@ void JumpScopeChecker::BuildScopeInformation(Stmt *S,
     // order to avoid blowing out the stack.
     while (true) {
       Stmt *Next;
-      if (CaseStmt *CS = dyn_cast<CaseStmt>(SubStmt))
-        Next = CS->getSubStmt();
-      else if (DefaultStmt *DS = dyn_cast<DefaultStmt>(SubStmt))
-        Next = DS->getSubStmt();
+      if (SwitchCase *SC = dyn_cast<SwitchCase>(SubStmt))
+        Next = SC->getSubStmt();
       else if (LabelStmt *LS = dyn_cast<LabelStmt>(SubStmt))
         Next = LS->getSubStmt();
       else

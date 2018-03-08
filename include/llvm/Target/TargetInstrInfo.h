@@ -1,4 +1,4 @@
-//===-- llvm/Target/TargetInstrInfo.h - Instruction Info --------*- C++ -*-===//
+//===- llvm/Target/TargetInstrInfo.h - Instruction Info ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,35 +14,46 @@
 #ifndef LLVM_TARGET_TARGETINSTRINFO_H
 #define LLVM_TARGET_TARGETINSTRINFO_H
 
+#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallSet.h"
+#include "llvm/ADT/DenseMapInfo.h"
+#include "llvm/ADT/None.h"
+#include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineCombinerPattern.h"
 #include "llvm/CodeGen/MachineFunction.h"
+#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/MachineLoopInfo.h"
+#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/Support/BranchProbability.h"
-#include "llvm/Target/TargetRegisterInfo.h"
-#include "llvm/CodeGen/LiveIntervalAnalysis.h"
+#include "llvm/Support/ErrorHandling.h"
+#include <cassert>
+#include <cstddef>
+#include <cstdint>
+#include <utility>
+#include <vector>
 
 namespace llvm {
 
+class DFAPacketizer;
 class InstrItineraryData;
 class LiveVariables;
-class MCAsmInfo;
 class MachineMemOperand;
 class MachineRegisterInfo;
-class MDNode;
+class MCAsmInfo;
 class MCInst;
 struct MCSchedModel;
-class MCSymbolRefExpr;
-class SDNode;
-class ScheduleHazardRecognizer;
-class SelectionDAG;
+class Module;
 class ScheduleDAG;
+class ScheduleHazardRecognizer;
+class SDNode;
+class SelectionDAG;
+class RegScavenger;
 class TargetRegisterClass;
 class TargetRegisterInfo;
-class TargetSubtargetInfo;
 class TargetSchedModel;
-class DFAPacketizer;
+class TargetSubtargetInfo;
 
 template<class T> class SmallVectorImpl;
 
@@ -51,8 +62,6 @@ template<class T> class SmallVectorImpl;
 /// TargetInstrInfo - Interface to description of machine instruction set
 ///
 class TargetInstrInfo : public MCInstrInfo {
-  TargetInstrInfo(const TargetInstrInfo &) = delete;
-  void operator=(const TargetInstrInfo &) = delete;
 public:
   TargetInstrInfo(unsigned CFSetupOpcode = ~0u, unsigned CFDestroyOpcode = ~0u,
                   unsigned CatchRetOpcode = ~0u, unsigned ReturnOpcode = ~0u)
@@ -60,7 +69,8 @@ public:
         CallFrameDestroyOpcode(CFDestroyOpcode),
         CatchRetOpcode(CatchRetOpcode),
         ReturnOpcode(ReturnOpcode) {}
-
+  TargetInstrInfo(const TargetInstrInfo &) = delete;
+  TargetInstrInfo &operator=(const TargetInstrInfo &) = delete;
   virtual ~TargetInstrInfo();
 
   static bool isGenericOpcode(unsigned Opc) {
@@ -150,6 +160,42 @@ public:
   ///
   unsigned getCallFrameSetupOpcode() const { return CallFrameSetupOpcode; }
   unsigned getCallFrameDestroyOpcode() const { return CallFrameDestroyOpcode; }
+
+  /// Returns true if the argument is a frame pseudo instruction.
+  bool isFrameInstr(const MachineInstr &I) const {
+    return I.getOpcode() == getCallFrameSetupOpcode() ||
+      I.getOpcode() == getCallFrameDestroyOpcode();
+  }
+
+  /// Returns true if the argument is a frame setup pseudo instruction.
+  bool isFrameSetup(const MachineInstr &I) const {
+    return I.getOpcode() == getCallFrameSetupOpcode();
+  }
+
+  /// Returns size of the frame associated with the given frame instruction.
+  /// For frame setup instruction this is frame that is set up space set up
+  /// after the instruction. For frame destroy instruction this is the frame
+  /// freed by the caller.
+  /// Note, in some cases a call frame (or a part of it) may be prepared prior
+  /// to the frame setup instruction. It occurs in the calls that involve
+  /// inalloca arguments. This function reports only the size of the frame part
+  /// that is set up between the frame setup and destroy pseudo instructions.
+  int64_t getFrameSize(const MachineInstr &I) const {
+    assert(isFrameInstr(I) && "Not a frame instruction");
+    assert(I.getOperand(0).getImm() >= 0);
+    return I.getOperand(0).getImm();
+  }
+
+  /// Returns the total frame size, which is made up of the space set up inside
+  /// the pair of frame start-stop instructions and the space that is set up
+  /// prior to the pair.
+  int64_t getFrameTotalSize(const MachineInstr &I) const {
+    if (isFrameSetup(I)) {
+      assert(I.getOperand(1).getImm() >= 0 && "Frame size must not be negative");
+      return getFrameSize(I) + I.getOperand(1).getImm();
+    }
+    return getFrameSize(I);
+  }
 
   unsigned getCatchReturnOpcode() const { return CatchRetOpcode; }
   unsigned getReturnOpcode() const { return ReturnOpcode; }
@@ -250,6 +296,12 @@ public:
                                  unsigned &Size, unsigned &Offset,
                                  const MachineFunction &MF) const;
 
+  /// Returns the size in bytes of the specified MachineInstr, or ~0U
+  /// when this function is not implemented by a target.
+  virtual unsigned getInstSizeInBytes(const MachineInstr &MI) const {
+    return ~0U;
+  }
+
   /// Return true if the instruction is as cheap as a move instruction.
   ///
   /// Targets for different archs need to override this, and different
@@ -263,11 +315,8 @@ public:
   /// MachineSink determines on its own whether the instruction is safe to sink;
   /// this gives the target a hook to override the default behavior with regards
   /// to which instructions should be sunk.
-  /// The default behavior is to not sink insert_subreg, subreg_to_reg, and
-  /// reg_sequence. These are meant to be close to the source to make it easier
-  /// to coalesce.
   virtual bool shouldSink(const MachineInstr &MI) const {
-    return !MI.isInsertSubreg() && !MI.isSubregToReg() && !MI.isRegSequence();
+    return true;
   }
 
   /// Re-issue the specified 'original' instruction at the
@@ -356,14 +405,17 @@ public:
   struct RegSubRegPair {
     unsigned Reg;
     unsigned SubReg;
+
     RegSubRegPair(unsigned Reg = 0, unsigned SubReg = 0)
         : Reg(Reg), SubReg(SubReg) {}
   };
+
   /// A pair composed of a pair of a register and a sub-register index,
   /// and another sub-register index.
   /// Used to give some type checking when modeling Reg:SubReg1, SubReg2.
   struct RegSubRegPairAndIdx : RegSubRegPair {
     unsigned SubIdx;
+
     RegSubRegPairAndIdx(unsigned Reg = 0, unsigned SubReg = 0,
                         unsigned SubIdx = 0)
         : RegSubRegPair(Reg, SubReg), SubIdx(SubIdx) {}
@@ -429,7 +481,6 @@ public:
                         RegSubRegPair &BaseReg,
                         RegSubRegPairAndIdx &InsertedReg) const;
 
-
   /// Return true if two machine instructions would produce identical values.
   /// By default, this is only true when the two instructions
   /// are deemed identical except for defs. If this function is called when the
@@ -438,6 +489,31 @@ public:
   virtual bool produceSameValue(const MachineInstr &MI0,
                                 const MachineInstr &MI1,
                                 const MachineRegisterInfo *MRI = nullptr) const;
+
+  /// \returns true if a branch from an instruction with opcode \p BranchOpc
+  ///  bytes is capable of jumping to a position \p BrOffset bytes away.
+  virtual bool isBranchOffsetInRange(unsigned BranchOpc,
+                                     int64_t BrOffset) const {
+    llvm_unreachable("target did not implement");
+  }
+
+  /// \returns The block that branch instruction \p MI jumps to.
+  virtual MachineBasicBlock *getBranchDestBlock(const MachineInstr &MI) const {
+    llvm_unreachable("target did not implement");
+  }
+
+  /// Insert an unconditional indirect branch at the end of \p MBB to \p
+  /// NewDestBB.  \p BrOffset indicates the offset of \p NewDestBB relative to
+  /// the offset of the position to insert the new branch.
+  ///
+  /// \returns The number of bytes added to the block.
+  virtual unsigned insertIndirectBranch(MachineBasicBlock &MBB,
+                                        MachineBasicBlock &NewDestBB,
+                                        const DebugLoc &DL,
+                                        int64_t BrOffset = 0,
+                                        RegScavenger *RS = nullptr) const {
+    llvm_unreachable("target did not implement");
+  }
 
   /// Analyze the branching code at the end of MBB, returning
   /// true if it cannot be understood (e.g. it's a switch dispatch or isn't
@@ -458,7 +534,7 @@ public:
   ///    condition.  These operands can be passed to other TargetInstrInfo
   ///    methods to create new branches.
   ///
-  /// Note that RemoveBranch and InsertBranch must be implemented to support
+  /// Note that removeBranch and insertBranch must be implemented to support
   /// cases where this method returns success.
   ///
   /// If AllowModify is true, then this routine is allowed to modify the basic
@@ -486,23 +562,19 @@ public:
       PRED_INVALID // Sentinel value
     };
 
-    ComparePredicate Predicate;
-    MachineOperand LHS;
-    MachineOperand RHS;
-    MachineBasicBlock *TrueDest;
-    MachineBasicBlock *FalseDest;
-    MachineInstr *ConditionDef;
+    ComparePredicate Predicate = PRED_INVALID;
+    MachineOperand LHS = MachineOperand::CreateImm(0);
+    MachineOperand RHS = MachineOperand::CreateImm(0);
+    MachineBasicBlock *TrueDest = nullptr;
+    MachineBasicBlock *FalseDest = nullptr;
+    MachineInstr *ConditionDef = nullptr;
 
     /// SingleUseCondition is true if ConditionDef is dead except for the
     /// branch(es) at the end of the basic block.
     ///
-    bool SingleUseCondition;
+    bool SingleUseCondition = false;
 
-    explicit MachineBranchPredicate()
-        : Predicate(PRED_INVALID), LHS(MachineOperand::CreateImm(0)),
-          RHS(MachineOperand::CreateImm(0)), TrueDest(nullptr),
-          FalseDest(nullptr), ConditionDef(nullptr), SingleUseCondition(false) {
-    }
+    explicit MachineBranchPredicate() = default;
   };
 
   /// Analyze the branching code at the end of MBB and parse it into the
@@ -521,15 +593,18 @@ public:
   /// Remove the branching code at the end of the specific MBB.
   /// This is only invoked in cases where AnalyzeBranch returns success. It
   /// returns the number of instructions that were removed.
-  virtual unsigned RemoveBranch(MachineBasicBlock &MBB) const {
-    llvm_unreachable("Target didn't implement TargetInstrInfo::RemoveBranch!");
+  /// If \p BytesRemoved is non-null, report the change in code size from the
+  /// removed instructions.
+  virtual unsigned removeBranch(MachineBasicBlock &MBB,
+                                int *BytesRemoved = nullptr) const {
+    llvm_unreachable("Target didn't implement TargetInstrInfo::removeBranch!");
   }
 
-  /// Insert branch code into the end of the specified MachineBasicBlock.
-  /// The operands to this method are the same as those
-  /// returned by AnalyzeBranch.  This is only invoked in cases where
-  /// AnalyzeBranch returns success. It returns the number of instructions
-  /// inserted.
+  /// Insert branch code into the end of the specified MachineBasicBlock. The
+  /// operands to this method are the same as those returned by AnalyzeBranch.
+  /// This is only invoked in cases where AnalyzeBranch returns success. It
+  /// returns the number of instructions inserted. If \p BytesAdded is non-null,
+  /// report the change in code size from the added instructions.
   ///
   /// It is also invoked by tail merging to add unconditional branches in
   /// cases where AnalyzeBranch doesn't apply because there was no original
@@ -538,51 +613,46 @@ public:
   ///
   /// The CFG information in MBB.Predecessors and MBB.Successors must be valid
   /// before calling this function.
-  virtual unsigned InsertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
+  virtual unsigned insertBranch(MachineBasicBlock &MBB, MachineBasicBlock *TBB,
                                 MachineBasicBlock *FBB,
                                 ArrayRef<MachineOperand> Cond,
-                                const DebugLoc &DL) const {
-    llvm_unreachable("Target didn't implement TargetInstrInfo::InsertBranch!");
+                                const DebugLoc &DL,
+                                int *BytesAdded = nullptr) const {
+    llvm_unreachable("Target didn't implement TargetInstrInfo::insertBranch!");
+  }
+
+  unsigned insertUnconditionalBranch(MachineBasicBlock &MBB,
+                                     MachineBasicBlock *DestBB,
+                                     const DebugLoc &DL,
+                                     int *BytesAdded = nullptr) const {
+    return insertBranch(MBB, DestBB, nullptr,
+                        ArrayRef<MachineOperand>(), DL, BytesAdded);
+  }
+
+  /// Analyze the loop code, return true if it cannot be understoo. Upon
+  /// success, this function returns false and returns information about the
+  /// induction variable and compare instruction used at the end.
+  virtual bool analyzeLoop(MachineLoop &L, MachineInstr *&IndVarInst,
+                           MachineInstr *&CmpInst) const {
+    return true;
+  }
+
+  /// Generate code to reduce the loop iteration by one and check if the loop is
+  /// finished.  Return the value/register of the the new loop count.  We need
+  /// this function when peeling off one or more iterations of a loop. This
+  /// function assumes the nth iteration is peeled first.
+  virtual unsigned reduceLoopCount(MachineBasicBlock &MBB,
+                                   MachineInstr *IndVar, MachineInstr &Cmp,
+                                   SmallVectorImpl<MachineOperand> &Cond,
+                                   SmallVectorImpl<MachineInstr *> &PrevInsts,
+                                   unsigned Iter, unsigned MaxIter) const {
+    llvm_unreachable("Target didn't implement ReduceLoopCount");
   }
 
   /// Delete the instruction OldInst and everything after it, replacing it with
   /// an unconditional branch to NewDest. This is used by the tail merging pass.
   virtual void ReplaceTailWithBranchTo(MachineBasicBlock::iterator Tail,
                                        MachineBasicBlock *NewDest) const;
-
-  /// Get an instruction that performs an unconditional branch to the given
-  /// symbol.
-  virtual void
-  getUnconditionalBranch(MCInst &MI,
-                         const MCSymbolRefExpr *BranchTarget) const {
-    llvm_unreachable("Target didn't implement "
-                     "TargetInstrInfo::getUnconditionalBranch!");
-  }
-
-  /// Get a machine trap instruction.
-  virtual void getTrap(MCInst &MI) const {
-    llvm_unreachable("Target didn't implement TargetInstrInfo::getTrap!");
-  }
-
-  /// Get a number of bytes that suffices to hold
-  /// either the instruction returned by getUnconditionalBranch or the
-  /// instruction returned by getTrap. This only makes sense because
-  /// getUnconditionalBranch returns a single, specific instruction. This
-  /// information is needed by the jumptable construction code, since it must
-  /// decide how many bytes to use for a jumptable entry so it can generate the
-  /// right mask.
-  ///
-  /// Note that if the jumptable instruction requires alignment, then that
-  /// alignment should be factored into this required bound so that the
-  /// resulting bound gives the right alignment for the instruction.
-  virtual unsigned getJumpInstrTableEntryBound() const {
-    // This method gets called by LLVMTargetMachine always, so it can't fail
-    // just because there happens to be no implementation for this target.
-    // Any code that tries to use a jumptable annotation without defining
-    // getUnconditionalBranch on the appropriate Target will fail anyway, and
-    // the value returned here won't matter in that case.
-    return 0;
-  }
 
   /// Return true if it's legal to split the given basic
   /// block at the specified instruction (i.e. instruction would be the start
@@ -789,6 +859,20 @@ public:
   /// new instructions and erase MI. The function should return true if
   /// anything was changed.
   virtual bool expandPostRAPseudo(MachineInstr &MI) const { return false; }
+
+  /// Check whether the target can fold a load that feeds a subreg operand
+  /// (or a subreg operand that feeds a store).
+  /// For example, X86 may want to return true if it can fold
+  /// movl (%esp), %eax
+  /// subb, %al, ...
+  /// Into:
+  /// subb (%esp), ...
+  ///
+  /// Ideally, we'd like the target implementation of foldMemoryOperand() to
+  /// reject subregs - but since this behavior used to be enforced in the
+  /// target-independent code, moving this responsibility to the targets
+  /// has the potential of causing nasty silent breakage in out-of-tree targets.
+  virtual bool isSubregFoldable() const { return false; }
 
   /// Attempt to fold a load or store of the specified stack
   /// slot into the specified machine instruction for the specified operand(s).
@@ -1003,27 +1087,36 @@ public:
     return false;
   }
 
-  virtual bool enableClusterLoads() const { return false; }
-
-  virtual bool enableClusterStores() const { return false; }
-
-  virtual bool shouldClusterMemOps(MachineInstr &FirstLdSt,
-                                   MachineInstr &SecondLdSt,
-                                   unsigned NumLoads) const {
+  /// Return true if the instruction contains a base register and offset. If
+  /// true, the function also sets the operand position in the instruction
+  /// for the base register and offset.
+  virtual bool getBaseAndOffsetPosition(const MachineInstr &MI,
+                                        unsigned &BasePos,
+                                        unsigned &OffsetPos) const {
     return false;
   }
 
-  /// Can this target fuse the given instructions if they are scheduled
-  /// adjacent.
-  virtual bool shouldScheduleAdjacent(MachineInstr &First,
-                                      MachineInstr &Second) const {
+  /// If the instruction is an increment of a constant value, return the amount.
+  virtual bool getIncrementValue(const MachineInstr &MI, int &Value) const {
     return false;
+  }
+
+  /// Returns true if the two given memory operations should be scheduled
+  /// adjacent. Note that you have to add:
+  ///   DAG->addMutation(createLoadClusterDAGMutation(DAG->TII, DAG->TRI));
+  /// or
+  ///   DAG->addMutation(createStoreClusterDAGMutation(DAG->TII, DAG->TRI));
+  /// to TargetPassConfig::createMachineScheduler() to have an effect.
+  virtual bool shouldClusterMemOps(MachineInstr &FirstLdSt,
+                                   MachineInstr &SecondLdSt,
+                                   unsigned NumLoads) const {
+    llvm_unreachable("target did not implement shouldClusterMemOps()");
   }
 
   /// Reverses the branch condition of the specified condition list,
   /// returning false on success and true if it cannot be reversed.
   virtual
-  bool ReverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
+  bool reverseBranchCondition(SmallVectorImpl<MachineOperand> &Cond) const {
     return true;
   }
 
@@ -1031,10 +1124,13 @@ public:
   virtual void insertNoop(MachineBasicBlock &MBB,
                           MachineBasicBlock::iterator MI) const;
 
-
   /// Return the noop instruction to use for a noop.
-  virtual void getNoopForMachoTarget(MCInst &NopInst) const;
+  virtual void getNoop(MCInst &NopInst) const;
 
+  /// Return true for post-incremented instructions.
+  virtual bool isPostIncrement(const MachineInstr &MI) const {
+    return false;
+  }
 
   /// Returns true if the instruction is already predicated.
   virtual bool isPredicated(const MachineInstr &MI) const {
@@ -1044,6 +1140,25 @@ public:
   /// Returns true if the instruction is a
   /// terminator instruction that has not been predicated.
   virtual bool isUnpredicatedTerminator(const MachineInstr &MI) const;
+
+  /// Returns true if MI is an unconditional tail call.
+  virtual bool isUnconditionalTailCall(const MachineInstr &MI) const {
+    return false;
+  }
+
+  /// Returns true if the tail call can be made conditional on BranchCond.
+  virtual bool
+  canMakeTailCallConditional(SmallVectorImpl<MachineOperand> &Cond,
+                             const MachineInstr &TailCall) const {
+    return false;
+  }
+
+  /// Replace the conditional branch in MBB with a conditional tail call.
+  virtual void replaceBranchWithTailCall(MachineBasicBlock &MBB,
+                                         SmallVectorImpl<MachineOperand> &Cond,
+                                         const MachineInstr &TailCall) const {
+    llvm_unreachable("Target didn't implement replaceBranchWithTailCall!");
+  }
 
   /// Convert the instruction into a predicated instruction.
   /// It returns true if the operation was successful.
@@ -1069,7 +1184,7 @@ public:
   /// Return true if the specified instruction can be predicated.
   /// By default, this returns true for every instruction with a
   /// PredicateOperand.
-  virtual bool isPredicable(MachineInstr &MI) const {
+  virtual bool isPredicable(const MachineInstr &MI) const {
     return MI.getDesc().isPredicable();
   }
 
@@ -1194,22 +1309,6 @@ public:
                                 const MachineInstr &DefMI, unsigned DefIdx,
                                 const MachineInstr &UseMI,
                                 unsigned UseIdx) const;
-
-  /// Compute and return the latency of the given data dependent def and use
-  /// when the operand indices are already known. UseMI may be \c nullptr for
-  /// an unknown use.
-  ///
-  /// FindMin may be set to get the minimum vs. expected latency. Minimum
-  /// latency is used for scheduling groups, while expected latency is for
-  /// instruction cost and critical path.
-  ///
-  /// Depending on the subtarget's itinerary properties, this may or may not
-  /// need to call getOperandLatency(). For most subtargets, we don't need
-  /// DefIdx or UseIdx to compute min latency.
-  unsigned computeOperandLatency(const InstrItineraryData *ItinData,
-                                 const MachineInstr &DefMI, unsigned DefIdx,
-                                 const MachineInstr *UseMI,
-                                 unsigned UseIdx) const;
 
   /// Compute the instruction latency of a given instruction.
   /// If the instruction has higher cost when predicated, it's returned via
@@ -1380,10 +1479,17 @@ public:
     return nullptr;
   }
 
-  // Sometimes, it is possible for the target
-  // to tell, even without aliasing information, that two MIs access different
-  // memory addresses. This function returns true if two MIs access different
-  // memory addresses and false otherwise.
+  /// Sometimes, it is possible for the target
+  /// to tell, even without aliasing information, that two MIs access different
+  /// memory addresses. This function returns true if two MIs access different
+  /// memory addresses and false otherwise.
+  ///
+  /// Assumes any physical registers used to compute addresses have the same
+  /// value for both instructions. (This is the most useful assumption for
+  /// post-RA scheduling.)
+  ///
+  /// See also MachineInstr::mayAlias, which is implemented on top of this
+  /// function.
   virtual bool
   areMemAccessesTriviallyDisjoint(MachineInstr &MIa, MachineInstr &MIb,
                                   AliasAnalysis *AA = nullptr) const {
@@ -1439,6 +1545,89 @@ public:
     return None;
   }
 
+  /// Return an array that contains the MMO target flag values and their
+  /// names.
+  ///
+  /// MIR Serialization is able to serialize only the MMO target flags that are
+  /// defined by this method.
+  virtual ArrayRef<std::pair<MachineMemOperand::Flags, const char *>>
+  getSerializableMachineMemOperandTargetFlags() const {
+    return None;
+  }
+
+  /// Determines whether \p Inst is a tail call instruction. Override this
+  /// method on targets that do not properly set MCID::Return and MCID::Call on
+  /// tail call instructions."
+  virtual bool isTailCall(const MachineInstr &Inst) const {
+    return Inst.isReturn() && Inst.isCall();
+  }
+
+  /// True if the instruction is bound to the top of its basic block and no
+  /// other instructions shall be inserted before it. This can be implemented
+  /// to prevent register allocator to insert spills before such instructions.
+  virtual bool isBasicBlockPrologue(const MachineInstr &MI) const {
+    return false;
+  }
+
+  /// \brief Return how many instructions would be saved by outlining a
+  /// sequence containing \p SequenceSize instructions that appears
+  /// \p Occurrences times in a module.
+  virtual unsigned getOutliningBenefit(size_t SequenceSize, size_t Occurrences,
+                                       bool CanBeTailCall) const {
+    llvm_unreachable(
+        "Target didn't implement TargetInstrInfo::getOutliningBenefit!");
+  }
+
+  /// Represents how an instruction should be mapped by the outliner.
+  /// \p Legal instructions are those which are safe to outline.
+  /// \p Illegal instructions are those which cannot be outlined.
+  /// \p Invisible instructions are instructions which can be outlined, but
+  /// shouldn't actually impact the outlining result.
+  enum MachineOutlinerInstrType {Legal, Illegal, Invisible};
+
+  /// Returns how or if \p MI should be outlined.
+  virtual MachineOutlinerInstrType getOutliningType(MachineInstr &MI) const {
+    llvm_unreachable(
+        "Target didn't implement TargetInstrInfo::getOutliningType!");
+  }
+
+  /// Insert a custom epilogue for outlined functions.
+  /// This may be empty, in which case no epilogue or return statement will be
+  /// emitted.
+  virtual void insertOutlinerEpilogue(MachineBasicBlock &MBB,
+                                      MachineFunction &MF,
+                                      bool IsTailCall) const {
+    llvm_unreachable(
+        "Target didn't implement TargetInstrInfo::insertOutlinerEpilogue!");
+  }
+
+  /// Insert a call to an outlined function into the program.
+  /// Returns an iterator to the spot where we inserted the call. This must be
+  /// implemented by the target.
+  virtual MachineBasicBlock::iterator
+  insertOutlinedCall(Module &M, MachineBasicBlock &MBB,
+                     MachineBasicBlock::iterator &It, MachineFunction &MF,
+                     bool IsTailCall) const {
+    llvm_unreachable(
+        "Target didn't implement TargetInstrInfo::insertOutlinedCall!");
+  }
+
+  /// Insert a custom prologue for outlined functions.
+  /// This may be empty, in which case no prologue will be emitted.
+  virtual void insertOutlinerPrologue(MachineBasicBlock &MBB,
+                                      MachineFunction &MF,
+                                      bool IsTailCall) const {
+    llvm_unreachable(
+        "Target didn't implement TargetInstrInfo::insertOutlinerPrologue!");
+  }
+
+  /// Return true if the function can safely be outlined from.
+  /// By default, this means that the function has no red zone.
+  virtual bool isFunctionSafeToOutlineFrom(MachineFunction &MF) const {
+    llvm_unreachable("Target didn't implement "
+                     "TargetInstrInfo::isFunctionSafeToOutlineFrom!");
+  }
+
 private:
   unsigned CallFrameSetupOpcode, CallFrameDestroyOpcode;
   unsigned CatchRetOpcode;
@@ -1448,16 +1637,18 @@ private:
 /// \brief Provide DenseMapInfo for TargetInstrInfo::RegSubRegPair.
 template<>
 struct DenseMapInfo<TargetInstrInfo::RegSubRegPair> {
-  typedef DenseMapInfo<unsigned> RegInfo;
+  using RegInfo = DenseMapInfo<unsigned>;
 
   static inline TargetInstrInfo::RegSubRegPair getEmptyKey() {
     return TargetInstrInfo::RegSubRegPair(RegInfo::getEmptyKey(),
                          RegInfo::getEmptyKey());
   }
+
   static inline TargetInstrInfo::RegSubRegPair getTombstoneKey() {
     return TargetInstrInfo::RegSubRegPair(RegInfo::getTombstoneKey(),
                          RegInfo::getTombstoneKey());
   }
+
   /// \brief Reuse getHashValue implementation from
   /// std::pair<unsigned, unsigned>.
   static unsigned getHashValue(const TargetInstrInfo::RegSubRegPair &Val) {
@@ -1465,6 +1656,7 @@ struct DenseMapInfo<TargetInstrInfo::RegSubRegPair> {
         std::make_pair(Val.Reg, Val.SubReg);
     return DenseMapInfo<std::pair<unsigned, unsigned>>::getHashValue(PairVal);
   }
+
   static bool isEqual(const TargetInstrInfo::RegSubRegPair &LHS,
                       const TargetInstrInfo::RegSubRegPair &RHS) {
     return RegInfo::isEqual(LHS.Reg, RHS.Reg) &&

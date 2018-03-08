@@ -49,8 +49,9 @@ public:
   LanaiAsmBackend(const Target &T, Triple::OSType OST)
       : MCAsmBackend(), OSType(OST) {}
 
-  void applyFixup(const MCFixup &Fixup, char *Data, unsigned DataSize,
-                  uint64_t Value, bool IsPCRel) const override;
+  void applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
+                  const MCValue &Target, MutableArrayRef<char> Data,
+                  uint64_t Value, bool IsResolved) const override;
 
   MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override;
 
@@ -88,9 +89,10 @@ bool LanaiAsmBackend::writeNopData(uint64_t Count, MCObjectWriter *OW) const {
   return true;
 }
 
-void LanaiAsmBackend::applyFixup(const MCFixup &Fixup, char *Data,
-                                 unsigned /*DataSize*/, uint64_t Value,
-                                 bool /*IsPCRel*/) const {
+void LanaiAsmBackend::applyFixup(const MCAssembler &Asm, const MCFixup &Fixup,
+                                 const MCValue &Target,
+                                 MutableArrayRef<char> Data, uint64_t Value,
+                                 bool /*IsResolved*/) const {
   MCFixupKind Kind = Fixup.getKind();
   Value = adjustFixupValue(static_cast<unsigned>(Kind), Value);
 
@@ -163,10 +165,10 @@ LanaiAsmBackend::getFixupKindInfo(MCFixupKind Kind) const {
 
 MCAsmBackend *llvm::createLanaiAsmBackend(const Target &T,
                                           const MCRegisterInfo & /*MRI*/,
-                                          const Triple &TheTriple,
-                                          StringRef /*CPU*/) {
-  if (!TheTriple.isOSBinFormatELF())
+                                          const Triple &TT, StringRef /*CPU*/,
+                                          const MCTargetOptions & /*Options*/) {
+  if (!TT.isOSBinFormatELF())
     llvm_unreachable("OS not supported");
 
-  return new LanaiAsmBackend(T, TheTriple.getOS());
+  return new LanaiAsmBackend(T, TT.getOS());
 }

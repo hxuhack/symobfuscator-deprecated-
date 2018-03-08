@@ -244,17 +244,23 @@ for.body:                                         ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @test_reversed_load2_store2(
-; CHECK: %wide.vec = load <8 x i32>, <8 x i32>* {{.*}}, align 4
+; CHECK: %[[G0:.+]] = getelementptr inbounds %struct.ST2, %struct.ST2* %A, i64 %offset.idx, i32 0
+; CHECK: %[[G1:.+]] = getelementptr i32, i32* %[[G0]], i64 -6
+; CHECK: %[[B0:.+]] = bitcast i32* %[[G1]] to <8 x i32>*
+; CHECK: %wide.vec = load <8 x i32>, <8 x i32>* %[[B0]], align 4
 ; CHECK: shufflevector <8 x i32> %wide.vec, <8 x i32> undef, <4 x i32> <i32 0, i32 2, i32 4, i32 6>
 ; CHECK: shufflevector <4 x i32> {{.*}}, <4 x i32> <i32 3, i32 2, i32 1, i32 0>
 ; CHECK: shufflevector <8 x i32> %wide.vec, <8 x i32> undef, <4 x i32> <i32 1, i32 3, i32 5, i32 7>
 ; CHECK: shufflevector <4 x i32> {{.*}}, <4 x i32> <i32 3, i32 2, i32 1, i32 0>
 ; CHECK: add nsw <4 x i32>
 ; CHECK: sub nsw <4 x i32>
+; CHECK: %[[G2:.+]] = getelementptr inbounds %struct.ST2, %struct.ST2* %B, i64 %offset.idx, i32 1
+; CHECK: %[[G3:.+]] = getelementptr i32, i32* %[[G2]], i64 -7
+; CHECK: %[[B1:.+]] = bitcast i32* %[[G3]] to <8 x i32>*
 ; CHECK: shufflevector <4 x i32> {{.*}}, <4 x i32> <i32 3, i32 2, i32 1, i32 0>
 ; CHECK: shufflevector <4 x i32> {{.*}}, <4 x i32> <i32 3, i32 2, i32 1, i32 0>
 ; CHECK: %interleaved.vec = shufflevector <4 x i32> {{.*}}, <8 x i32> <i32 0, i32 4, i32 1, i32 5, i32 2, i32 6, i32 3, i32 7>
-; CHECK: store <8 x i32> %interleaved.vec, <8 x i32>* %{{.*}}, align 4
+; CHECK: store <8 x i32> %interleaved.vec, <8 x i32>* %[[B1]], align 4
 
 %struct.ST2 = type { i32, i32 }
 
@@ -332,7 +338,7 @@ for.body:                                         ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @even_load_dynamic_tc(
-; CHECK: min.iters.checked:
+; CHECK: vector.ph:
 ; CHECK:   %n.mod.vf = and i64 %[[N:[a-zA-Z0-9]+]], 3
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:[a-zA-Z0-9]+]] = select i1 %[[IsZero]], i64 4, i64 %n.mod.vf
@@ -573,11 +579,11 @@ for.body:                                         ; preds = %for.body, %entry
 ; }
 
 ; CHECK-LABEL: @PR27626_0(
-; CHECK: min.iters.checked:
+; CHECK: vector.ph:
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 3
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:[a-zA-Z0-9]+]] = select i1 %[[IsZero]], i64 4, i64 %n.mod.vf
-; CHECK:   %n.vec = sub i64 %[[N]], %[[R]]
+; CHECK:   %n.vec = sub nsw i64 %[[N]], %[[R]]
 ; CHECK: vector.body:
 ; CHECK:   %[[L1:.+]] = load <8 x i32>, <8 x i32>* {{.*}}
 ; CHECK:   %[[X1:.+]] = extractelement <8 x i32> %[[L1]], i32 0
@@ -621,11 +627,11 @@ for.end:
 ; }
 
 ; CHECK-LABEL: @PR27626_1(
-; CHECK: min.iters.checked:
+; CHECK: vector.ph:
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 3
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:[a-zA-Z0-9]+]] = select i1 %[[IsZero]], i64 4, i64 %n.mod.vf
-; CHECK:   %n.vec = sub i64 %[[N]], %[[R]]
+; CHECK:   %n.vec = sub nsw i64 %[[N]], %[[R]]
 ; CHECK: vector.body:
 ; CHECK:   %[[Phi:.+]] = phi <4 x i32> [ zeroinitializer, %vector.ph ], [ {{.*}}, %vector.body ]
 ; CHECK:   %[[L1:.+]] = load <8 x i32>, <8 x i32>* {{.*}}
@@ -674,11 +680,11 @@ for.end:
 ; }
 
 ; CHECK-LABEL: @PR27626_2(
-; CHECK: min.iters.checked:
+; CHECK: vector.ph:
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 3
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:[a-zA-Z0-9]+]] = select i1 %[[IsZero]], i64 4, i64 %n.mod.vf
-; CHECK:   %n.vec = sub i64 %[[N]], %[[R]]
+; CHECK:   %n.vec = sub nsw i64 %[[N]], %[[R]]
 ; CHECK: vector.body:
 ; CHECK:   %[[L1:.+]] = load <8 x i32>, <8 x i32>* {{.*}}
 ; CHECK:   %[[X1:.+]] = extractelement <8 x i32> %[[L1]], i32 0
@@ -722,11 +728,11 @@ for.end:
 ; }
 
 ; CHECK-LABEL: @PR27626_3(
-; CHECK: min.iters.checked:
+; CHECK: vector.ph:
 ; CHECK:   %n.mod.vf = and i64 %[[N:.+]], 3
 ; CHECK:   %[[IsZero:[a-zA-Z0-9]+]] = icmp eq i64 %n.mod.vf, 0
 ; CHECK:   %[[R:[a-zA-Z0-9]+]] = select i1 %[[IsZero]], i64 4, i64 %n.mod.vf
-; CHECK:   %n.vec = sub i64 %[[N]], %[[R]]
+; CHECK:   %n.vec = sub nsw i64 %[[N]], %[[R]]
 ; CHECK: vector.body:
 ; CHECK:   %[[Phi:.+]] = phi <4 x i32> [ zeroinitializer, %vector.ph ], [ {{.*}}, %vector.body ]
 ; CHECK:   %[[L1:.+]] = load <8 x i32>, <8 x i32>* {{.*}}

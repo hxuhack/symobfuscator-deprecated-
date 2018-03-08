@@ -112,33 +112,6 @@ In this example the ``extra_sources`` variable is only defined if you're
 targeting an Apple platform. For all other targets the ``extra_sources`` will be
 evaluated as empty before add_executable is given its arguments.
 
-One big "Gotcha" with variable dereferencing is that ``if`` commands implicitly
-dereference values. This has some unexpected results. For example:
-
-.. code-block:: cmake
-
-   if("${SOME_VAR}" STREQUAL "MSVC")
-
-In this code sample MSVC will be implicitly dereferenced, which will result in
-the if command comparing the value of the dereferenced variables ``SOME_VAR``
-and ``MSVC``. A common workaround to this solution is to prepend strings being
-compared with an ``x``.
-
-.. code-block:: cmake
-
-   if("x${SOME_VAR}" STREQUAL "xMSVC")
-
-This works because while ``MSVC`` is a defined variable, ``xMSVC`` is not. This
-pattern is uncommon, but it does occur in LLVM's CMake scripts.
-
-.. note::
-   
-   Once the LLVM project upgrades its minimum CMake version to 3.1 or later we
-   can prevent this behavior by setting CMP0054 to new. For more information on
-   CMake policies please see the cmake-policies manpage or the `cmake-policies
-   online documentation
-   <https://cmake.org/cmake/help/v3.4/manual/cmake-policies.7.html>`_.
-
 Lists
 -----
 
@@ -246,11 +219,11 @@ In general CMake if blocks work the way you'd expect:
 .. code-block:: cmake
 
   if(<condition>)
-    .. do stuff
+    message("do stuff")
   elseif(<condition>)
-    .. do other stuff
+    message("do other stuff")
   else()
-    .. do other other stuff
+    message("do other other stuff")
   endif()
 
 The single most important thing to know about CMake's if blocks coming from a C
@@ -265,7 +238,7 @@ The most common form of the CMake ``foreach`` block is:
 .. code-block:: cmake
 
   foreach(var ...)
-    .. do stuff
+    message("do stuff")
   endforeach()
 
 The variable argument portion of the ``foreach`` block can contain dereferenced

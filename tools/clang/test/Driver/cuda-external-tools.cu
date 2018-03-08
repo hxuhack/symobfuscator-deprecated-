@@ -1,4 +1,5 @@
-// Tests that ptxas and fatbinary are correctly during CUDA compilation.
+// Tests that ptxas and fatbinary are invoked correctly during CUDA
+// compilation.
 //
 // REQUIRES: clang-driver
 // REQUIRES: x86-registered-target
@@ -23,8 +24,8 @@
 // RUN: | FileCheck -check-prefix ARCH64 -check-prefix SM20 -check-prefix DBG %s
 
 // --no-cuda-noopt-device-debug overrides --cuda-noopt-device-debug.
-// RUN: %clang -### -target x86_64-linux-gnu --cuda-noopt-debug \
-// RUN:   --no-cuda-noopt-debug -O2 -c %s 2>&1 \
+// RUN: %clang -### -target x86_64-linux-gnu --cuda-noopt-device-debug \
+// RUN:   --no-cuda-noopt-device-debug -O2 -c %s 2>&1 \
 // RUN: | FileCheck -check-prefix ARCH64 -check-prefix SM20 -check-prefix OPT2 %s
 
 // Regular compile without -O.  This should result in us passing -O0 to ptxas.
@@ -55,6 +56,14 @@
 // RUN:   -Xcuda-fatbinary -bar1 -Xcuda-ptxas -foo2 -Xcuda-fatbinary -bar2 %s 2>&1 \
 // RUN: | FileCheck -check-prefix SM20 -check-prefix PTXAS-EXTRA \
 // RUN:   -check-prefix FATBINARY-EXTRA %s
+
+// MacOS spot-checks
+// RUN: %clang -### -target x86_64-apple-macosx -O0 -c %s 2>&1 \
+// RUN: | FileCheck -check-prefix ARCH64 -check-prefix SM20 -check-prefix OPT0 %s
+// RUN: %clang -### -target x86_64-apple-macosx --cuda-gpu-arch=sm_35 -c %s 2>&1 \
+// RUN: | FileCheck -check-prefix ARCH64 -check-prefix SM35 %s
+// RUN: %clang -### -target x86_32-apple-macosx -c %s 2>&1 \
+// RUN: | FileCheck -check-prefix ARCH32 -check-prefix SM20 %s
 
 // Match clang job that produces PTX assembly.
 // CHECK: "-cc1" "-triple" "nvptx64-nvidia-cuda"

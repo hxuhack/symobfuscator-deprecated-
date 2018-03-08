@@ -1,7 +1,8 @@
-// RUN: %clang_cc1 -triple x86_64-unknown-unknown -emit-llvm -o - %s | FileCheck %s
+// RUN: %clang_cc1 -ffreestanding -triple x86_64-unknown-unknown -emit-llvm -o - %s | FileCheck %s
 
-// Don't include mm_malloc.h, it's system specific.
-#define __MM_MALLOC_H
+// PR33722
+// RUN: %clang_cc1 -ffreestanding -triple x86_64-unknown-unknown -D_MSC_VER -emit-llvm -o - %s | FileCheck %s
+
 #include <immintrin.h>
 
 int test_bit_scan_forward(int a) {

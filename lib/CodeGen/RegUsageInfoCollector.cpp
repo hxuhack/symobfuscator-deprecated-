@@ -48,7 +48,7 @@ public:
     initializeRegUsageInfoCollectorPass(Registry);
   }
 
-  const char *getPassName() const override {
+  StringRef getPassName() const override {
     return "Register Usage Information Collector Pass";
   }
 
@@ -57,10 +57,6 @@ public:
   bool runOnMachineFunction(MachineFunction &MF) override;
 
   static char ID;
-
-private:
-  void markRegClobbered(const TargetRegisterInfo *TRI, uint32_t *RegMask,
-                        unsigned PReg);
 };
 } // end of anonymous namespace
 
@@ -74,13 +70,6 @@ INITIALIZE_PASS_END(RegUsageInfoCollector, "RegUsageInfoCollector",
 
 FunctionPass *llvm::createRegUsageInfoCollector() {
   return new RegUsageInfoCollector();
-}
-
-void RegUsageInfoCollector::markRegClobbered(const TargetRegisterInfo *TRI,
-                                             uint32_t *RegMask, unsigned PReg) {
-  // If PReg is clobbered then all of its alias are also clobbered.
-  for (MCRegAliasIterator AI(PReg, TRI, true); AI.isValid(); ++AI)
-    RegMask[*AI / 32] &= ~(1u << *AI % 32);
 }
 
 void RegUsageInfoCollector::getAnalysisUsage(AnalysisUsage &AU) const {
@@ -114,9 +103,27 @@ bool RegUsageInfoCollector::runOnMachineFunction(MachineFunction &MF) {
 
   DEBUG(dbgs() << "Clobbered Registers: ");
 
-  for (unsigned PReg = 1, PRegE = TRI->getNumRegs(); PReg < PRegE; ++PReg)
-    if (MRI->isPhysRegModified(PReg, true))
-      markRegClobbered(TRI, &RegMask[0], PReg);
+  const BitVector &UsedPhysRegsMask = MRI->getUsedPhysRegsMask();
+  auto SetRegAsDefined = [&RegMask] (unsigned Reg) {
+    RegMask[Reg / 32] &= ~(1u << Reg % 32);
+  };
+  // Scan all the physical registers. When a register is defined in the current
+  // function set it and all the aliasing registers as defined in the regmask.
+  for (unsigned PReg = 1, PRegE = TRI->getNumRegs(); PReg < PRegE; ++PReg) {
+    // If a register is in the UsedPhysRegsMask set then mark it as defined.
+    // All it's aliases will also be in the set, so we can skip setting
+    // as defined all the aliases here.
+    if (UsedPhysRegsMask.test(PReg)) {
+      SetRegAsDefined(PReg);
+      continue;
+    }
+    // If a register is defined by an instruction mark it as defined together
+    // with all it's aliases.
+    if (!MRI->def_empty(PReg)) {
+      for (MCRegAliasIterator AI(PReg, TRI, true); AI.isValid(); ++AI)
+        SetRegAsDefined(*AI);
+    }
+  }
 
   if (!TargetFrameLowering::isSafeForNoCSROpt(F)) {
     const uint32_t *CallPreservedMask =

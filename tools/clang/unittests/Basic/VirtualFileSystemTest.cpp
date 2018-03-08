@@ -12,7 +12,6 @@
 #include "llvm/Support/Errc.h"
 #include "llvm/Support/Host.h"
 #include "llvm/Support/MemoryBuffer.h"
-#include "llvm/Support/Path.h"
 #include "llvm/Support/SourceMgr.h"
 #include "gtest/gtest.h"
 #include <map>
@@ -116,20 +115,23 @@ public:
   }
 
   void addRegularFile(StringRef Path, sys::fs::perms Perms = sys::fs::all_all) {
-    vfs::Status S(Path, UniqueID(FSID, FileID++), sys::TimeValue::now(), 0, 0,
-                  1024, sys::fs::file_type::regular_file, Perms);
+    vfs::Status S(Path, UniqueID(FSID, FileID++),
+                  std::chrono::system_clock::now(), 0, 0, 1024,
+                  sys::fs::file_type::regular_file, Perms);
     addEntry(Path, S);
   }
 
   void addDirectory(StringRef Path, sys::fs::perms Perms = sys::fs::all_all) {
-    vfs::Status S(Path, UniqueID(FSID, FileID++), sys::TimeValue::now(), 0, 0,
-                  0, sys::fs::file_type::directory_file, Perms);
+    vfs::Status S(Path, UniqueID(FSID, FileID++),
+                  std::chrono::system_clock::now(), 0, 0, 0,
+                  sys::fs::file_type::directory_file, Perms);
     addEntry(Path, S);
   }
 
   void addSymlink(StringRef Path) {
-    vfs::Status S(Path, UniqueID(FSID, FileID++), sys::TimeValue::now(), 0, 0,
-                  0, sys::fs::file_type::symlink_file, sys::fs::all_all);
+    vfs::Status S(Path, UniqueID(FSID, FileID++),
+                  std::chrono::system_clock::now(), 0, 0, 0,
+                  sys::fs::file_type::symlink_file, sys::fs::all_all);
     addEntry(Path, S);
   }
 };
@@ -298,8 +300,26 @@ struct ScopedDir {
     EXPECT_FALSE(EC);
   }
   ~ScopedDir() {
-    if (Path != "")
+    if (Path != "") {
       EXPECT_FALSE(llvm::sys::fs::remove(Path.str()));
+    }
+  }
+  operator StringRef() { return Path.str(); }
+};
+
+struct ScopedLink {
+  SmallString<128> Path;
+  ScopedLink(const Twine &To, const Twine &From) {
+    Path = From.str();
+    std::error_code EC = sys::fs::create_link(To, From);
+    if (EC)
+      Path = "";
+    EXPECT_FALSE(EC);
+  }
+  ~ScopedLink() {
+    if (Path != "") {
+      EXPECT_FALSE(llvm::sys::fs::remove(Path.str()));
+    }
   }
   operator StringRef() { return Path.str(); }
 };
@@ -331,6 +351,42 @@ TEST(VirtualFileSystemTest, BasicRealFSIteration) {
   I.increment(EC);
   EXPECT_EQ(vfs::directory_iterator(), I);
 }
+
+#ifdef LLVM_ON_UNIX
+TEST(VirtualFileSystemTest, BrokenSymlinkRealFSIteration) {
+  ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getRealFileSystem();
+
+  ScopedLink _a("no_such_file", TestDirectory + "/a");
+  ScopedDir _b(TestDirectory + "/b");
+  ScopedLink _c("no_such_file", TestDirectory + "/c");
+
+  std::error_code EC;
+  for (vfs::directory_iterator I = FS->dir_begin(Twine(TestDirectory), EC), E;
+       I != E; I.increment(EC)) {
+    // Skip broken symlinks.
+    auto EC2 = std::make_error_code(std::errc::no_such_file_or_directory);
+    if (EC == EC2) {
+      EC.clear();
+      continue;
+    }
+    // For bot debugging.
+    if (EC) {
+      outs() << "Error code found:\n"
+             << "EC value: " << EC.value() << "\n"
+             << "EC category: " << EC.category().name()
+             << "EC message: " << EC.message() << "\n";
+
+      outs() << "Error code tested for:\n"
+             << "EC value: " << EC2.value() << "\n"
+             << "EC category: " << EC2.category().name()
+             << "EC message: " << EC2.message() << "\n";
+    }
+    ASSERT_FALSE(EC);
+    EXPECT_TRUE(I->getName() == _b);
+  }
+}
+#endif
 
 TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/true);
@@ -370,6 +426,56 @@ TEST(VirtualFileSystemTest, BasicRealFSRecursiveIteration) {
   EXPECT_EQ(1, Counts[2]); // c
   EXPECT_EQ(1, Counts[3]); // d
 }
+
+#ifdef LLVM_ON_UNIX
+TEST(VirtualFileSystemTest, BrokenSymlinkRealFSRecursiveIteration) {
+  ScopedDir TestDirectory("virtual-file-system-test", /*Unique*/ true);
+  IntrusiveRefCntPtr<vfs::FileSystem> FS = vfs::getRealFileSystem();
+
+  ScopedLink _a("no_such_file", TestDirectory + "/a");
+  ScopedDir _b(TestDirectory + "/b");
+  ScopedLink _ba("no_such_file", TestDirectory + "/b/a");
+  ScopedDir _bb(TestDirectory + "/b/b");
+  ScopedLink _bc("no_such_file", TestDirectory + "/b/c");
+  ScopedLink _c("no_such_file", TestDirectory + "/c");
+  ScopedDir _d(TestDirectory + "/d");
+  ScopedDir _dd(TestDirectory + "/d/d");
+  ScopedDir _ddd(TestDirectory + "/d/d/d");
+  ScopedLink _e("no_such_file", TestDirectory + "/e");
+  std::vector<StringRef> Expected = {_b, _bb, _d, _dd, _ddd};
+
+  std::vector<std::string> Contents;
+  std::error_code EC;
+  for (vfs::recursive_directory_iterator I(*FS, Twine(TestDirectory), EC), E;
+       I != E; I.increment(EC)) {
+    // Skip broken symlinks.
+    auto EC2 = std::make_error_code(std::errc::no_such_file_or_directory);
+    if (EC == EC2) {
+      EC.clear();
+      continue;
+    }
+    // For bot debugging.
+    if (EC) {
+      outs() << "Error code found:\n"
+             << "EC value: " << EC.value() << "\n"
+             << "EC category: " << EC.category().name()
+             << "EC message: " << EC.message() << "\n";
+
+      outs() << "Error code tested for:\n"
+             << "EC value: " << EC2.value() << "\n"
+             << "EC category: " << EC2.category().name()
+             << "EC message: " << EC2.message() << "\n";
+    }
+    ASSERT_FALSE(EC);
+    Contents.push_back(I->getName());
+  }
+
+  // Check sorted contents.
+  std::sort(Contents.begin(), Contents.end());
+  EXPECT_EQ(Expected.size(), Contents.size());
+  EXPECT_TRUE(std::equal(Contents.begin(), Contents.end(), Expected.begin()));
+}
+#endif
 
 template <typename DirIter>
 static void checkContents(DirIter I, ArrayRef<StringRef> ExpectedOut) {

@@ -1,6 +1,5 @@
-; RUN: llc < %s -march=arm64 -mcpu=cyclone -enable-misched=false -disable-fp-elim | FileCheck %s
-; RUN: llc < %s -O0 -disable-fp-elim | FileCheck -check-prefix=FAST %s
-target triple = "arm64-apple-darwin"
+; RUN: llc < %s -mtriple=arm64-apple-darwin -mcpu=cyclone -enable-misched=false -disable-fp-elim | FileCheck %s
+; RUN: llc < %s -mtriple=arm64-apple-darwin -O0 -disable-fp-elim | FileCheck -check-prefix=FAST %s
 
 ; rdar://12648441
 ; Generated from arm64-arguments.c with -O2.
@@ -281,10 +280,10 @@ entry:
 define i32 @caller42() #3 {
 entry:
 ; CHECK-LABEL: caller42
-; CHECK: str {{x[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
-; CHECK: str {{x[0-9]+}}, [sp, #16]
-; CHECK: str {{q[0-9]+}}, [sp]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #16]
+; CHECK-DAG: str {{q[0-9]+}}, [sp]
 ; CHECK: add x1, sp, #32
 ; CHECK: mov x2, sp
 ; Space for s1 is allocated at sp+32
@@ -319,10 +318,10 @@ entry:
 ; CHECK-LABEL: caller42_stack
 ; CHECK: sub sp, sp, #112
 ; CHECK: add x29, sp, #96
-; CHECK: stur {{x[0-9]+}}, [x29, #-16]
-; CHECK: stur {{q[0-9]+}}, [x29, #-32]
-; CHECK: str {{x[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: stur {{x[0-9]+}}, [x29, #-16]
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-32]
+; CHECK-DAG: str {{x[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
 ; Space for s1 is allocated at x29-32 = sp+64
 ; Space for s2 is allocated at sp+32
 ; CHECK: add x[[B:[0-9]+]], sp, #32
@@ -389,10 +388,10 @@ entry:
 define i32 @caller43() #3 {
 entry:
 ; CHECK-LABEL: caller43
-; CHECK: str {{q[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
-; CHECK: str {{q[0-9]+}}, [sp, #16]
-; CHECK: str {{q[0-9]+}}, [sp]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #16]
+; CHECK-DAG: str {{q[0-9]+}}, [sp]
 ; CHECK: add x1, sp, #32
 ; CHECK: mov x2, sp
 ; Space for s1 is allocated at sp+32
@@ -431,10 +430,10 @@ entry:
 ; CHECK-LABEL: caller43_stack
 ; CHECK: sub sp, sp, #112
 ; CHECK: add x29, sp, #96
-; CHECK: stur {{q[0-9]+}}, [x29, #-16]
-; CHECK: stur {{q[0-9]+}}, [x29, #-32]
-; CHECK: str {{q[0-9]+}}, [sp, #48]
-; CHECK: str {{q[0-9]+}}, [sp, #32]
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-16]
+; CHECK-DAG: stur {{q[0-9]+}}, [x29, #-32]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #48]
+; CHECK-DAG: str {{q[0-9]+}}, [sp, #32]
 ; Space for s1 is allocated at x29-32 = sp+64
 ; Space for s2 is allocated at sp+32
 ; CHECK: add x[[B:[0-9]+]], sp, #32

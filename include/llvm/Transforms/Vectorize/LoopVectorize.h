@@ -57,11 +57,12 @@
 #include "llvm/Analysis/DemandedBits.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/LoopPassManager.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/IR/PassManager.h"
+#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include <functional>
 
 namespace llvm {
@@ -84,8 +85,7 @@ struct LoopVectorizePass : public PassInfoMixin<LoopVectorizePass> {
   AliasAnalysis *AA;
   AssumptionCache *AC;
   std::function<const LoopAccessInfo &(Loop &)> *GetLAA;
-
-  BlockFrequency ColdEntryFreq;
+  OptimizationRemarkEmitter *ORE;
 
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 
@@ -94,7 +94,8 @@ struct LoopVectorizePass : public PassInfoMixin<LoopVectorizePass> {
                TargetTransformInfo &TTI_, DominatorTree &DT_,
                BlockFrequencyInfo &BFI_, TargetLibraryInfo *TLI_,
                DemandedBits &DB_, AliasAnalysis &AA_, AssumptionCache &AC_,
-               std::function<const LoopAccessInfo &(Loop &)> &GetLAA_);
+               std::function<const LoopAccessInfo &(Loop &)> &GetLAA_,
+               OptimizationRemarkEmitter &ORE);
 
   bool processLoop(Loop *L);
 };

@@ -20,6 +20,7 @@ namespace llvm {
   class Constant;
   class LLVMContext;
   class Module;
+  class StringRef;
 }
 
 namespace clang {
@@ -34,6 +35,7 @@ namespace clang {
 
 namespace CodeGen {
   class CodeGenModule;
+  class CGDebugInfo;
 }
 
 /// The primary public interface to the Clang code generator.
@@ -63,6 +65,9 @@ public:
   /// It is illegal to call methods other than GetModule on the
   /// CodeGenerator after releasing its module.
   llvm::Module *ReleaseModule();
+
+  /// Return debug info code generator.
+  CodeGen::CGDebugInfo *getCGDebugInfo();
 
   /// Given a mangled name, return a declaration which mangles that way
   /// which has been added to this code generator via a Handle method.

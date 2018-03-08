@@ -528,6 +528,11 @@ TEST(Matcher, ConstructorCall) {
   EXPECT_TRUE(matches("class X {}; void x(int) { X x; }", Constructor));
 }
 
+TEST(Match, ConstructorInitializers) {
+  EXPECT_TRUE(matches("class C { int i; public: C(int ii) : i(ii) {} };",
+                      cxxCtorInitializer(forField(hasName("i")))));
+}
+
 TEST(Matcher, ThisExpr) {
   EXPECT_TRUE(
     matches("struct X { int a; int f () { return a; } };", cxxThisExpr()));
@@ -589,7 +594,7 @@ TEST(MaterializeTemporaryExpr, MatchesTemporary) {
                materializeTemporaryExpr()));
 
   EXPECT_TRUE(
-    notMatches(ClassString +
+    matches(ClassString +
                  "string GetStringByValue();"
                    "void run() { int k = GetStringByValue().length(); }",
                materializeTemporaryExpr()));
@@ -661,6 +666,12 @@ TEST(Matcher, IntegerLiterals) {
   EXPECT_TRUE(notMatches("int i = 'a';", HasIntLiteral));
   EXPECT_TRUE(notMatches("int i = 1e10;", HasIntLiteral));
   EXPECT_TRUE(notMatches("int i = 10.0;", HasIntLiteral));
+
+  // Negative integers.
+  EXPECT_TRUE(
+      matches("int i = -10;",
+              unaryOperator(hasOperatorName("-"),
+                            hasUnaryOperand(integerLiteral(equals(10))))));
 }
 
 TEST(Matcher, FloatLiterals) {
@@ -1013,6 +1024,29 @@ TEST(InitListExpression, MatchesInitListExpression) {
                       declRefExpr(to(functionDecl(hasName("f"))))));
   EXPECT_TRUE(
     matches("int i[1] = {42, [0] = 43};", integerLiteral(equals(42))));
+}
+
+TEST(CXXStdInitializerListExpression, MatchesCXXStdInitializerListExpression) {
+  const std::string code = "namespace std {"
+                           "template <typename> class initializer_list {"
+                           "  public: initializer_list() noexcept {}"
+                           "};"
+                           "}"
+                           "struct A {"
+                           "  A(std::initializer_list<int>) {}"
+                           "};";
+  EXPECT_TRUE(matches(code + "A a{0};",
+                      cxxConstructExpr(has(cxxStdInitializerListExpr()),
+                                       hasDeclaration(cxxConstructorDecl(
+                                           ofClass(hasName("A")))))));
+  EXPECT_TRUE(matches(code + "A a = {0};",
+                      cxxConstructExpr(has(cxxStdInitializerListExpr()),
+                                       hasDeclaration(cxxConstructorDecl(
+                                           ofClass(hasName("A")))))));
+
+  EXPECT_TRUE(notMatches("int a[] = { 1, 2 };", cxxStdInitializerListExpr()));
+  EXPECT_TRUE(notMatches("struct B { int x, y; }; B b = { 5, 6 };",
+                         cxxStdInitializerListExpr()));
 }
 
 TEST(UsingDeclaration, MatchesUsingDeclarations) {
@@ -1489,15 +1523,32 @@ TEST(TypedefNameDeclMatcher, Match) {
                       typedefNameDecl(hasName("typedefNameDeclTest2"))));
 }
 
+TEST(TypeAliasTemplateDeclMatcher, Match) {
+  std::string Code = R"(
+    template <typename T>
+    class X { T t; };
+
+    template <typename T>
+    using typeAliasTemplateDecl = X<T>;
+
+    using typeAliasDecl = X<int>;
+  )";
+  EXPECT_TRUE(
+      matches(Code, typeAliasTemplateDecl(hasName("typeAliasTemplateDecl"))));
+  EXPECT_TRUE(
+      notMatches(Code, typeAliasTemplateDecl(hasName("typeAliasDecl"))));
+}
+
 TEST(ObjCMessageExprMatcher, SimpleExprs) {
   // don't find ObjCMessageExpr where none are present
   EXPECT_TRUE(notMatchesObjC("", objcMessageExpr(anything())));
 
   std::string Objc1String =
     "@interface Str "
-      " - (Str *)uppercaseString:(Str *)str;"
+      " - (Str *)uppercaseString;"
       "@end "
       "@interface foo "
+      "- (void)contents;"
       "- (void)meth:(Str *)text;"
       "@end "
       " "
@@ -1533,6 +1584,46 @@ TEST(ObjCMessageExprMatcher, SimpleExprs) {
     objcMessageExpr(matchesSelector("uppercase*"),
                     argumentCountIs(0)
     )));
+}
+
+TEST(ObjCDeclMacher, CoreDecls) {
+  std::string ObjCString =
+    "@protocol Proto "
+    "- (void)protoDidThing; "
+    "@end "
+    "@interface Thing "
+    "@property int enabled; "
+    "@end "
+    "@interface Thing (ABC) "
+    "- (void)abc_doThing; "
+    "@end "
+    "@implementation Thing "
+    "{ id _ivar; } "
+    "- (void)anything {} "
+    "@end "
+    ;
+
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcProtocolDecl(hasName("Proto"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcCategoryDecl(hasName("ABC"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("protoDidThing"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("abc_doThing"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcMethodDecl(hasName("anything"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcIvarDecl(hasName("_ivar"))));
+  EXPECT_TRUE(matchesObjC(
+    ObjCString,
+    objcPropertyDecl(hasName("enabled"))));
 }
 
 } // namespace ast_matchers

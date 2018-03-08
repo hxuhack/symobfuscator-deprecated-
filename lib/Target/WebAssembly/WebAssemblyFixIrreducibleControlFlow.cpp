@@ -26,8 +26,8 @@
 ///
 //===----------------------------------------------------------------------===//
 
-#include "WebAssembly.h"
 #include "MCTargetDesc/WebAssemblyMCTargetDesc.h"
+#include "WebAssembly.h"
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "WebAssemblySubtarget.h"
 #include "llvm/ADT/PriorityQueue.h"
@@ -47,7 +47,7 @@ using namespace llvm;
 
 namespace {
 class WebAssemblyFixIrreducibleControlFlow final : public MachineFunctionPass {
-  const char *getPassName() const override {
+  StringRef getPassName() const override {
     return "WebAssembly Fix Irreducible Control Flow";
   }
 

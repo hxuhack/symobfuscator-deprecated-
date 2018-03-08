@@ -69,7 +69,8 @@ public:
 
   /// \brief Perform an action for an invocation.
   virtual bool
-  runInvocation(clang::CompilerInvocation *Invocation, FileManager *Files,
+  runInvocation(std::shared_ptr<clang::CompilerInvocation> Invocation,
+                FileManager *Files,
                 std::shared_ptr<PCHContainerOperations> PCHContainerOps,
                 DiagnosticConsumer *DiagConsumer) = 0;
 };
@@ -85,7 +86,8 @@ public:
   ~FrontendActionFactory() override;
 
   /// \brief Invokes the compiler with a FrontendAction created by create().
-  bool runInvocation(clang::CompilerInvocation *Invocation, FileManager *Files,
+  bool runInvocation(std::shared_ptr<clang::CompilerInvocation> Invocation,
+                     FileManager *Files,
                      std::shared_ptr<PCHContainerOperations> PCHContainerOps,
                      DiagnosticConsumer *DiagConsumer) override;
 
@@ -114,7 +116,7 @@ public:
 
   /// \brief Called before a source file is processed by a FrontEndAction.
   /// \see clang::FrontendAction::BeginSourceFileAction
-  virtual bool handleBeginSource(CompilerInstance &CI, StringRef Filename) {
+  virtual bool handleBeginSource(CompilerInstance &CI) {
     return true;
   }
 
@@ -200,12 +202,15 @@ buildASTFromCode(const Twine &Code, const Twine &FileName = "input.cc",
 /// \param PCHContainerOps The PCHContainerOperations for loading and creating
 /// clang modules.
 ///
+/// \param Adjuster A function to filter the command line arguments as specified.
+///
 /// \return The resulting AST or null if an error occurred.
 std::unique_ptr<ASTUnit> buildASTFromCodeWithArgs(
     const Twine &Code, const std::vector<std::string> &Args,
     const Twine &FileName = "input.cc", const Twine &ToolName = "clang-tool",
     std::shared_ptr<PCHContainerOperations> PCHContainerOps =
-        std::make_shared<PCHContainerOperations>());
+      std::make_shared<PCHContainerOperations>(),
+    ArgumentsAdjuster Adjuster = getClangStripDependencyFileAdjuster());
 
 /// \brief Utility to run a FrontendAction in a single clang invocation.
 class ToolInvocation {
@@ -261,7 +266,7 @@ public:
 
   bool runInvocation(const char *BinaryName,
                      clang::driver::Compilation *Compilation,
-                     clang::CompilerInvocation *Invocation,
+                     std::shared_ptr<clang::CompilerInvocation> Invocation,
                      std::shared_ptr<PCHContainerOperations> PCHContainerOps);
 
   std::vector<std::string> CommandLine;
@@ -386,12 +391,11 @@ inline std::unique_ptr<FrontendActionFactory> newFrontendActionFactory(
       }
 
     protected:
-      bool BeginSourceFileAction(CompilerInstance &CI,
-                                 StringRef Filename) override {
-        if (!clang::ASTFrontendAction::BeginSourceFileAction(CI, Filename))
+      bool BeginSourceFileAction(CompilerInstance &CI) override {
+        if (!clang::ASTFrontendAction::BeginSourceFileAction(CI))
           return false;
         if (Callbacks)
-          return Callbacks->handleBeginSource(CI, Filename);
+          return Callbacks->handleBeginSource(CI);
         return true;
       }
       void EndSourceFileAction() override {

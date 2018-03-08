@@ -367,6 +367,18 @@ cmovnae	%bx,%bx
 // CHECK:  encoding: [0x8e,0xc8]
         movl %eax, %cs
 
+// CHECK: movl	%eax, %cs
+// CHECK:  encoding: [0x8e,0xc8]
+        movw %ax, %cs
+
+// CHECK: movl	%eax, %cs
+// CHECK:  encoding: [0x8e,0xc8]
+        mov %eax, %cs
+
+// CHECK: movl	%eax, %cs
+// CHECK:  encoding: [0x8e,0xc8]
+        mov %ax, %cs
+
 // CHECK: movl	(%eax), %cs
 // CHECK:  encoding: [0x8e,0x08]
         movl (%eax), %cs
@@ -431,6 +443,14 @@ cmovnae	%bx,%bx
 // CHECK: movl	%dr7, %eax
 // CHECK:  encoding: [0x0f,0x21,0xf8]
         movl %dr7,%eax
+
+// CHECK:       clzero
+// CHECK:  encoding: [0x0f,0x01,0xfc]
+                clzero
+
+// CHECK:       clzero
+// CHECK:  encoding: [0x0f,0x01,0xfc]
+                clzero %eax
 
 // radr://8017522
 // CHECK: wait
@@ -1067,3 +1087,13 @@ retw
 // CHECK: lretw
 // CHECK: encoding: [0x66,0xcb]
 lretw
+
+// CHECK: data16
+// CHECK: encoding: [0x66]
+data16
+
+// CHECK: data16
+// CHECK: encoding: [0x66]
+// CHECK: lgdtl 4(%eax)
+// CHECK:  encoding: [0x0f,0x01,0x50,0x04]
+data16 lgdt 4(%eax)

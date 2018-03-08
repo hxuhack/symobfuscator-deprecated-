@@ -39,7 +39,7 @@ typedef char __v8qi __attribute__((__vector_size__(8)));
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c EMMS instruction.
+/// This intrinsic corresponds to the <c> EMMS </c> instruction.
 ///
 static __inline__ void __DEFAULT_FN_ATTRS
 _mm_empty(void)
@@ -52,7 +52,7 @@ _mm_empty(void)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VMOVD / MOVD instruction.
+/// This intrinsic corresponds to the <c> VMOVD / MOVD </c> instruction.
 ///
 /// \param __i
 ///    A 32-bit integer value.
@@ -69,7 +69,7 @@ _mm_cvtsi32_si64(int __i)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VMOVD / MOVD instruction.
+/// This intrinsic corresponds to the <c> VMOVD / MOVD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector.
@@ -85,7 +85,7 @@ _mm_cvtsi64_si32(__m64 __m)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VMOVQ / MOVD instruction.
+/// This intrinsic corresponds to the <c> VMOVQ / MOVD </c> instruction.
 ///
 /// \param __i
 ///    A 64-bit signed integer.
@@ -101,7 +101,7 @@ _mm_cvtsi64_m64(long long __i)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VMOVQ / MOVD instruction.
+/// This intrinsic corresponds to the <c> VMOVQ / MOVD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector.
@@ -121,7 +121,7 @@ _mm_cvtm64_si64(__m64 __m)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PACKSSWB instruction.
+/// This intrinsic corresponds to the <c> PACKSSWB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16]. Each 16-bit element is treated as a
@@ -151,7 +151,7 @@ _mm_packs_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PACKSSDW instruction.
+/// This intrinsic corresponds to the <c> PACKSSDW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32]. Each 32-bit element is treated as a
@@ -181,7 +181,7 @@ _mm_packs_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PACKUSWB instruction.
+/// This intrinsic corresponds to the <c> PACKUSWB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16]. Each 16-bit element is treated as a
@@ -208,19 +208,19 @@ _mm_packs_pu16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKHBW instruction.
+/// This intrinsic corresponds to the <c> PUNPCKHBW </c> instruction.
 ///
 /// \param __m1
-///    A 64-bit integer vector of [8 x i8].
-///    Bits [39:32] are written to bits [7:0] of the result.
-///    Bits [47:40] are written to bits [23:16] of the result.
-///    Bits [55:48] are written to bits [39:32] of the result.
+///    A 64-bit integer vector of [8 x i8]. \n
+///    Bits [39:32] are written to bits [7:0] of the result. \n
+///    Bits [47:40] are written to bits [23:16] of the result. \n
+///    Bits [55:48] are written to bits [39:32] of the result. \n
 ///    Bits [63:56] are written to bits [55:48] of the result.
 /// \param __m2
 ///    A 64-bit integer vector of [8 x i8].
-///    Bits [39:32] are written to bits [15:8] of the result.
-///    Bits [47:40] are written to bits [31:24] of the result.
-///    Bits [55:48] are written to bits [47:40] of the result.
+///    Bits [39:32] are written to bits [15:8] of the result. \n
+///    Bits [47:40] are written to bits [31:24] of the result. \n
+///    Bits [55:48] are written to bits [47:40] of the result. \n
 ///    Bits [63:56] are written to bits [63:56] of the result.
 /// \returns A 64-bit integer vector of [8 x i8] containing the interleaved
 ///    values.
@@ -235,15 +235,15 @@ _mm_unpackhi_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKHWD instruction.
+/// This intrinsic corresponds to the <c> PUNPCKHWD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
-///    Bits [47:32] are written to bits [15:0] of the result.
+///    Bits [47:32] are written to bits [15:0] of the result. \n
 ///    Bits [63:48] are written to bits [47:32] of the result.
 /// \param __m2
 ///    A 64-bit integer vector of [4 x i16].
-///    Bits [47:32] are written to bits [31:16] of the result.
+///    Bits [47:32] are written to bits [31:16] of the result. \n
 ///    Bits [63:48] are written to bits [63:48] of the result.
 /// \returns A 64-bit integer vector of [4 x i16] containing the interleaved
 ///    values.
@@ -258,7 +258,7 @@ _mm_unpackhi_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKHDQ instruction.
+/// This intrinsic corresponds to the <c> PUNPCKHDQ </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32]. The upper 32 bits are written to
@@ -279,19 +279,19 @@ _mm_unpackhi_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKLBW instruction.
+/// This intrinsic corresponds to the <c> PUNPCKLBW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
-///    Bits [7:0] are written to bits [7:0] of the result.
-///    Bits [15:8] are written to bits [23:16] of the result.
-///    Bits [23:16] are written to bits [39:32] of the result.
+///    Bits [7:0] are written to bits [7:0] of the result. \n
+///    Bits [15:8] are written to bits [23:16] of the result. \n
+///    Bits [23:16] are written to bits [39:32] of the result. \n
 ///    Bits [31:24] are written to bits [55:48] of the result.
 /// \param __m2
 ///    A 64-bit integer vector of [8 x i8].
-///    Bits [7:0] are written to bits [15:8] of the result.
-///    Bits [15:8] are written to bits [31:24] of the result.
-///    Bits [23:16] are written to bits [47:40] of the result.
+///    Bits [7:0] are written to bits [15:8] of the result. \n
+///    Bits [15:8] are written to bits [31:24] of the result. \n
+///    Bits [23:16] are written to bits [47:40] of the result. \n
 ///    Bits [31:24] are written to bits [63:56] of the result.
 /// \returns A 64-bit integer vector of [8 x i8] containing the interleaved
 ///    values.
@@ -306,15 +306,15 @@ _mm_unpacklo_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKLWD instruction.
+/// This intrinsic corresponds to the <c> PUNPCKLWD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
-///    Bits [15:0] are written to bits [15:0] of the result.
+///    Bits [15:0] are written to bits [15:0] of the result. \n
 ///    Bits [31:16] are written to bits [47:32] of the result.
 /// \param __m2
 ///    A 64-bit integer vector of [4 x i16].
-///    Bits [15:0] are written to bits [31:16] of the result.
+///    Bits [15:0] are written to bits [31:16] of the result. \n
 ///    Bits [31:16] are written to bits [63:48] of the result.
 /// \returns A 64-bit integer vector of [4 x i16] containing the interleaved
 ///    values.
@@ -329,7 +329,7 @@ _mm_unpacklo_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PUNPCKLDQ instruction.
+/// This intrinsic corresponds to the <c> PUNPCKLDQ </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32]. The lower 32 bits are written to
@@ -352,7 +352,7 @@ _mm_unpacklo_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDB instruction.
+/// This intrinsic corresponds to the <c> PADDB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
@@ -373,7 +373,7 @@ _mm_add_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDW instruction.
+/// This intrinsic corresponds to the <c> PADDW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -394,7 +394,7 @@ _mm_add_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDD instruction.
+/// This intrinsic corresponds to the <c> PADDD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32].
@@ -416,7 +416,7 @@ _mm_add_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDSB instruction.
+/// This intrinsic corresponds to the <c> PADDSB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
@@ -439,7 +439,7 @@ _mm_adds_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDSW instruction.
+/// This intrinsic corresponds to the <c> PADDSW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -461,7 +461,7 @@ _mm_adds_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDUSB instruction.
+/// This intrinsic corresponds to the <c> PADDUSB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
@@ -483,7 +483,7 @@ _mm_adds_pu8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PADDUSW instruction.
+/// This intrinsic corresponds to the <c> PADDUSW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -504,7 +504,7 @@ _mm_adds_pu16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBB instruction.
+/// This intrinsic corresponds to the <c> PSUBB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8] containing the minuends.
@@ -525,7 +525,7 @@ _mm_sub_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBW instruction.
+/// This intrinsic corresponds to the <c> PSUBW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16] containing the minuends.
@@ -546,7 +546,7 @@ _mm_sub_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBD instruction.
+/// This intrinsic corresponds to the <c> PSUBD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32] containing the minuends.
@@ -569,7 +569,7 @@ _mm_sub_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBSB instruction.
+/// This intrinsic corresponds to the <c> PSUBSB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8] containing the minuends.
@@ -592,7 +592,7 @@ _mm_subs_pi8(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBSW instruction.
+/// This intrinsic corresponds to the <c> PSUBSW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16] containing the minuends.
@@ -608,14 +608,15 @@ _mm_subs_pi16(__m64 __m1, __m64 __m2)
 
 /// \brief Subtracts each 8-bit unsigned integer element of the second 64-bit
 ///    integer vector of [8 x i8] from the corresponding 8-bit unsigned integer
-///    element of the first 64-bit integer vector of [8 x i8]. If an element of
-///    the first vector is less than the corresponding element of the second
-///    vector, the result is saturated to 0. The results are packed into a
-///    64-bit integer vector of [8 x i8].
+///    element of the first 64-bit integer vector of [8 x i8].
+///
+///    If an element of the first vector is less than the corresponding element
+///    of the second vector, the result is saturated to 0. The results are
+///    packed into a 64-bit integer vector of [8 x i8].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBUSB instruction.
+/// This intrinsic corresponds to the <c> PSUBUSB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8] containing the minuends.
@@ -631,14 +632,15 @@ _mm_subs_pu8(__m64 __m1, __m64 __m2)
 
 /// \brief Subtracts each 16-bit unsigned integer element of the second 64-bit
 ///    integer vector of [4 x i16] from the corresponding 16-bit unsigned
-///    integer element of the first 64-bit integer vector of [4 x i16]. If an
-///    element of the first vector is less than the corresponding element of the
-///    second vector, the result is saturated to 0. The results are packed into
-///    a 64-bit integer vector of [4 x i16].
+///    integer element of the first 64-bit integer vector of [4 x i16].
+///
+///    If an element of the first vector is less than the corresponding element
+///    of the second vector, the result is saturated to 0. The results are
+///    packed into a 64-bit integer vector of [4 x i16].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSUBUSW instruction.
+/// This intrinsic corresponds to the <c> PSUBUSW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16] containing the minuends.
@@ -657,13 +659,15 @@ _mm_subs_pu16(__m64 __m1, __m64 __m2)
 ///    element of the second 64-bit integer vector of [4 x i16] and get four
 ///    32-bit products. Adds adjacent pairs of products to get two 32-bit sums.
 ///    The lower 32 bits of these two sums are packed into a 64-bit integer
-///    vector of [2 x i32]. For example, bits [15:0] of both parameters are
-///    multiplied, bits [31:16] of both parameters are multiplied, and the sum
-///    of both results is written to bits [31:0] of the result.
+///    vector of [2 x i32].
+///
+///    For example, bits [15:0] of both parameters are multiplied, bits [31:16]
+///    of both parameters are multiplied, and the sum of both results is written
+///    to bits [31:0] of the result.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PMADDWD instruction.
+/// This intrinsic corresponds to the <c> PMADDWD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -684,7 +688,7 @@ _mm_madd_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PMULHW instruction.
+/// This intrinsic corresponds to the <c> PMULHW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -705,7 +709,7 @@ _mm_mulhi_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PMULLW instruction.
+/// This intrinsic corresponds to the <c> PMULLW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -727,14 +731,15 @@ _mm_mullo_pi16(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLW instruction.
+/// This intrinsic corresponds to the <c> PSLLW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
 /// \param __count
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
 /// \returns A 64-bit integer vector of [4 x i16] containing the left-shifted
-///    values. If __count is greater or equal to 16, the result is set to all 0.
+///    values. If \a __count is greater or equal to 16, the result is set to all
+///    0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_sll_pi16(__m64 __m, __m64 __count)
 {
@@ -748,14 +753,15 @@ _mm_sll_pi16(__m64 __m, __m64 __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLW instruction.
+/// This intrinsic corresponds to the <c> PSLLW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
 /// \param __count
 ///    A 32-bit integer value.
 /// \returns A 64-bit integer vector of [4 x i16] containing the left-shifted
-///    values. If __count is greater or equal to 16, the result is set to all 0.
+///    values. If \a __count is greater or equal to 16, the result is set to all
+///    0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_slli_pi16(__m64 __m, int __count)
 {
@@ -770,14 +776,15 @@ _mm_slli_pi16(__m64 __m, int __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLD instruction.
+/// This intrinsic corresponds to the <c> PSLLD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
 /// \param __count
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
 /// \returns A 64-bit integer vector of [2 x i32] containing the left-shifted
-///    values. If __count is greater or equal to 32, the result is set to all 0.
+///    values. If \a __count is greater or equal to 32, the result is set to all
+///    0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_sll_pi32(__m64 __m, __m64 __count)
 {
@@ -791,14 +798,15 @@ _mm_sll_pi32(__m64 __m, __m64 __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLD instruction.
+/// This intrinsic corresponds to the <c> PSLLD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
 /// \param __count
 ///    A 32-bit integer value.
 /// \returns A 64-bit integer vector of [2 x i32] containing the left-shifted
-///    values. If __count is greater or equal to 32, the result is set to all 0.
+///    values. If \a __count is greater or equal to 32, the result is set to all
+///    0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_slli_pi32(__m64 __m, int __count)
 {
@@ -811,14 +819,14 @@ _mm_slli_pi32(__m64 __m, int __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLQ instruction.
+/// This intrinsic corresponds to the <c> PSLLQ </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
 /// \param __count
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
 /// \returns A 64-bit integer vector containing the left-shifted value. If
-///     __count is greater or equal to 64, the result is set to 0.
+///     \a __count is greater or equal to 64, the result is set to 0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_sll_si64(__m64 __m, __m64 __count)
 {
@@ -831,14 +839,14 @@ _mm_sll_si64(__m64 __m, __m64 __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSLLQ instruction.
+/// This intrinsic corresponds to the <c> PSLLQ </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
 /// \param __count
 ///    A 32-bit integer value.
 /// \returns A 64-bit integer vector containing the left-shifted value. If
-///     __count is greater or equal to 64, the result is set to 0.
+///     \a __count is greater or equal to 64, the result is set to 0.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_slli_si64(__m64 __m, int __count)
 {
@@ -847,14 +855,15 @@ _mm_slli_si64(__m64 __m, int __count)
 
 /// \brief Right-shifts each 16-bit integer element of the first parameter,
 ///    which is a 64-bit integer vector of [4 x i16], by the number of bits
-///    specified by the second parameter, which is a 64-bit integer. High-order
-///    bits are filled with the sign bit of the initial value of each 16-bit
-///    element. The 16-bit results are packed into a 64-bit integer vector of
-///    [4 x i16].
+///    specified by the second parameter, which is a 64-bit integer.
+///
+///    High-order bits are filled with the sign bit of the initial value of each
+///    16-bit element. The 16-bit results are packed into a 64-bit integer
+///    vector of [4 x i16].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRAW instruction.
+/// This intrinsic corresponds to the <c> PSRAW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
@@ -870,13 +879,14 @@ _mm_sra_pi16(__m64 __m, __m64 __count)
 
 /// \brief Right-shifts each 16-bit integer element of a 64-bit integer vector
 ///    of [4 x i16] by the number of bits specified by a 32-bit integer.
+///
 ///    High-order bits are filled with the sign bit of the initial value of each
 ///    16-bit element. The 16-bit results are packed into a 64-bit integer
 ///    vector of [4 x i16].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRAW instruction.
+/// This intrinsic corresponds to the <c> PSRAW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
@@ -892,14 +902,15 @@ _mm_srai_pi16(__m64 __m, int __count)
 
 /// \brief Right-shifts each 32-bit integer element of the first parameter,
 ///    which is a 64-bit integer vector of [2 x i32], by the number of bits
-///    specified by the second parameter, which is a 64-bit integer. High-order
-///    bits are filled with the sign bit of the initial value of each 32-bit
-///    element. The 32-bit results are packed into a 64-bit integer vector of
-///    [2 x i32].
+///    specified by the second parameter, which is a 64-bit integer.
+///
+///    High-order bits are filled with the sign bit of the initial value of each
+///    32-bit element. The 32-bit results are packed into a 64-bit integer
+///    vector of [2 x i32].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRAD instruction.
+/// This intrinsic corresponds to the <c> PSRAD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
@@ -915,13 +926,14 @@ _mm_sra_pi32(__m64 __m, __m64 __count)
 
 /// \brief Right-shifts each 32-bit integer element of a 64-bit integer vector
 ///    of [2 x i32] by the number of bits specified by a 32-bit integer.
+///
 ///    High-order bits are filled with the sign bit of the initial value of each
 ///    32-bit element. The 32-bit results are packed into a 64-bit integer
 ///    vector of [2 x i32].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRAD instruction.
+/// This intrinsic corresponds to the <c> PSRAD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
@@ -937,13 +949,14 @@ _mm_srai_pi32(__m64 __m, int __count)
 
 /// \brief Right-shifts each 16-bit integer element of the first parameter,
 ///    which is a 64-bit integer vector of [4 x i16], by the number of bits
-///    specified by the second parameter, which is a 64-bit integer. High-order
-///    bits are cleared. The 16-bit results are packed into a 64-bit integer
-///    vector of [4 x i16].
+///    specified by the second parameter, which is a 64-bit integer.
+///
+///    High-order bits are cleared. The 16-bit results are packed into a 64-bit
+///    integer vector of [4 x i16].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLW instruction.
+/// This intrinsic corresponds to the <c> PSRLW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
@@ -959,12 +972,13 @@ _mm_srl_pi16(__m64 __m, __m64 __count)
 
 /// \brief Right-shifts each 16-bit integer element of a 64-bit integer vector
 ///    of [4 x i16] by the number of bits specified by a 32-bit integer.
+///
 ///    High-order bits are cleared. The 16-bit results are packed into a 64-bit
 ///    integer vector of [4 x i16].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLW instruction.
+/// This intrinsic corresponds to the <c> PSRLW </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [4 x i16].
@@ -980,13 +994,14 @@ _mm_srli_pi16(__m64 __m, int __count)
 
 /// \brief Right-shifts each 32-bit integer element of the first parameter,
 ///    which is a 64-bit integer vector of [2 x i32], by the number of bits
-///    specified by the second parameter, which is a 64-bit integer. High-order
-///    bits are cleared. The 32-bit results are packed into a 64-bit integer
-///    vector of [2 x i32].
+///    specified by the second parameter, which is a 64-bit integer.
+///
+///    High-order bits are cleared. The 32-bit results are packed into a 64-bit
+///    integer vector of [2 x i32].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLD instruction.
+/// This intrinsic corresponds to the <c> PSRLD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
@@ -1002,12 +1017,13 @@ _mm_srl_pi32(__m64 __m, __m64 __count)
 
 /// \brief Right-shifts each 32-bit integer element of a 64-bit integer vector
 ///    of [2 x i32] by the number of bits specified by a 32-bit integer.
+///
 ///    High-order bits are cleared. The 32-bit results are packed into a 64-bit
 ///    integer vector of [2 x i32].
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLD instruction.
+/// This intrinsic corresponds to the <c> PSRLD </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector of [2 x i32].
@@ -1022,12 +1038,13 @@ _mm_srli_pi32(__m64 __m, int __count)
 }
 
 /// \brief Right-shifts the first 64-bit integer parameter by the number of bits
-///    specified by the second 64-bit integer parameter. High-order bits are
-///    cleared.
+///    specified by the second 64-bit integer parameter.
+///
+///    High-order bits are cleared.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLQ instruction.
+/// This intrinsic corresponds to the <c> PSRLQ </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
@@ -1042,11 +1059,13 @@ _mm_srl_si64(__m64 __m, __m64 __count)
 
 /// \brief Right-shifts the first parameter, which is a 64-bit integer, by the
 ///    number of bits specified by the second parameter, which is a 32-bit
-///    integer. High-order bits are cleared.
+///    integer.
+///
+///    High-order bits are cleared.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PSRLQ instruction.
+/// This intrinsic corresponds to the <c> PSRLQ </c> instruction.
 ///
 /// \param __m
 ///    A 64-bit integer vector interpreted as a single 64-bit integer.
@@ -1063,7 +1082,7 @@ _mm_srli_si64(__m64 __m, int __count)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PAND instruction.
+/// This intrinsic corresponds to the <c> PAND </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector.
@@ -1083,7 +1102,7 @@ _mm_and_si64(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PANDN instruction.
+/// This intrinsic corresponds to the <c> PANDN </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector. The one's complement of this parameter is used
@@ -1102,7 +1121,7 @@ _mm_andnot_si64(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c POR instruction.
+/// This intrinsic corresponds to the <c> POR </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector.
@@ -1120,7 +1139,7 @@ _mm_or_si64(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PXOR instruction.
+/// This intrinsic corresponds to the <c> PXOR </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector.
@@ -1136,12 +1155,13 @@ _mm_xor_si64(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 8-bit integer elements of two 64-bit integer vectors of
 ///    [8 x i8] to determine if the element of the first vector is equal to the
-///    corresponding element of the second vector. The comparison yields 0 for
-///    false, 0xFF for true.
+///    corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPEQB instruction.
+/// This intrinsic corresponds to the <c> PCMPEQB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
@@ -1157,12 +1177,13 @@ _mm_cmpeq_pi8(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 16-bit integer elements of two 64-bit integer vectors of
 ///    [4 x i16] to determine if the element of the first vector is equal to the
-///    corresponding element of the second vector. The comparison yields 0 for
-///    false, 0xFFFF for true.
+///    corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPEQW instruction.
+/// This intrinsic corresponds to the <c> PCMPEQW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -1178,12 +1199,13 @@ _mm_cmpeq_pi16(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 32-bit integer elements of two 64-bit integer vectors of
 ///    [2 x i32] to determine if the element of the first vector is equal to the
-///    corresponding element of the second vector. The comparison yields 0 for
-///    false, 0xFFFFFFFF for true.
+///    corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPEQD instruction.
+/// This intrinsic corresponds to the <c> PCMPEQD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32].
@@ -1199,12 +1221,13 @@ _mm_cmpeq_pi32(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 8-bit integer elements of two 64-bit integer vectors of
 ///    [8 x i8] to determine if the element of the first vector is greater than
-///    the corresponding element of the second vector. The comparison yields 0
-///    for false, 0xFF for true.
+///    the corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPGTB instruction.
+/// This intrinsic corresponds to the <c> PCMPGTB </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [8 x i8].
@@ -1220,12 +1243,13 @@ _mm_cmpgt_pi8(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 16-bit integer elements of two 64-bit integer vectors of
 ///    [4 x i16] to determine if the element of the first vector is greater than
-///    the corresponding element of the second vector. The comparison yields 0
-///    for false, 0xFFFF for true.
+///    the corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPGTW instruction.
+/// This intrinsic corresponds to the <c> PCMPGTW </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [4 x i16].
@@ -1241,12 +1265,13 @@ _mm_cmpgt_pi16(__m64 __m1, __m64 __m2)
 
 /// \brief Compares the 32-bit integer elements of two 64-bit integer vectors of
 ///    [2 x i32] to determine if the element of the first vector is greater than
-///    the corresponding element of the second vector. The comparison yields 0
-///    for false, 0xFFFFFFFF for true.
+///    the corresponding element of the second vector.
+///
+///    The comparison yields 0 for false, 0xFFFFFFFF for true.
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c PCMPGTD instruction.
+/// This intrinsic corresponds to the <c> PCMPGTD </c> instruction.
 ///
 /// \param __m1
 ///    A 64-bit integer vector of [2 x i32].
@@ -1264,7 +1289,7 @@ _mm_cmpgt_pi32(__m64 __m1, __m64 __m2)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the the \c VXORPS / XORPS instruction.
+/// This intrinsic corresponds to the <c> VXORPS / XORPS </c> instruction.
 ///
 /// \returns An initialized 64-bit integer vector with all elements set to zero.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
@@ -1356,7 +1381,7 @@ _mm_set_pi8(char __b7, char __b6, char __b5, char __b4, char __b3, char __b2,
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VPSHUFD / PSHUFD instruction.
+/// This intrinsic corresponds to the <c> VPSHUFD / PSHUFD </c> instruction.
 ///
 /// \param __i
 ///    A 32-bit integer value used to initialize each vector element of the
@@ -1374,7 +1399,7 @@ _mm_set1_pi32(int __i)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VPSHUFLW / PSHUFLW instruction.
+/// This intrinsic corresponds to the <c> VPSHUFLW / PSHUFLW </c> instruction.
 ///
 /// \param __w
 ///    A 16-bit integer value used to initialize each vector element of the
@@ -1391,8 +1416,8 @@ _mm_set1_pi16(short __w)
 ///
 /// \headerfile <x86intrin.h>
 ///
-/// This intrinsic corresponds to the \c VPUNPCKLBW + VPSHUFLW / \c PUNPCKLBW +
-///    PSHUFLW instruction.
+/// This intrinsic corresponds to the <c> VPUNPCKLBW + VPSHUFLW / PUNPCKLBW +
+///    PSHUFLW </c> instruction.
 ///
 /// \param __b
 ///    An 8-bit integer value used to initialize each vector element of the

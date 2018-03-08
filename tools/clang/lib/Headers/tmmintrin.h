@@ -469,10 +469,11 @@ _mm_hsubs_pi16(__m64 __a, __m64 __b)
 ///    values contained in the first source operand and packed 8-bit signed
 ///    integer values contained in the second source operand, adds pairs of
 ///    contiguous products with signed saturation, and writes the 16-bit sums to
-///    the corresponding bits in the destination. For example, bits [7:0] of
-///    both operands are multiplied, bits [15:8] of both operands are
-///    multiplied, and the sum of both results is written to bits [15:0] of the
-///    destination.
+///    the corresponding bits in the destination.
+///
+///    For example, bits [7:0] of both operands are multiplied, bits [15:8] of
+///    both operands are multiplied, and the sum of both results is written to
+///    bits [15:0] of the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -483,15 +484,15 @@ _mm_hsubs_pi16(__m64 __a, __m64 __b)
 /// \param __b
 ///    A 128-bit integer vector containing the second source operand.
 /// \returns A 128-bit integer vector containing the sums of products of both
-///    operands:
-///    R0 := (__a0 * __b0) + (__a1 * __b1)
-///    R1 := (__a2 * __b2) + (__a3 * __b3)
-///    R2 := (__a4 * __b4) + (__a5 * __b5)
-///    R3 := (__a6 * __b6) + (__a7 * __b7)
-///    R4 := (__a8 * __b8) + (__a9 * __b9)
-///    R5 := (__a10 * __b10) + (__a11 * __b11)
-///    R6 := (__a12 * __b12) + (__a13 * __b13)
-///    R7 := (__a14 * __b14) + (__a15 * __b15)
+///    operands: \n
+///    \a R0 := (\a __a0 * \a __b0) + (\a __a1 * \a __b1) \n
+///    \a R1 := (\a __a2 * \a __b2) + (\a __a3 * \a __b3) \n
+///    \a R2 := (\a __a4 * \a __b4) + (\a __a5 * \a __b5) \n
+///    \a R3 := (\a __a6 * \a __b6) + (\a __a7 * \a __b7) \n
+///    \a R4 := (\a __a8 * \a __b8) + (\a __a9 * \a __b9) \n
+///    \a R5 := (\a __a10 * \a __b10) + (\a __a11 * \a __b11) \n
+///    \a R6 := (\a __a12 * \a __b12) + (\a __a13 * \a __b13) \n
+///    \a R7 := (\a __a14 * \a __b14) + (\a __a15 * \a __b15)
 static __inline__ __m128i __DEFAULT_FN_ATTRS
 _mm_maddubs_epi16(__m128i __a, __m128i __b)
 {
@@ -502,10 +503,11 @@ _mm_maddubs_epi16(__m128i __a, __m128i __b)
 ///    values contained in the first source operand and packed 8-bit signed
 ///    integer values contained in the second source operand, adds pairs of
 ///    contiguous products with signed saturation, and writes the 16-bit sums to
-///    the corresponding bits in the destination. For example, bits [7:0] of
-///    both operands are multiplied, bits [15:8] of both operands are
-///    multiplied, and the sum of both results is written to bits [15:0] of the
-///    destination.
+///    the corresponding bits in the destination.
+///
+///    For example, bits [7:0] of both operands are multiplied, bits [15:8] of
+///    both operands are multiplied, and the sum of both results is written to
+///    bits [15:0] of the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -516,11 +518,11 @@ _mm_maddubs_epi16(__m128i __a, __m128i __b)
 /// \param __b
 ///    A 64-bit integer vector containing the second source operand.
 /// \returns A 64-bit integer vector containing the sums of products of both
-///    operands:
-///    R0 := (__a0 * __b0) + (__a1 * __b1)
-///    R1 := (__a2 * __b2) + (__a3 * __b3)
-///    R2 := (__a4 * __b4) + (__a5 * __b5)
-///    R3 := (__a6 * __b6) + (__a7 * __b7)
+///    operands: \n
+///    \a R0 := (\a __a0 * \a __b0) + (\a __a1 * \a __b1) \n
+///    \a R1 := (\a __a2 * \a __b2) + (\a __a3 * \a __b3) \n
+///    \a R2 := (\a __a4 * \a __b4) + (\a __a5 * \a __b5) \n
+///    \a R3 := (\a __a6 * \a __b6) + (\a __a7 * \a __b7)
 static __inline__ __m64 __DEFAULT_FN_ATTRS
 _mm_maddubs_pi16(__m64 __a, __m64 __b)
 {
@@ -580,11 +582,11 @@ _mm_mulhrs_pi16(__m64 __a, __m64 __b)
 /// \param __b
 ///    A 128-bit integer vector containing control bytes corresponding to
 ///    positions in the destination:
-///    Bit 7:
-///    1: Clear the corresponding byte in the destination.
+///    Bit 7: \n
+///    1: Clear the corresponding byte in the destination. \n
 ///    0: Copy the selected source byte to the corresponding byte in the
-///    destination.
-///    Bits [6:4] Reserved.
+///    destination. \n
+///    Bits [6:4] Reserved.  \n
 ///    Bits [3:0] select the source byte to be copied.
 /// \returns A 128-bit integer vector containing the copied or cleared values.
 static __inline__ __m128i __DEFAULT_FN_ATTRS
@@ -606,10 +608,10 @@ _mm_shuffle_epi8(__m128i __a, __m128i __b)
 /// \param __b
 ///    A 64-bit integer vector containing control bytes corresponding to
 ///    positions in the destination:
-///    Bit 7:
-///    1: Clear the corresponding byte in the destination.
+///    Bit 7: \n
+///    1: Clear the corresponding byte in the destination. \n
 ///    0: Copy the selected source byte to the corresponding byte in the
-///    destination.
+///    destination. \n
 ///    Bits [3:0] select the source byte to be copied.
 /// \returns A 64-bit integer vector containing the copied or cleared values.
 static __inline__ __m64 __DEFAULT_FN_ATTRS
@@ -619,13 +621,14 @@ _mm_shuffle_pi8(__m64 __a, __m64 __b)
 }
 
 /// \brief For each 8-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    byte in the second source is negative, calculate the two's complement of
-///    the corresponding byte in the first source, and write that value to the
-///    destination. If the byte in the second source is positive, copy the
-///    corresponding byte from the first source to the destination. If the byte
-///    in the second source is zero, clear the corresponding byte in the
-///    destination.
+///    the following actions as specified by the second source operand.
+///
+///    If the byte in the second source is negative, calculate the two's
+///    complement of the corresponding byte in the first source, and write that
+///    value to the destination. If the byte in the second source is positive,
+///    copy the corresponding byte from the first source to the destination. If
+///    the byte in the second source is zero, clear the corresponding byte in
+///    the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -644,13 +647,14 @@ _mm_sign_epi8(__m128i __a, __m128i __b)
 }
 
 /// \brief For each 16-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    word in the second source is negative, calculate the two's complement of
-///    the corresponding word in the first source, and write that value to the
-///    destination. If the word in the second source is positive, copy the
-///    corresponding word from the first source to the destination. If the word
-///    in the second source is zero, clear the corresponding word in the
-///    destination.
+///    the following actions as specified by the second source operand.
+///
+///    If the word in the second source is negative, calculate the two's
+///    complement of the corresponding word in the first source, and write that
+///    value to the destination. If the word in the second source is positive,
+///    copy the corresponding word from the first source to the destination. If
+///    the word in the second source is zero, clear the corresponding word in
+///    the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -669,8 +673,9 @@ _mm_sign_epi16(__m128i __a, __m128i __b)
 }
 
 /// \brief For each 32-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    doubleword in the second source is negative, calculate the two's
+///    the following actions as specified by the second source operand.
+///
+///    If the doubleword in the second source is negative, calculate the two's
 ///    complement of the corresponding word in the first source, and write that
 ///    value to the destination. If the doubleword in the second source is
 ///    positive, copy the corresponding word from the first source to the
@@ -694,13 +699,14 @@ _mm_sign_epi32(__m128i __a, __m128i __b)
 }
 
 /// \brief For each 8-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    byte in the second source is negative, calculate the two's complement of
-///    the corresponding byte in the first source, and write that value to the
-///    destination. If the byte in the second source is positive, copy the
-///    corresponding byte from the first source to the destination. If the byte
-///    in the second source is zero, clear the corresponding byte in the
-///    destination.
+///    the following actions as specified by the second source operand.
+///
+///    If the byte in the second source is negative, calculate the two's
+///    complement of the corresponding byte in the first source, and write that
+///    value to the destination. If the byte in the second source is positive,
+///    copy the corresponding byte from the first source to the destination. If
+///    the byte in the second source is zero, clear the corresponding byte in
+///    the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -719,13 +725,14 @@ _mm_sign_pi8(__m64 __a, __m64 __b)
 }
 
 /// \brief For each 16-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    word in the second source is negative, calculate the two's complement of
-///    the corresponding word in the first source, and write that value to the
-///    destination. If the word in the second source is positive, copy the
-///    corresponding word from the first source to the destination. If the word
-///    in the second source is zero, clear the corresponding word in the
-///    destination.
+///    the following actions as specified by the second source operand.
+///
+///    If the word in the second source is negative, calculate the two's
+///    complement of the corresponding word in the first source, and write that
+///    value to the destination. If the word in the second source is positive,
+///    copy the corresponding word from the first source to the destination. If
+///    the word in the second source is zero, clear the corresponding word in
+///    the destination.
 ///
 /// \headerfile <x86intrin.h>
 ///
@@ -744,8 +751,9 @@ _mm_sign_pi16(__m64 __a, __m64 __b)
 }
 
 /// \brief For each 32-bit integer in the first source operand, perform one of
-///    the following actions as specified by the second source operand: If the
-///    doubleword in the second source is negative, calculate the two's
+///    the following actions as specified by the second source operand.
+///
+///    If the doubleword in the second source is negative, calculate the two's
 ///    complement of the corresponding doubleword in the first source, and
 ///    write that value to the destination. If the doubleword in the second
 ///    source is positive, copy the corresponding doubleword from the first

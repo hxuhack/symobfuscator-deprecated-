@@ -8,8 +8,15 @@
 ; RUN: llvm-profdata merge %S/Inputs/branch1.proftext -o %t.profdata
 ; RUN: opt < %s -pgo-instr-use -pgo-test-profile-file=%t.profdata -S | FileCheck %s --check-prefix=USE
 
+; RUN: llvm-profdata merge %S/Inputs/branch1_large_count.proftext -o %t.l.profdata
+; RUN: opt < %s -pgo-instr-use -pgo-test-profile-file=%t.l.profdata -S | FileCheck %s --check-prefix=USE-LARGE
+
 ; New PM
 ; RUN: opt < %s -passes=pgo-instr-use -pgo-test-profile-file=%t.profdata -S | FileCheck %s --check-prefix=USE
+; RUN: opt < %s -passes=pgo-instr-use -pgo-test-profile-file=%t.l.profdata -S | FileCheck %s --check-prefix=USE-LARGE
+
+; RUN: opt < %s -pgo-instr-use -pgo-test-profile-file=%t.profdata -pass-remarks-analysis=pgo-use-annot -pgo-emit-branch-prob -S 2>&1| FileCheck %s --check-prefix=ANALYSIS
+; RUN: opt < %s -passes=pgo-instr-use -pgo-test-profile-file=%t.profdata -pass-remarks-analysis=pgo-use-annot -pgo-emit-branch-prob -S 2>&1| FileCheck %s --check-prefix=ANALYSIS
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 target triple = "x86_64-unknown-linux-gnu"
@@ -31,6 +38,9 @@ entry:
 ; USE: br i1 %cmp, label %if.then, label %if.end
 ; USE-SAME: !prof ![[BW_ENTRY:[0-9]+]]
 ; USE-DAG: ![[BW_ENTRY]] = !{!"branch_weights", i32 2, i32 1}
+; USE-LARGE: br i1 %cmp, label %if.then, label %if.end
+; USE-LARGE-SAME: !prof ![[BW_L_ENTRY:[0-9]+]]
+; USE-LARGE-DAG: ![[BW_L_ENTRY]] = !{!"branch_weights", i32 -1431655766, i32 1431655765}
 
 if.then:
 ; GEN: if.then:
@@ -47,3 +57,5 @@ if.end:
 ; USE-DAG: {{![0-9]+}} = !{i32 1, !"ProfileSummary", {{![0-9]+}}}
 ; USE-DAG: {{![0-9]+}} = !{!"DetailedSummary", {{![0-9]+}}}
 ; USE-DAG: ![[FUNC_ENTRY_COUNT]] = !{!"function_entry_count", i64 3}
+
+; ANALYSIS:remark: <unknown>:0:0: sgt_i32_Zero {{.*}}66.67% (total count : 3)

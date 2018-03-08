@@ -97,20 +97,24 @@ entry:
 
   ; M2:         sllv      $[[T0:[0-9]+]], $5, $7
   ; M2:         andi      $[[T1:[0-9]+]], $7, 32
-  ; M2:         bnez      $[[T1]], $[[BB0:BB[0-9_]+]]
+  ; M2:         beqz      $[[T1]], $[[BB0:BB[0-9_]+]]
   ; M2:         move      $2, $[[T0]]
+  ; M2:         beqz      $[[T1]], $[[BB1:BB[0-9_]+]]
+  ; M2:         addiu     $3, $zero, 0
+  ; M2:         $[[EXIT:BB[0-9_]+]]:
+  ; M2:         jr        $ra
+  ; M2:         nop
+  ; M2:         $[[BB0]]:
   ; M2:         sllv      $[[T2:[0-9]+]], $4, $7
   ; M2:         not       $[[T3:[0-9]+]], $7
   ; M2:         srl       $[[T4:[0-9]+]], $5, 1
   ; M2:         srlv      $[[T5:[0-9]+]], $[[T4]], $[[T3]]
   ; M2:         or        $2, $[[T2]], $[[T3]]
-  ; M2:         $[[BB0]]:
-  ; M2:         bnez      $[[T1]], $[[BB1:BB[0-9_]+]]
+  ; M2:         bnez      $[[T1]], $[[EXIT]]
   ; M2:         addiu     $3, $zero, 0
-  ; M2:         move      $3, $[[T0]]
   ; M2:         $[[BB1]]:
   ; M2:         jr        $ra
-  ; M2:         nop
+  ; M2:         move      $3, $[[T0]]
 
   ; 32R1-R5:    sllv      $[[T0:[0-9]+]], $4, $7
   ; 32R1-R5:    not       $[[T1:[0-9]+]], $7
@@ -139,20 +143,20 @@ entry:
   ; GP64:       dsllv     $2, $4, $5
 
   ; MMR3:       sllv      $[[T0:[0-9]+]], $4, $7
-  ; MMR3:       srl16     $[[T1:[0-9]+]], $5, 1
-  ; MMR3:       not16     $[[T2:[0-9]+]], $7
-  ; MMR3:       srlv      $[[T3:[0-9]+]], $[[T1]], $[[T2]]
+  ; MMR3:       not16     $[[T1:[0-9]+]], $7
+  ; MMR3:       srl16     $[[T2:[0-9]+]], $5, 1
+  ; MMR3:       srlv      $[[T3:[0-9]+]], $[[T2]], $[[T1]]
   ; MMR3:       or16      $[[T4:[0-9]+]], $[[T0]]
   ; MMR3:       sllv      $[[T5:[0-9]+]], $5, $7
   ; MMR3:       andi16    $[[T6:[0-9]+]], $7, 32
   ; MMR3:       movn      $[[T7:[0-9]+]], $[[T5]], $[[T6]]
-  ; MMR3:       lui       $[[T8:[0-9]+]], 0
+  ; MMR3:       li16      $[[T8:[0-9]+]], 0
   ; MMR3:       movn      $3, $[[T8]], $[[T6]]
 
   ; MMR6:       sllv      $[[T0:[0-9]+]], $4, $7
-  ; MMR6:       srl16     $[[T1:[0-9]+]], $5, 1
-  ; MMR6:       not16     $[[T2:[0-9]+]], $7
-  ; MMR6:       srlv      $[[T3:[0-9]+]], $[[T1]], $[[T2]]
+  ; MMR6:       not16     $[[T1:[0-9]+]], $7
+  ; MMR6:       srl16     $[[T2:[0-9]+]], $5, 1
+  ; MMR6:       srlv      $[[T3:[0-9]+]], $[[T2]], $[[T1]]
   ; MMR6:       or16      $[[T4:[0-9]+]], $[[T0]]
   ; MMR6:       andi16    $[[T5:[0-9]+]], $7, 32
   ; MMR6:       seleqz    $[[T6:[0-9]+]], $[[T4]], $[[T5]]
@@ -169,25 +173,31 @@ define signext i128 @shl_i128(i128 signext %a, i128 signext %b) {
 entry:
 ; ALL-LABEL: shl_i128:
 
-  ; GP32:           lw        $25, %call16(__ashlti3)($gp)
+  ; o32 shouldn't use TImode helpers.
+  ; GP32-NOT:       lw        $25, %call16(__ashlti3)($gp)
+  ; MM-NOT:         lw        $25, %call16(__ashlti3)($2)
 
   ; M3:             sll       $[[T0:[0-9]+]], $7, 0
   ; M3:             dsllv     $[[T1:[0-9]+]], $5, $7
   ; M3:             andi      $[[T2:[0-9]+]], $[[T0]], 64
-  ; M3:             bnez      $[[T3:[0-9]+]], [[BB0:\.LBB[0-9_]+]]
+  ; M3:             beqz      $[[T3:[0-9]+]], [[BB0:\.LBB[0-9_]+]]
   ; M3:             move      $2, $[[T1]]
+  ; M3:             beqz      $[[T3]], [[BB1:\.LBB[0-9_]+]]
+  ; M3:             daddiu    $3, $zero, 0
+  ; M3:             [[EXIT:\.LBB[0-9_]+]]:
+  ; M3:             jr        $ra
+  ; M3:             nop
+  ; M3:             [[BB0]]:
   ; M3:             dsllv     $[[T4:[0-9]+]], $4, $7
   ; M3:             dsrl      $[[T5:[0-9]+]], $5, 1
   ; M3:             not       $[[T6:[0-9]+]], $[[T0]]
   ; M3:             dsrlv     $[[T7:[0-9]+]], $[[T5]], $[[T6]]
   ; M3:             or        $2, $[[T4]], $[[T7]]
-  ; M3:             [[BB0]]:
-  ; M3:             bnez      $[[T3]], [[BB1:\.LBB[0-9_]+]]
+  ; M3:             bnez      $[[T3]], [[EXIT]]
   ; M3:             daddiu    $3, $zero, 0
-  ; M3:             move      $3, $[[T1]]
   ; M3:             [[BB1]]:
   ; M3:             jr        $ra
-  ; M3:             nop
+  ; M3:             move      $3, $[[T1]]
 
   ; GP64-NOT-R6:    dsllv     $[[T0:[0-9]+]], $4, $7
   ; GP64-NOT-R6:    dsrl      $[[T1:[0-9]+]], $5, 1
@@ -215,8 +225,6 @@ entry:
   ; 64R6:           or        $2, $[[T10]], $[[T8]]
   ; 64R6:           jr        $ra
   ; 64R6:           seleqz    $3, $[[T9]], $[[T7]]
-
-  ; MM:             lw        $25, %call16(__ashlti3)($2)
 
   %r = shl i128 %a, %b
   ret i128 %r

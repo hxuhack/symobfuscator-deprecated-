@@ -85,6 +85,8 @@ representation.
    CodeOfConduct
    CompileCudaWithLLVM
    ReportingGuide
+   Benchmarking
+   Docker
 
 :doc:`GettingStarted`
    Discusses how to get up and running quickly with the LLVM infrastructure.
@@ -155,6 +157,9 @@ representation.
    A collection of tips for frontend authors on how to generate IR 
    which LLVM is able to effectively optimize.
 
+:doc:`Docker`
+   A reference for using Dockerfiles provided with LLVM.
+
 
 Programming Documentation
 =========================
@@ -174,6 +179,7 @@ For developers of applications which use LLVM as a library.
    Extensions
    LibFuzzer
    ScudoHardenedAllocator
+   OptBisect
 
 :doc:`LLVM Language Reference Manual <LangRef>`
   Defines the LLVM intermediate representation and the assembly form of the
@@ -221,6 +227,9 @@ For developers of applications which use LLVM as a library.
 :doc:`ScudoHardenedAllocator`
   A library that implements a security-hardened `malloc()`.
 
+:doc:`OptBisect`
+  A command line option for debugging optimization-induced failures.
+
 Subsystem Documentation
 =======================
 
@@ -230,6 +239,7 @@ For API clients and LLVM developers.
    :hidden:
 
    AliasAnalysis
+   MemorySSA
    BitCodeFormat
    BlockFrequencyTerminology
    BranchWeightMetadata
@@ -261,6 +271,11 @@ For API clients and LLVM developers.
    TypeMetadata
    FaultMaps
    MIRLangRef
+   Coroutines
+   GlobalISel
+   XRay
+   XRayExample
+   PDB/index
 
 :doc:`WritingAnLLVMPass`
    Information on how to write LLVM transformations and analyses.
@@ -284,6 +299,9 @@ For API clients and LLVM developers.
 :doc:`AliasAnalysis`
    Information on how to write a new alias analysis implementation or how to
    use existing analyses.
+
+:doc:`MemorySSA`
+   Information about the MemorySSA utility in LLVM, as well as how to use it.
 
 :doc:`GarbageCollection`
    The interfaces source-language compilers should use for compiling GC'd
@@ -341,10 +359,10 @@ For API clients and LLVM developers.
   Answers some questions about the new Attributes infrastructure.
 
 :doc:`NVPTXUsage`
-   This document describes using the NVPTX back-end to compile GPU kernels.
+   This document describes using the NVPTX backend to compile GPU kernels.
 
 :doc:`AMDGPUUsage`
-   This document describes how to use the AMDGPU back-end.
+   This document describes using the AMDGPU backend to compile GPU kernels.
 
 :doc:`StackMaps`
   LLVM support for mapping instruction addresses to the location of
@@ -372,6 +390,21 @@ For API clients and LLVM developers.
 
 :doc:`CompileCudaWithLLVM`
   LLVM support for CUDA.
+
+:doc:`Coroutines`
+  LLVM support for coroutines.
+
+:doc:`GlobalISel`
+  This describes the prototype instruction selection replacement, GlobalISel.
+
+:doc:`XRay`
+  High-level documentation of how to use XRay in LLVM.
+
+:doc:`XRayExample`
+  An example of how to debug an application with XRay.
+
+:doc:`The Microsoft PDB File Format <PDB/index>`
+  A detailed description of the Microsoft PDB (Program Database) file format.
 
 Development Process Documentation
 =================================
@@ -483,6 +516,28 @@ This channel has several bots.
 * clang-bot - A `geordi <http://www.eelis.net/geordi/>`_ instance running
   near-trunk clang instead of gcc.
 
+Community wide proposals
+------------------------
+
+Proposals for massive changes in how the community behaves and how the work flow
+can be better.
+
+.. toctree::
+   :hidden:
+
+   CodeOfConduct
+   Proposals/GitHubMove
+   Proposals/VectorizationPlan
+
+:doc:`CodeOfConduct`
+   Proposal to adopt a code of conduct on the LLVM social spaces (lists, events,
+   IRC, etc).
+
+:doc:`Proposals/GitHubMove`
+   Proposal to move from SVN/Git to GitHub.
+
+:doc:`Proposals/VectorizationPlan`
+   Proposal to model the process and upgrade the infrastructure of LLVM's Loop Vectorizer.
 
 Indices and tables
 ==================

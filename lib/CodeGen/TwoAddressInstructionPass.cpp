@@ -52,7 +52,7 @@
 
 using namespace llvm;
 
-#define DEBUG_TYPE "twoaddrinstr"
+#define DEBUG_TYPE "twoaddressinstruction"
 
 STATISTIC(NumTwoAddressInstrs, "Number of two-address instructions");
 STATISTIC(NumCommuted        , "Number of instructions commuted to coalesce");
@@ -67,6 +67,13 @@ static cl::opt<bool>
 EnableRescheduling("twoaddr-reschedule",
                    cl::desc("Coalesce copies by rescheduling (default=true)"),
                    cl::init(true), cl::Hidden);
+
+// Limit the number of dataflow edges to traverse when evaluating the benefit
+// of commuting operands.
+static cl::opt<unsigned> MaxDataFlowEdge(
+    "dataflow-edge-limit", cl::Hidden, cl::init(3),
+    cl::desc("Maximum number of dataflow edges to traverse when evaluating "
+             "the benefit of commuting operands"));
 
 namespace {
 class TwoAddressInstructionPass : public MachineFunctionPass {
@@ -109,7 +116,7 @@ class TwoAddressInstructionPass : public MachineFunctionPass {
   bool isProfitableToCommute(unsigned regA, unsigned regB, unsigned regC,
                              MachineInstr *MI, unsigned Dist);
 
-  bool commuteInstruction(MachineInstr *MI,
+  bool commuteInstruction(MachineInstr *MI, unsigned DstIdx,
                           unsigned RegBIdx, unsigned RegCIdx, unsigned Dist);
 
   bool isProfitableToConv3Addr(unsigned RegA, unsigned RegB);
@@ -155,7 +162,7 @@ public:
 
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.setPreservesCFG();
-    AU.addRequired<AAResultsWrapperPass>();
+    AU.addUsedIfAvailable<AAResultsWrapperPass>();
     AU.addUsedIfAvailable<LiveVariables>();
     AU.addPreserved<LiveVariables>();
     AU.addPreserved<SlotIndexes>();
@@ -171,10 +178,10 @@ public:
 } // end anonymous namespace
 
 char TwoAddressInstructionPass::ID = 0;
-INITIALIZE_PASS_BEGIN(TwoAddressInstructionPass, "twoaddressinstruction",
+INITIALIZE_PASS_BEGIN(TwoAddressInstructionPass, DEBUG_TYPE,
                 "Two-Address instruction pass", false, false)
 INITIALIZE_PASS_DEPENDENCY(AAResultsWrapperPass)
-INITIALIZE_PASS_END(TwoAddressInstructionPass, "twoaddressinstruction",
+INITIALIZE_PASS_END(TwoAddressInstructionPass, DEBUG_TYPE,
                 "Two-Address instruction pass", false, false)
 
 char &llvm::TwoAddressInstructionPassID = TwoAddressInstructionPass::ID;
@@ -637,10 +644,10 @@ isProfitableToCommute(unsigned regA, unsigned regB, unsigned regC,
   // To more generally minimize register copies, ideally the logic of two addr
   // instruction pass should be integrated with register allocation pass where
   // interference graph is available.
-  if (isRevCopyChain(regC, regA, 3))
+  if (isRevCopyChain(regC, regA, MaxDataFlowEdge))
     return true;
 
-  if (isRevCopyChain(regB, regA, 3))
+  if (isRevCopyChain(regB, regA, MaxDataFlowEdge))
     return false;
 
   // Since there are no intervening uses for both registers, then commute
@@ -651,6 +658,7 @@ isProfitableToCommute(unsigned regA, unsigned regB, unsigned regC,
 /// Commute a two-address instruction and update the basic block, distance map,
 /// and live variables if needed. Return true if it is successful.
 bool TwoAddressInstructionPass::commuteInstruction(MachineInstr *MI,
+                                                   unsigned DstIdx,
                                                    unsigned RegBIdx,
                                                    unsigned RegCIdx,
                                                    unsigned Dist) {
@@ -671,7 +679,7 @@ bool TwoAddressInstructionPass::commuteInstruction(MachineInstr *MI,
   // Update source register map.
   unsigned FromRegC = getMappedReg(RegC, SrcRegMap);
   if (FromRegC) {
-    unsigned RegA = MI->getOperand(0).getReg();
+    unsigned RegA = MI->getOperand(DstIdx).getReg();
     SrcRegMap[RegA] = FromRegC;
   }
 
@@ -904,7 +912,7 @@ rescheduleMIBelowKill(MachineBasicBlock::iterator &mi,
     ++End;
   }
 
-  // Check if the reschedule will not break depedencies.
+  // Check if the reschedule will not break dependencies.
   unsigned NumVisited = 0;
   MachineBasicBlock::iterator KillPos = KillMI;
   ++KillPos;
@@ -1171,6 +1179,9 @@ bool TwoAddressInstructionPass::tryInstructionCommute(MachineInstr *MI,
                                                       unsigned BaseOpIdx,
                                                       bool BaseOpKilled,
                                                       unsigned Dist) {
+  if (!MI->isCommutable())
+    return false;
+
   unsigned DstOpReg = MI->getOperand(DstOpIdx).getReg();
   unsigned BaseOpReg = MI->getOperand(BaseOpIdx).getReg();
   unsigned OpsNum = MI->getDesc().getNumOperands();
@@ -1180,7 +1191,7 @@ bool TwoAddressInstructionPass::tryInstructionCommute(MachineInstr *MI,
     // and OtherOpIdx are commutable, it does not really search for
     // other commutable operands and does not change the values of passed
     // variables.
-    if (OtherOpIdx == BaseOpIdx ||
+    if (OtherOpIdx == BaseOpIdx || !MI->getOperand(OtherOpIdx).isReg() ||
         !TII->findCommutedOpIndices(*MI, BaseOpIdx, OtherOpIdx))
       continue;
 
@@ -1199,7 +1210,8 @@ bool TwoAddressInstructionPass::tryInstructionCommute(MachineInstr *MI,
     }
 
     // If it's profitable to commute, try to do so.
-    if (DoCommute && commuteInstruction(MI, BaseOpIdx, OtherOpIdx, Dist)) {
+    if (DoCommute && commuteInstruction(MI, DstOpIdx, BaseOpIdx, OtherOpIdx,
+                                        Dist)) {
       ++NumCommuted;
       if (AggressiveCommute)
         ++NumAggrCommuted;
@@ -1567,14 +1579,14 @@ TwoAddressInstructionPass::processTiedPairs(MachineInstr *MI,
     if (!IsEarlyClobber) {
       // Replace other (un-tied) uses of regB with LastCopiedReg.
       for (MachineOperand &MO : MI->operands()) {
-        if (MO.isReg() && MO.getReg() == RegB && MO.getSubReg() == SubRegB &&
+        if (MO.isReg() && MO.getReg() == RegB &&
             MO.isUse()) {
           if (MO.isKill()) {
             MO.setIsKill(false);
             RemovedKillFlag = true;
           }
           MO.setReg(LastCopiedReg);
-          MO.setSubReg(0);
+          MO.setSubReg(MO.getSubReg());
         }
       }
     }
@@ -1622,7 +1634,10 @@ bool TwoAddressInstructionPass::runOnMachineFunction(MachineFunction &Func) {
   InstrItins = MF->getSubtarget().getInstrItineraryData();
   LV = getAnalysisIfAvailable<LiveVariables>();
   LIS = getAnalysisIfAvailable<LiveIntervals>();
-  AA = &getAnalysis<AAResultsWrapperPass>().getAAResults();
+  if (auto *AAPass = getAnalysisIfAvailable<AAResultsWrapperPass>())
+    AA = &AAPass->getAAResults();
+  else
+    AA = nullptr;
   OptLevel = TM.getOptLevel();
 
   bool MadeChange = false;
@@ -1780,7 +1795,7 @@ eliminateRegSequence(MachineBasicBlock::iterator &MBBI) {
     MachineInstr *CopyMI = BuildMI(*MI.getParent(), MI, MI.getDebugLoc(),
                                    TII->get(TargetOpcode::COPY))
                                .addReg(DstReg, RegState::Define, SubIdx)
-                               .addOperand(UseMO);
+                               .add(UseMO);
 
     // The first def needs an <undef> flag because there is no live register
     // before it.

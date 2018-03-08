@@ -16,7 +16,6 @@
 #define LLVM_ANALYSIS_CFLGRAPH_H
 
 #include "AliasAnalysisSummary.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/IR/InstVisitor.h"
 #include "llvm/IR/Instructions.h"
@@ -40,6 +39,7 @@ public:
 
   struct Edge {
     Node Other;
+    int64_t Offset;
   };
 
   typedef std::vector<Edge> EdgeList;
@@ -107,8 +107,8 @@ public:
     auto *ToInfo = getNode(To);
     assert(ToInfo != nullptr);
 
-    FromInfo->Edges.push_back(Edge{To});
-    ToInfo->ReverseEdges.push_back(Edge{From});
+    FromInfo->Edges.push_back(Edge{To, Offset});
+    ToInfo->ReverseEdges.push_back(Edge{From, Offset});
   }
 
   const NodeInfo *getNode(Node N) const {
@@ -151,6 +151,7 @@ template <typename CFLAA> class CFLGraphBuilder {
   /// Gets the edges our graph should have, based on an Instruction*
   class GetEdgesVisitor : public InstVisitor<GetEdgesVisitor, void> {
     CFLAA &AA;
+    const DataLayout &DL;
     const TargetLibraryInfo &TLI;
 
     CFLGraph &Graph;
@@ -208,6 +209,11 @@ template <typename CFLAA> class CFLGraphBuilder {
 
     void addDerefEdge(Value *From, Value *To, bool IsRead) {
       assert(From != nullptr && To != nullptr);
+      // FIXME: This is subtly broken, due to how we model some instructions
+      // (e.g. extractvalue, extractelement) as loads. Since those take
+      // non-pointer operands, we'll entirely skip adding edges for those.
+      //
+      // addAssignEdge seems to have a similar issue with insertvalue, etc.
       if (!From->getType()->isPointerTy() || !To->getType()->isPointerTy())
         return;
       addNode(From);
@@ -225,8 +231,8 @@ template <typename CFLAA> class CFLGraphBuilder {
     void addStoreEdge(Value *From, Value *To) { addDerefEdge(From, To, false); }
 
   public:
-    GetEdgesVisitor(CFLGraphBuilder &Builder)
-        : AA(Builder.Analysis), TLI(Builder.TLI), Graph(Builder.Graph),
+    GetEdgesVisitor(CFLGraphBuilder &Builder, const DataLayout &DL)
+        : AA(Builder.Analysis), DL(DL), TLI(Builder.TLI), Graph(Builder.Graph),
           ReturnValues(Builder.ReturnedValues) {}
 
     void visitInstruction(Instruction &) {
@@ -281,9 +287,20 @@ template <typename CFLAA> class CFLGraphBuilder {
         addAssignEdge(Val, &Inst);
     }
 
+    void visitGEP(GEPOperator &GEPOp) {
+      uint64_t Offset = UnknownOffset;
+      APInt APOffset(DL.getPointerSizeInBits(GEPOp.getPointerAddressSpace()),
+                     0);
+      if (GEPOp.accumulateConstantOffset(DL, APOffset))
+        Offset = APOffset.getSExtValue();
+
+      auto *Op = GEPOp.getPointerOperand();
+      addAssignEdge(Op, &GEPOp, Offset);
+    }
+
     void visitGetElementPtrInst(GetElementPtrInst &Inst) {
-      auto *Op = Inst.getPointerOperand();
-      addAssignEdge(Op, &Inst);
+      auto *GEPOp = cast<GEPOperator>(&Inst);
+      visitGEP(*GEPOp);
     }
 
     void visitSelectInst(SelectInst &Inst) {
@@ -321,7 +338,8 @@ template <typename CFLAA> class CFLGraphBuilder {
       // For now, we'll handle this like a landingpad instruction (by placing
       // the
       // result in its own group, and having that group alias externals).
-      addNode(&Inst, getAttrUnknown());
+      if (Inst.getType()->isPointerTy())
+        addNode(&Inst, getAttrUnknown());
     }
 
     static bool isFunctionExternal(Function *Fn) {
@@ -386,8 +404,7 @@ template <typename CFLAA> class CFLGraphBuilder {
       // TODO: address other common library functions such as realloc(),
       // strdup(),
       // etc.
-      if (isMallocLikeFn(Inst, &TLI) || isCallocLikeFn(Inst, &TLI) ||
-          isFreeCall(Inst, &TLI))
+      if (isMallocOrCallocLikeFn(Inst, &TLI) || isFreeCall(Inst, &TLI))
         return;
 
       // TODO: Add support for noalias args/all the other fun function
@@ -416,7 +433,7 @@ template <typename CFLAA> class CFLGraphBuilder {
 
       if (Inst->getType()->isPointerTy()) {
         auto *Fn = CS.getCalledFunction();
-        if (Fn == nullptr || !Fn->doesNotAlias(0))
+        if (Fn == nullptr || !Fn->returnDoesNotAlias())
           // No need to call addNode() since we've added Inst at the
           // beginning of this function and we know it is not a global.
           Graph.addAttr(InstantiatedValue{Inst, 0}, getAttrUnknown());
@@ -444,7 +461,8 @@ template <typename CFLAA> class CFLGraphBuilder {
       // Exceptions come from "nowhere", from our analysis' perspective.
       // So we place the instruction its own group, noting that said group may
       // alias externals
-      addNode(&Inst, getAttrUnknown());
+      if (Inst.getType()->isPointerTy())
+        addNode(&Inst, getAttrUnknown());
     }
 
     void visitInsertValueInst(InsertValueInst &Inst) {
@@ -468,14 +486,98 @@ template <typename CFLAA> class CFLGraphBuilder {
 
     void visitConstantExpr(ConstantExpr *CE) {
       switch (CE->getOpcode()) {
+      case Instruction::GetElementPtr: {
+        auto GEPOp = cast<GEPOperator>(CE);
+        visitGEP(*GEPOp);
+        break;
+      }
+      case Instruction::PtrToInt: {
+        auto *Ptr = CE->getOperand(0);
+        addNode(Ptr, getAttrEscaped());
+        break;
+      }
+      case Instruction::IntToPtr: {
+        addNode(CE, getAttrUnknown());
+        break;
+      }
+      case Instruction::BitCast:
+      case Instruction::AddrSpaceCast:
+      case Instruction::Trunc:
+      case Instruction::ZExt:
+      case Instruction::SExt:
+      case Instruction::FPExt:
+      case Instruction::FPTrunc:
+      case Instruction::UIToFP:
+      case Instruction::SIToFP:
+      case Instruction::FPToUI:
+      case Instruction::FPToSI: {
+        auto *Src = CE->getOperand(0);
+        addAssignEdge(Src, CE);
+        break;
+      }
+      case Instruction::Select: {
+        auto *TrueVal = CE->getOperand(0);
+        auto *FalseVal = CE->getOperand(1);
+        addAssignEdge(TrueVal, CE);
+        addAssignEdge(FalseVal, CE);
+        break;
+      }
+      case Instruction::InsertElement: {
+        auto *Vec = CE->getOperand(0);
+        auto *Val = CE->getOperand(1);
+        addAssignEdge(Vec, CE);
+        addStoreEdge(Val, CE);
+        break;
+      }
+      case Instruction::ExtractElement: {
+        auto *Ptr = CE->getOperand(0);
+        addLoadEdge(Ptr, CE);
+        break;
+      }
+      case Instruction::InsertValue: {
+        auto *Agg = CE->getOperand(0);
+        auto *Val = CE->getOperand(1);
+        addAssignEdge(Agg, CE);
+        addStoreEdge(Val, CE);
+        break;
+      }
+      case Instruction::ExtractValue: {
+        auto *Ptr = CE->getOperand(0);
+        addLoadEdge(Ptr, CE);
+        break;
+      }
+      case Instruction::ShuffleVector: {
+        auto *From1 = CE->getOperand(0);
+        auto *From2 = CE->getOperand(1);
+        addAssignEdge(From1, CE);
+        addAssignEdge(From2, CE);
+        break;
+      }
+      case Instruction::Add:
+      case Instruction::Sub:
+      case Instruction::FSub:
+      case Instruction::Mul:
+      case Instruction::FMul:
+      case Instruction::UDiv:
+      case Instruction::SDiv:
+      case Instruction::FDiv:
+      case Instruction::URem:
+      case Instruction::SRem:
+      case Instruction::FRem:
+      case Instruction::And:
+      case Instruction::Or:
+      case Instruction::Xor:
+      case Instruction::Shl:
+      case Instruction::LShr:
+      case Instruction::AShr:
+      case Instruction::ICmp:
+      case Instruction::FCmp: {
+        addAssignEdge(CE->getOperand(0), CE);
+        addAssignEdge(CE->getOperand(1), CE);
+        break;
+      }
       default:
         llvm_unreachable("Unknown instruction type encountered!");
-// Build the switch statement using the Instruction.def file.
-#define HANDLE_INST(NUM, OPCODE, CLASS)                                        \
-  case Instruction::OPCODE:                                                    \
-    this->visit##OPCODE(*(CLASS *)CE);                                         \
-    break;
-#include "llvm/IR/Instruction.def"
       }
     }
   };
@@ -517,7 +619,7 @@ template <typename CFLAA> class CFLGraphBuilder {
   // Builds the graph needed for constructing the StratifiedSets for the given
   // function
   void buildGraphFrom(Function &Fn) {
-    GetEdgesVisitor Visitor(*this);
+    GetEdgesVisitor Visitor(*this, Fn.getParent()->getDataLayout());
 
     for (auto &Bb : Fn.getBasicBlockList())
       for (auto &Inst : Bb.getInstList())

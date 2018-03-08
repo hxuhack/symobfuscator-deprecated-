@@ -11,13 +11,12 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "clang/Parse/Parser.h"
-#include "RAIIObjectsForParser.h"
 #include "clang/Parse/ParseDiagnostic.h"
+#include "clang/Parse/Parser.h"
+#include "clang/Parse/RAIIObjectsForParser.h"
 #include "clang/Sema/Designator.h"
 #include "clang/Sema/Scope.h"
 #include "llvm/ADT/SmallString.h"
-#include "llvm/Support/raw_ostream.h"
 using namespace clang;
 
 
@@ -405,6 +404,10 @@ ExprResult Parser::ParseBraceInitializer() {
     return Actions.ActOnInitList(LBraceLoc, None, ConsumeBrace());
   }
 
+  // Enter an appropriate expression evaluation context for an initializer list.
+  EnterExpressionEvaluationContext EnterContext(
+      Actions, EnterExpressionEvaluationContext::InitList);
+
   bool InitExprsOk = true;
 
   while (1) {
@@ -498,7 +501,8 @@ bool Parser::ParseMicrosoftIfExistsBraceInitializer(ExprVector &InitExprs,
     Diag(Result.KeywordLoc, diag::warn_microsoft_dependent_exists)
       << Result.IsIfExists;
     // Fall through to skip.
-      
+    LLVM_FALLTHROUGH;
+
   case IEB_Skip:
     Braces.skipToEnd();
     return false;

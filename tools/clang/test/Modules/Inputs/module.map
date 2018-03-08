@@ -261,8 +261,17 @@ module config {
   config_macros [exhaustive] WANT_FOO, WANT_BAR
 }
 
+module diag_flags {
+  header "diag_flags.h"
+}
+
 module diag_pragma {
   header "diag_pragma.h"
+}
+
+module pragma_pack {
+  module set { header "pragma_pack_set.h" }
+  module empty { header "empty.h" }
 }
 
 module dummy {
@@ -336,6 +345,12 @@ module DebugCXX {
 
 module DebugObjC {
   header "DebugObjC.h"
+}
+
+module DebugObjCImport {
+  module SubModule {
+    header "DebugObjCImport.h"
+  }
 }
 
 module ImportNameInDir {
@@ -417,4 +432,31 @@ module Empty {}
 
 module MacroFabs1 {
   header "MacroFabs1.h"
+}
+
+module DiagOutOfDate {
+  header "DiagOutOfDate.h"
+}
+
+module DebugNestedA {
+  header "DebugNestedA.h"
+  export *
+}
+
+module DebugNestedB {
+  header "DebugNestedB.h"
+  export *
+}
+
+module objcAtKeywordMissingEnd {
+  header "objcAtKeywordMissingEnd.h"
+}
+
+module innerstructredef {
+  module one {
+    header "empty.h"
+  }
+  module two {
+   header "innerstructredef.h"
+  }
 }

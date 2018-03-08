@@ -904,8 +904,9 @@ define <8 x i8> @getl(<16 x i8> %x) #0 {
 
 ; CHECK-LABEL: test_extracts_inserts_varidx_extract:
 ; CHECK: str q0
-; CHECK: add x[[PTR:[0-9]+]], {{.*}}, w0, sxtw #1
-; CHECK-DAG: ld1 { v[[R:[0-9]+]].h }[0], [x[[PTR]]]
+; CHECK-DAG: and [[MASKED_IDX:x[0-9]+]], x0, #0x7
+; CHECK: bfi [[PTR:x[0-9]+]], [[MASKED_IDX]], #1, #3
+; CHECK-DAG: ldr h[[R:[0-9]+]], {{\[}}[[PTR]]{{\]}}
 ; CHECK-DAG: ins v[[R]].h[1], v0.h[1]
 ; CHECK-DAG: ins v[[R]].h[2], v0.h[2]
 ; CHECK-DAG: ins v[[R]].h[3], v0.h[3]
@@ -922,7 +923,9 @@ define <4 x i16> @test_extracts_inserts_varidx_extract(<8 x i16> %x, i32 %idx) {
 }
 
 ; CHECK-LABEL: test_extracts_inserts_varidx_insert:
-; CHECK: str h0, [{{.*}}, w0, sxtw #1]
+; CHECK: and [[MASKED_IDX:x[0-9]+]], x0, #0x3
+; CHECK: bfi x9, [[MASKED_IDX]], #1, #2
+; CHECK: st1 { v0.h }[0], [x9]
 ; CHECK-DAG: ldr d[[R:[0-9]+]]
 ; CHECK-DAG: ins v[[R]].h[1], v0.h[1]
 ; CHECK-DAG: ins v[[R]].h[2], v0.h[2]
@@ -1375,7 +1378,7 @@ entry:
 
 define <2 x i64> @test_concat_v2i64_v2i64_v1i64(<2 x i64> %x, <1 x i64> %y) #0 {
 ; CHECK-LABEL: test_concat_v2i64_v2i64_v1i64:
-; CHECK: ins {{v[0-9]+}}.d[1], {{v[0-9]+}}.d[0]
+; CHECK: zip1 {{v[0-9]+}}.2d, {{v[0-9]+}}.2d, {{v[0-9]+}}.2d
 entry:
   %vecext = extractelement <2 x i64> %x, i32 0
   %vecinit = insertelement <2 x i64> undef, i64 %vecext, i32 0

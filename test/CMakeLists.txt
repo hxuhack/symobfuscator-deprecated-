@@ -1,6 +1,14 @@
-if(LLVM_BUILD_EXAMPLES)
-  set(ENABLE_EXAMPLES 1)
-endif()
+llvm_canonicalize_cmake_booleans(
+  LLVM_TOOL_LTO_BUILD
+  HAVE_OCAMLOPT
+  HAVE_OCAML_OUNIT
+  LLVM_INCLUDE_GO_TESTS
+  LLVM_USE_INTEL_JITEVENTS
+  HAVE_LIBZ
+  HAVE_LIBXAR
+  LLVM_ENABLE_DIA_SDK
+  LLVM_ENABLE_FFI
+  BUILD_SHARED_LIBS)
 
 configure_lit_site_cfg(
   ${CMAKE_CURRENT_SOURCE_DIR}/lit.site.cfg.in
@@ -32,30 +40,41 @@ set(LLVM_TEST_DEPENDS
           llvm-as
           llvm-bcanalyzer
           llvm-c-test
+          llvm-cat
+          llvm-cxxfilt
           llvm-config
           llvm-cov
           llvm-cxxdump
+          llvm-cvtres
           llvm-diff
           llvm-dis
+          llvm-dlltool
           llvm-dsymutil
           llvm-dwarfdump
           llvm-dwp
           llvm-extract
           llvm-lib
           llvm-link
+          llvm-lto2
           llvm-mc
           llvm-mcmarkup
+          llvm-modextract
+          llvm-mt
           llvm-nm
           llvm-objdump
-          llvm-pdbdump
+          llvm-opt-report
+          llvm-pdbutil
           llvm-profdata
           llvm-ranlib
           llvm-readobj
+          llvm-readelf
           llvm-rtdyld
           llvm-size
           llvm-split
+          llvm-strings
           llvm-symbolizer
           llvm-tblgen
+          llvm-xray
           not
           obj2yaml
           opt
@@ -87,7 +106,22 @@ if(TARGET LTO)
   set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS} LTO)
 endif()
 
+if(LLVM_BUILD_EXAMPLES)
+  list(APPEND LLVM_TEST_DEPENDS
+    Kaleidoscope-Ch3
+    Kaleidoscope-Ch4
+    Kaleidoscope-Ch5
+    Kaleidoscope-Ch6
+    Kaleidoscope-Ch7
+    )
+endif()
+
 if(TARGET ocaml_llvm)
+  # Clear all non-OCaml cross-target dependencies when building out-of-tree.
+  if(LLVM_OCAML_OUT_OF_TREE)
+    set(LLVM_TEST_DEPENDS)
+  endif()
+
   set(LLVM_TEST_DEPENDS ${LLVM_TEST_DEPENDS}
           ocaml_llvm
           ocaml_llvm_all_backends
@@ -104,16 +138,6 @@ if(TARGET ocaml_llvm)
           ocaml_llvm_transform_utils
           ocaml_llvm_vectorize
         )
-endif()
-
-if(LLVM_BUILD_EXAMPLES)
-  list(APPEND LLVM_TEST_DEPENDS
-    Kaleidoscope-Ch3
-    Kaleidoscope-Ch4
-    Kaleidoscope-Ch5
-    Kaleidoscope-Ch6
-    Kaleidoscope-Ch7
-    )
 endif()
 
 add_custom_target(llvm-test-depends DEPENDS ${LLVM_TEST_DEPENDS})

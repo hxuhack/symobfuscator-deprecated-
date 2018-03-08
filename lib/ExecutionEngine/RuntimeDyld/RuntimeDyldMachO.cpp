@@ -27,7 +27,8 @@ using namespace llvm::object;
 namespace {
 
 class LoadedMachOObjectInfo final
-    : public RuntimeDyld::LoadedObjectInfoHelper<LoadedMachOObjectInfo> {
+    : public LoadedObjectInfoHelper<LoadedMachOObjectInfo,
+                                    RuntimeDyld::LoadedObjectInfo> {
 public:
   LoadedMachOObjectInfo(RuntimeDyldImpl &RTDyld,
                         ObjSectionToIDMap ObjSecToIDMap)
@@ -343,7 +344,7 @@ void RuntimeDyldMachOCRTPBase<Impl>::registerEHFrames() {
 std::unique_ptr<RuntimeDyldMachO>
 RuntimeDyldMachO::create(Triple::ArchType Arch,
                          RuntimeDyld::MemoryManager &MemMgr,
-                         RuntimeDyld::SymbolResolver &Resolver) {
+                         JITSymbolResolver &Resolver) {
   switch (Arch) {
   default:
     llvm_unreachable("Unsupported target for RuntimeDyldMachO.");

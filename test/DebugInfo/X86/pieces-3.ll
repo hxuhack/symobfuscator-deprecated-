@@ -19,7 +19,9 @@
 ; CHECK-NEXT:   DW_AT_location [DW_FORM_data4]        ([[LOC1:.*]])
 ; CHECK-NEXT:   DW_AT_name {{.*}}"outer"
 ; CHECK: DW_TAG_variable
-; CHECK-NEXT:   DW_AT_location [DW_FORM_data4]        ([[LOC2:.*]])
+; CHECK-NEXT:   DW_AT_location
+;                                     rsi, piece 0x00000004
+; CHECK-SAME:                         54 93 04
 ; CHECK-NEXT:   "i1"
 ;
 ; CHECK: .debug_loc
@@ -32,10 +34,6 @@
 ; CHECK:           Beginning address offset: 0x0000000000000004
 ; CHECK-NEXT:         Ending address offset: 0x0000000000000008
 ; CHECK-NEXT: Location description: 55 93 08 93 04 54 93 04
-; CHECK: [[LOC2]]: Beginning address offset: 0x0000000000000004
-; CHECK-NEXT:         Ending address offset: 0x0000000000000008
-;                                     rsi, piece 0x00000004
-; CHECK-NEXT:   Location description: 54 93 04
 
 ;
 ; ModuleID = '/Volumes/Data/llvm/test/DebugInfo/X86/sroasplit-2.ll'
@@ -48,6 +46,7 @@ define i32 @foo(i64 %outer.coerce0, i64 %outer.coerce1) #0 !dbg !4 {
   call void @llvm.dbg.declare(metadata !{null}, metadata !27, metadata !28), !dbg !26
   call void @llvm.dbg.value(metadata i64 %outer.coerce1, i64 0, metadata !29, metadata !30), !dbg !26
   call void @llvm.dbg.declare(metadata !{null}, metadata !31, metadata !32), !dbg !26
+  ; The 'trunc' generates no extra code, thus i1 is visible throughout its scope.
   %outer.sroa.1.8.extract.trunc = trunc i64 %outer.coerce1 to i32, !dbg !33
   call void @llvm.dbg.value(metadata i32 %outer.sroa.1.8.extract.trunc, i64 0, metadata !34, metadata !35), !dbg !33
   %outer.sroa.1.12.extract.shift = lshr i64 %outer.coerce1, 32, !dbg !33
@@ -99,15 +98,15 @@ attributes #2 = { nounwind }
 !22 = !{i32 1, !"Debug Info Version", i32 3}
 !23 = !{!"clang version 3.5.0 "}
 !24 = !DILocalVariable(name: "outer", line: 10, arg: 1, scope: !4, file: !5, type: !9)
-!25 = !DIExpression(DW_OP_bit_piece, 0, 64)
+!25 = !DIExpression(DW_OP_LLVM_fragment, 0, 64)
 !26 = !DILocation(line: 10, scope: !4)
 !27 = !DILocalVariable(name: "outer", line: 10, arg: 1, scope: !4, file: !5, type: !9)
-!28 = !DIExpression(DW_OP_bit_piece, 64, 64)
+!28 = !DIExpression(DW_OP_LLVM_fragment, 64, 64)
 !29 = !DILocalVariable(name: "outer", line: 10, arg: 1, scope: !4, file: !5, type: !9)
-!30 = !DIExpression(DW_OP_bit_piece, 96, 32)
+!30 = !DIExpression(DW_OP_LLVM_fragment, 96, 32)
 !31 = !DILocalVariable(name: "outer", line: 10, arg: 1, scope: !4, file: !5, type: !9)
-!32 = !DIExpression(DW_OP_bit_piece, 64, 32)
+!32 = !DIExpression(DW_OP_LLVM_fragment, 64, 32)
 !33 = !DILocation(line: 11, scope: !4)
 !34 = !DILocalVariable(name: "i1", line: 11, scope: !4, file: !5, type: !14)
-!35 = !DIExpression(DW_OP_bit_piece, 0, 32)
+!35 = !DIExpression(DW_OP_LLVM_fragment, 0, 32)
 !36 = !DILocation(line: 12, scope: !4)

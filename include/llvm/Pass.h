@@ -97,7 +97,7 @@ public:
   /// implemented in terms of the name that is registered by one of the
   /// Registration templates, but can be overloaded directly.
   ///
-  virtual const char *getPassName() const;
+  virtual StringRef getPassName() const;
 
   /// getPassID - Return the PassID number that corresponds to this pass.
   AnalysisID getPassID() const {
@@ -384,7 +384,7 @@ extern bool isFunctionInPrintList(StringRef FunctionName);
 // Include support files that contain important APIs commonly used by Passes,
 // but that we want to separate out to make it easier to read the header files.
 //
-#include "llvm/PassSupport.h"
 #include "llvm/PassAnalysisSupport.h"
+#include "llvm/PassSupport.h"
 
 #endif

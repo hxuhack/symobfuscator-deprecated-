@@ -37,13 +37,22 @@ namespace llvm {
       // Tail call
       TailCall,
 
-      // Get the Higher 16 bits from a 32-bit immediate
+      // Get the Highest (63-48) 16 bits from a 64-bit immediate
+      Highest,
+
+      // Get the Higher (47-32) 16 bits from a 64-bit immediate
+      Higher,
+
+      // Get the High 16 bits from a 32/64-bit immediate
       // No relation with Mips Hi register
       Hi,
 
-      // Get the Lower 16 bits from a 32-bit immediate
+      // Get the Lower 16 bits from a 32/64-bit immediate
       // No relation with Mips Lo register
       Lo,
+
+      // Get the High 16 bits from a 32 bit immediate for accessing the GOT.
+      GotHi,
 
       // Handle gp_rel (small data/bss sections) relocation.
       GPRel,
@@ -107,6 +116,7 @@ namespace llvm {
 
       Ext,
       Ins,
+      CIns,
 
       // EXTR.W instrinsic nodes.
       EXTP,
@@ -238,6 +248,33 @@ namespace llvm {
     bool isCheapToSpeculateCttz() const override;
     bool isCheapToSpeculateCtlz() const override;
 
+    /// Return the register type for a given MVT, ensuring vectors are treated
+    /// as a series of gpr sized integers.
+    virtual MVT getRegisterTypeForCallingConv(MVT VT) const override;
+
+    /// Return the register type for a given MVT, ensuring vectors are treated
+    /// as a series of gpr sized integers.
+    virtual MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                              EVT VT) const override;
+
+    /// Return the number of registers for a given MVT, ensuring vectors are
+    /// treated as a series of gpr sized integers.
+    virtual unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                                   EVT VT) const override;
+
+    /// Break down vectors to the correct number of gpr sized integers.
+    virtual unsigned getVectorTypeBreakdownForCallingConv(
+        LLVMContext &Context, EVT VT, EVT &IntermediateVT,
+        unsigned &NumIntermediates, MVT &RegisterVT) const override;
+
+    /// Return the correct alignment for the current calling convention.
+    virtual unsigned
+    getABIAlignmentForCallingConv(Type *ArgTy, DataLayout DL) const override {
+      if (ArgTy->isVectorTy())
+        return std::min(DL.getABITypeAlignment(ArgTy), 8U);
+      return DL.getABITypeAlignment(ArgTy);
+    }
+
     ISD::NodeType getExtendForAtomicOps() const override {
       return ISD::SIGN_EXTEND;
     }
@@ -296,6 +333,10 @@ namespace llvm {
       return SrcAS < 256 && DestAS < 256;
     }
 
+    bool isJumpTableRelative() const override {
+      return getTargetMachine().isPositionIndependent();
+    }
+
   protected:
     SDValue getGlobalReg(SelectionDAG &DAG, EVT Ty) const;
 
@@ -340,8 +381,8 @@ namespace llvm {
                                   SelectionDAG &DAG, unsigned HiFlag,
                                   unsigned LoFlag, SDValue Chain,
                                   const MachinePointerInfo &PtrInfo) const {
-      SDValue Hi =
-          DAG.getNode(MipsISD::Hi, DL, Ty, getTargetNode(N, Ty, DAG, HiFlag));
+      SDValue Hi = DAG.getNode(MipsISD::GotHi, DL, Ty,
+                               getTargetNode(N, Ty, DAG, HiFlag));
       Hi = DAG.getNode(ISD::ADD, DL, Ty, Hi, getGlobalReg(DAG, Ty));
       SDValue Wrapper = DAG.getNode(MipsISD::Wrapper, DL, Ty, Hi,
                                     getTargetNode(N, Ty, DAG, LoFlag));
@@ -352,6 +393,8 @@ namespace llvm {
     // computing a symbol's address in non-PIC mode:
     //
     // (add %hi(sym), %lo(sym))
+    //
+    // This method covers O32, N32 and N64 in sym32 mode.
     template <class NodeTy>
     SDValue getAddrNonPIC(NodeTy *N, const SDLoc &DL, EVT Ty,
                           SelectionDAG &DAG) const {
@@ -360,7 +403,37 @@ namespace llvm {
       return DAG.getNode(ISD::ADD, DL, Ty,
                          DAG.getNode(MipsISD::Hi, DL, Ty, Hi),
                          DAG.getNode(MipsISD::Lo, DL, Ty, Lo));
-    }
+   }
+
+   // This method creates the following nodes, which are necessary for
+   // computing a symbol's address in non-PIC mode for N64.
+   //
+   // (add (shl (add (shl (add %highest(sym), %higher(sim)), 16), %high(sym)),
+   //            16), %lo(%sym))
+   //
+   // FIXME: This method is not efficent for (micro)MIPS64R6.
+   template <class NodeTy>
+   SDValue getAddrNonPICSym64(NodeTy *N, const SDLoc &DL, EVT Ty,
+                          SelectionDAG &DAG) const {
+      SDValue Hi = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_HI);
+      SDValue Lo = getTargetNode(N, Ty, DAG, MipsII::MO_ABS_LO);
+
+      SDValue Highest =
+          DAG.getNode(MipsISD::Highest, DL, Ty,
+                      getTargetNode(N, Ty, DAG, MipsII::MO_HIGHEST));
+      SDValue Higher = getTargetNode(N, Ty, DAG, MipsII::MO_HIGHER);
+      SDValue HigherPart =
+          DAG.getNode(ISD::ADD, DL, Ty, Highest,
+                      DAG.getNode(MipsISD::Higher, DL, Ty, Higher));
+      SDValue Cst = DAG.getConstant(16, DL, MVT::i32);
+      SDValue Shift = DAG.getNode(ISD::SHL, DL, Ty, HigherPart, Cst);
+      SDValue Add = DAG.getNode(ISD::ADD, DL, Ty, Shift,
+                                DAG.getNode(MipsISD::Hi, DL, Ty, Hi));
+      SDValue Shift2 = DAG.getNode(ISD::SHL, DL, Ty, Add, Cst);
+
+      return DAG.getNode(ISD::ADD, DL, Ty, Shift2,
+                         DAG.getNode(MipsISD::Lo, DL, Ty, Lo));
+   }
 
     // This method creates the following nodes, which are necessary for
     // computing a symbol's address using gp-relative addressing:
@@ -426,7 +499,6 @@ namespace llvm {
                             TargetLowering::CallLoweringInfo &CLI) const;
 
     // Lower Operand specifics
-    SDValue lowerBR_JT(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerBRCOND(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerConstantPool(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerGlobalAddress(SDValue Op, SelectionDAG &DAG) const;
@@ -446,7 +518,7 @@ namespace llvm {
     SDValue lowerShiftLeftParts(SDValue Op, SelectionDAG& DAG) const;
     SDValue lowerShiftRightParts(SDValue Op, SelectionDAG& DAG,
                                  bool IsSRA) const;
-    SDValue lowerADD(SDValue Op, SelectionDAG &DAG) const;
+    SDValue lowerEH_DWARF_CFA(SDValue Op, SelectionDAG &DAG) const;
     SDValue lowerFP_TO_SINT(SDValue Op, SelectionDAG &DAG) const;
 
     /// isEligibleForTailCallOptimization - Check whether the call is eligible
@@ -471,7 +543,7 @@ namespace llvm {
     void passByValArg(SDValue Chain, const SDLoc &DL,
                       std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
                       SmallVectorImpl<SDValue> &MemOpChains, SDValue StackPtr,
-                      MachineFrameInfo *MFI, SelectionDAG &DAG, SDValue Arg,
+                      MachineFrameInfo &MFI, SelectionDAG &DAG, SDValue Arg,
                       unsigned FirstReg, unsigned LastReg,
                       const ISD::ArgFlagsTy &Flags, bool isLittle,
                       const CCValAssign &VA) const;

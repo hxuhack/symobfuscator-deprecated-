@@ -12,10 +12,11 @@
 // weak symbols to be undefined. That is a complication we don't want to expose
 // to clients right now.
 //===----------------------------------------------------------------------===//
-#include "FuzzerInternal.h"
+#include "FuzzerDefs.h"
 #if LIBFUZZER_LINUX
 
 #include "FuzzerExtFunctions.h"
+#include "FuzzerIO.h"
 
 extern "C" {
 // Declare these symbols as weak to allow them to be optionally defined.
@@ -40,11 +41,14 @@ namespace fuzzer {
 ExternalFunctions::ExternalFunctions() {
 #define EXT_FUNC(NAME, RETURN_TYPE, FUNC_SIG, WARN)                            \
   this->NAME = ::NAME;                                                         \
-  CheckFnPtr((void *)::NAME, #NAME, WARN);
+  CheckFnPtr(reinterpret_cast<void *>(reinterpret_cast<uintptr_t>(::NAME)),    \
+             #NAME, WARN);
 
 #include "FuzzerExtFunctions.def"
 
 #undef EXT_FUNC
 }
+
 } // namespace fuzzer
+
 #endif // LIBFUZZER_LINUX

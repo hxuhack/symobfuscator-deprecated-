@@ -37,12 +37,8 @@
 #include "clang/Lex/Preprocessor.h"
 #include "clang/Sema/ScopeInfo.h"
 #include "clang/Sema/SemaInternal.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/FoldingSet.h"
-#include "llvm/ADT/ImmutableMap.h"
 #include "llvm/ADT/MapVector.h"
-#include "llvm/ADT/PostOrderIterator.h"
 #include "llvm/ADT/SmallString.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/StringRef.h"
@@ -50,7 +46,6 @@
 #include <algorithm>
 #include <deque>
 #include <iterator>
-#include <vector>
 
 using namespace clang;
 
@@ -61,6 +56,8 @@ using namespace clang;
 namespace {
   class UnreachableCodeHandler : public reachable_code::Callback {
     Sema &S;
+    SourceRange PreviousSilenceableCondVal;
+
   public:
     UnreachableCodeHandler(Sema &s) : S(s) {}
 
@@ -69,6 +66,14 @@ namespace {
                            SourceRange SilenceableCondVal,
                            SourceRange R1,
                            SourceRange R2) override {
+      // Avoid reporting multiple unreachable code diagnostics that are
+      // triggered by the same conditional value.
+      if (PreviousSilenceableCondVal.isValid() &&
+          SilenceableCondVal.isValid() &&
+          PreviousSilenceableCondVal == SilenceableCondVal)
+        return;
+      PreviousSilenceableCondVal = SilenceableCondVal;
+
       unsigned diag = diag::warn_unreachable;
       switch (UK) {
         case reachable_code::UK_Break:
@@ -274,6 +279,159 @@ static void checkRecursiveFunction(Sema &S, const FunctionDecl *FD,
 }
 
 //===----------------------------------------------------------------------===//
+// Check for throw in a non-throwing function.
+//===----------------------------------------------------------------------===//
+enum ThrowState {
+  FoundNoPathForThrow,
+  FoundPathForThrow,
+  FoundPathWithNoThrowOutFunction,
+};
+
+static bool isThrowCaught(const CXXThrowExpr *Throw,
+                          const CXXCatchStmt *Catch) {
+  const Type *ThrowType = nullptr;
+  if (Throw->getSubExpr())
+    ThrowType = Throw->getSubExpr()->getType().getTypePtrOrNull();
+  if (!ThrowType)
+    return false;
+  const Type *CaughtType = Catch->getCaughtType().getTypePtrOrNull();
+  if (!CaughtType)
+    return true;
+  if (ThrowType->isReferenceType())
+    ThrowType = ThrowType->castAs<ReferenceType>()
+                    ->getPointeeType()
+                    ->getUnqualifiedDesugaredType();
+  if (CaughtType->isReferenceType())
+    CaughtType = CaughtType->castAs<ReferenceType>()
+                     ->getPointeeType()
+                     ->getUnqualifiedDesugaredType();
+  if (ThrowType->isPointerType() && CaughtType->isPointerType()) {
+    ThrowType = ThrowType->getPointeeType()->getUnqualifiedDesugaredType();
+    CaughtType = CaughtType->getPointeeType()->getUnqualifiedDesugaredType();
+  }
+  if (CaughtType == ThrowType)
+    return true;
+  const CXXRecordDecl *CaughtAsRecordType =
+      CaughtType->getAsCXXRecordDecl();
+  const CXXRecordDecl *ThrowTypeAsRecordType = ThrowType->getAsCXXRecordDecl();
+  if (CaughtAsRecordType && ThrowTypeAsRecordType)
+    return ThrowTypeAsRecordType->isDerivedFrom(CaughtAsRecordType);
+  return false;
+}
+
+static bool isThrowCaughtByHandlers(const CXXThrowExpr *CE,
+                                    const CXXTryStmt *TryStmt) {
+  for (unsigned H = 0, E = TryStmt->getNumHandlers(); H < E; ++H) {
+    if (isThrowCaught(CE, TryStmt->getHandler(H)))
+      return true;
+  }
+  return false;
+}
+
+static bool doesThrowEscapePath(CFGBlock Block, SourceLocation &OpLoc) {
+  for (const auto &B : Block) {
+    if (B.getKind() != CFGElement::Statement)
+      continue;
+    const auto *CE = dyn_cast<CXXThrowExpr>(B.getAs<CFGStmt>()->getStmt());
+    if (!CE)
+      continue;
+
+    OpLoc = CE->getThrowLoc();
+    for (const auto &I : Block.succs()) {
+      if (!I.isReachable())
+        continue;
+      if (const auto *Terminator =
+              dyn_cast_or_null<CXXTryStmt>(I->getTerminator()))
+        if (isThrowCaughtByHandlers(CE, Terminator))
+          return false;
+    }
+    return true;
+  }
+  return false;
+}
+
+static bool hasThrowOutNonThrowingFunc(SourceLocation &OpLoc, CFG *BodyCFG) {
+
+  unsigned ExitID = BodyCFG->getExit().getBlockID();
+
+  SmallVector<ThrowState, 16> States(BodyCFG->getNumBlockIDs(),
+                                     FoundNoPathForThrow);
+  States[BodyCFG->getEntry().getBlockID()] = FoundPathWithNoThrowOutFunction;
+
+  SmallVector<CFGBlock *, 16> Stack;
+  Stack.push_back(&BodyCFG->getEntry());
+  while (!Stack.empty()) {
+    CFGBlock *CurBlock = Stack.back();
+    Stack.pop_back();
+
+    unsigned ID = CurBlock->getBlockID();
+    ThrowState CurState = States[ID];
+    if (CurState == FoundPathWithNoThrowOutFunction) {
+      if (ExitID == ID)
+        continue;
+
+      if (doesThrowEscapePath(*CurBlock, OpLoc))
+        CurState = FoundPathForThrow;
+    }
+
+    // Loop over successor blocks and add them to the Stack if their state
+    // changes.
+    for (const auto &I : CurBlock->succs())
+      if (I.isReachable()) {
+        unsigned NextID = I->getBlockID();
+        if (NextID == ExitID && CurState == FoundPathForThrow) {
+          States[NextID] = CurState;
+        } else if (States[NextID] < CurState) {
+          States[NextID] = CurState;
+          Stack.push_back(I);
+        }
+      }
+  }
+  // Return true if the exit node is reachable, and only reachable through
+  // a throw expression.
+  return States[ExitID] == FoundPathForThrow;
+}
+
+static void EmitDiagForCXXThrowInNonThrowingFunc(Sema &S, SourceLocation OpLoc,
+                                                 const FunctionDecl *FD) {
+  if (!S.getSourceManager().isInSystemHeader(OpLoc) &&
+      FD->getTypeSourceInfo()) {
+    S.Diag(OpLoc, diag::warn_throw_in_noexcept_func) << FD;
+    if (S.getLangOpts().CPlusPlus11 &&
+        (isa<CXXDestructorDecl>(FD) ||
+         FD->getDeclName().getCXXOverloadedOperator() == OO_Delete ||
+         FD->getDeclName().getCXXOverloadedOperator() == OO_Array_Delete)) {
+      if (const auto *Ty = FD->getTypeSourceInfo()->getType()->
+                                         getAs<FunctionProtoType>())
+        S.Diag(FD->getLocation(), diag::note_throw_in_dtor)
+            << !isa<CXXDestructorDecl>(FD) << !Ty->hasExceptionSpec()
+            << FD->getExceptionSpecSourceRange();
+    } else 
+      S.Diag(FD->getLocation(), diag::note_throw_in_function)
+          << FD->getExceptionSpecSourceRange();
+  }
+}
+
+static void checkThrowInNonThrowingFunc(Sema &S, const FunctionDecl *FD,
+                                        AnalysisDeclContext &AC) {
+  CFG *BodyCFG = AC.getCFG();
+  if (!BodyCFG)
+    return;
+  if (BodyCFG->getExit().pred_empty())
+    return;
+  SourceLocation OpLoc;
+  if (hasThrowOutNonThrowingFunc(OpLoc, BodyCFG))
+    EmitDiagForCXXThrowInNonThrowingFunc(S, OpLoc, FD);
+}
+
+static bool isNoexcept(const FunctionDecl *FD) {
+  const auto *FPT = FD->getType()->castAs<FunctionProtoType>();
+  if (FPT->isNothrow(FD->getASTContext()))
+    return true;
+  return false;
+}
+
+//===----------------------------------------------------------------------===//
 // Check for missing return value.
 //===----------------------------------------------------------------------===//
 
@@ -370,7 +528,7 @@ static ControlFlowKind CheckFallThrough(AnalysisDeclContext &AC) {
 
     CFGStmt CS = ri->castAs<CFGStmt>();
     const Stmt *S = CS.getStmt();
-    if (isa<ReturnStmt>(S)) {
+    if (isa<ReturnStmt>(S) || isa<CoreturnStmt>(S)) {
       HasLiveReturn = true;
       continue;
     }
@@ -421,7 +579,7 @@ struct CheckFallThroughDiagnostics {
   unsigned diag_AlwaysFallThrough_HasNoReturn;
   unsigned diag_AlwaysFallThrough_ReturnsNonVoid;
   unsigned diag_NeverFallThroughOrReturn;
-  enum { Function, Block, Lambda } funMode;
+  enum { Function, Block, Lambda, Coroutine } funMode;
   SourceLocation FuncLoc;
 
   static CheckFallThroughDiagnostics MakeForFunction(const Decl *Func) {
@@ -454,6 +612,19 @@ struct CheckFallThroughDiagnostics {
       D.diag_NeverFallThroughOrReturn = 0;
     
     D.funMode = Function;
+    return D;
+  }
+
+  static CheckFallThroughDiagnostics MakeForCoroutine(const Decl *Func) {
+    CheckFallThroughDiagnostics D;
+    D.FuncLoc = Func->getLocation();
+    D.diag_MaybeFallThrough_HasNoReturn = 0;
+    D.diag_MaybeFallThrough_ReturnsNonVoid =
+        diag::warn_maybe_falloff_nonvoid_coroutine;
+    D.diag_AlwaysFallThrough_HasNoReturn = 0;
+    D.diag_AlwaysFallThrough_ReturnsNonVoid =
+        diag::warn_falloff_nonvoid_coroutine;
+    D.funMode = Coroutine;
     return D;
   }
 
@@ -499,7 +670,13 @@ struct CheckFallThroughDiagnostics {
              (!ReturnsVoid ||
               D.isIgnored(diag::warn_suggest_noreturn_block, FuncLoc));
     }
-
+    if (funMode == Coroutine) {
+      return (ReturnsVoid ||
+              D.isIgnored(diag::warn_maybe_falloff_nonvoid_function, FuncLoc) ||
+              D.isIgnored(diag::warn_maybe_falloff_nonvoid_coroutine,
+                          FuncLoc)) &&
+             (!HasNoReturn);
+    }
     // For blocks / lambdas.
     return ReturnsVoid && !HasNoReturn;
   }
@@ -518,12 +695,16 @@ static void CheckFallThroughForBody(Sema &S, const Decl *D, const Stmt *Body,
 
   bool ReturnsVoid = false;
   bool HasNoReturn = false;
+  bool IsCoroutine = S.getCurFunction() && S.getCurFunction()->isCoroutine();
 
-  if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
-    ReturnsVoid = FD->getReturnType()->isVoidType();
+  if (const auto *FD = dyn_cast<FunctionDecl>(D)) {
+    if (const auto *CBody = dyn_cast<CoroutineBodyStmt>(Body))
+      ReturnsVoid = CBody->getFallthroughHandler() != nullptr;
+    else
+      ReturnsVoid = FD->getReturnType()->isVoidType();
     HasNoReturn = FD->isNoReturn();
   }
-  else if (const ObjCMethodDecl *MD = dyn_cast<ObjCMethodDecl>(D)) {
+  else if (const auto *MD = dyn_cast<ObjCMethodDecl>(D)) {
     ReturnsVoid = MD->getReturnType()->isVoidType();
     HasNoReturn = MD->hasAttr<NoReturnAttr>();
   }
@@ -543,8 +724,13 @@ static void CheckFallThroughForBody(Sema &S, const Decl *D, const Stmt *Body,
   // Short circuit for compilation speed.
   if (CD.checkDiagnostics(Diags, ReturnsVoid, HasNoReturn))
       return;
-
   SourceLocation LBrace = Body->getLocStart(), RBrace = Body->getLocEnd();
+  auto EmitDiag = [&](SourceLocation Loc, unsigned DiagID) {
+    if (IsCoroutine)
+      S.Diag(Loc, DiagID) << S.getCurFunction()->CoroutinePromise->getType();
+    else
+      S.Diag(Loc, DiagID);
+  };
   // Either in a function body compound statement, or a function-try-block.
   switch (CheckFallThrough(AC)) {
     case UnknownFallThrough:
@@ -552,15 +738,15 @@ static void CheckFallThroughForBody(Sema &S, const Decl *D, const Stmt *Body,
 
     case MaybeFallThrough:
       if (HasNoReturn)
-        S.Diag(RBrace, CD.diag_MaybeFallThrough_HasNoReturn);
+        EmitDiag(RBrace, CD.diag_MaybeFallThrough_HasNoReturn);
       else if (!ReturnsVoid)
-        S.Diag(RBrace, CD.diag_MaybeFallThrough_ReturnsNonVoid);
+        EmitDiag(RBrace, CD.diag_MaybeFallThrough_ReturnsNonVoid);
       break;
     case AlwaysFallThrough:
       if (HasNoReturn)
-        S.Diag(RBrace, CD.diag_AlwaysFallThrough_HasNoReturn);
+        EmitDiag(RBrace, CD.diag_AlwaysFallThrough_HasNoReturn);
       else if (!ReturnsVoid)
-        S.Diag(RBrace, CD.diag_AlwaysFallThrough_ReturnsNonVoid);
+        EmitDiag(RBrace, CD.diag_AlwaysFallThrough_ReturnsNonVoid);
       break;
     case NeverFallThroughOrReturn:
       if (ReturnsVoid && !HasNoReturn && CD.diag_NeverFallThroughOrReturn) {
@@ -945,7 +1131,8 @@ namespace {
       }
     }
 
-    bool checkFallThroughIntoBlock(const CFGBlock &B, int &AnnotatedCnt) {
+    bool checkFallThroughIntoBlock(const CFGBlock &B, int &AnnotatedCnt,
+                                   bool IsTemplateInstantiation) {
       assert(!ReachableBlocks.empty() && "ReachableBlocks empty");
 
       int UnannotatedCnt = 0;
@@ -975,8 +1162,12 @@ namespace {
                ElemIt != ElemEnd; ++ElemIt) {
             if (Optional<CFGStmt> CS = ElemIt->getAs<CFGStmt>()) {
               if (const AttributedStmt *AS = asFallThroughAttr(CS->getStmt())) {
-                S.Diag(AS->getLocStart(),
-                       diag::warn_fallthrough_attr_unreachable);
+                // Don't issue a warning for an unreachable fallthrough
+                // attribute in template instantiations as it may not be
+                // unreachable in all instantiations of the template.
+                if (!IsTemplateInstantiation)
+                  S.Diag(AS->getLocStart(),
+                         diag::warn_fallthrough_attr_unreachable);
                 markFallthroughVisited(AS);
                 ++AnnotatedCnt;
                 break;
@@ -1137,7 +1328,11 @@ static void DiagnoseSwitchLabelsFallthrough(Sema &S, AnalysisDeclContext &AC,
 
     int AnnotatedCnt;
 
-    if (!FM.checkFallThroughIntoBlock(*B, AnnotatedCnt))
+    bool IsTemplateInstantiation = false;
+    if (const FunctionDecl *Function = dyn_cast<FunctionDecl>(AC.getDecl()))
+      IsTemplateInstantiation = Function->isTemplateInstantiation();
+    if (!FM.checkFallThroughIntoBlock(*B, AnnotatedCnt,
+                                      IsTemplateInstantiation))
       continue;
 
     S.Diag(Label->getLocStart(),
@@ -1992,12 +2187,15 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
   // Warning: check missing 'return'
   if (P.enableCheckFallThrough) {
     const CheckFallThroughDiagnostics &CD =
-      (isa<BlockDecl>(D) ? CheckFallThroughDiagnostics::MakeForBlock()
-       : (isa<CXXMethodDecl>(D) &&
-          cast<CXXMethodDecl>(D)->getOverloadedOperator() == OO_Call &&
-          cast<CXXMethodDecl>(D)->getParent()->isLambda())
-            ? CheckFallThroughDiagnostics::MakeForLambda()
-            : CheckFallThroughDiagnostics::MakeForFunction(D));
+        (isa<BlockDecl>(D)
+             ? CheckFallThroughDiagnostics::MakeForBlock()
+             : (isa<CXXMethodDecl>(D) &&
+                cast<CXXMethodDecl>(D)->getOverloadedOperator() == OO_Call &&
+                cast<CXXMethodDecl>(D)->getParent()->isLambda())
+                   ? CheckFallThroughDiagnostics::MakeForLambda()
+                   : (fscope->isCoroutine()
+                          ? CheckFallThroughDiagnostics::MakeForCoroutine(D)
+                          : CheckFallThroughDiagnostics::MakeForFunction(D)));
     CheckFallThroughForBody(S, D, Body, blkExpr, CD, AC);
   }
 
@@ -2081,6 +2279,12 @@ AnalysisBasedWarnings::IssueWarnings(sema::AnalysisBasedWarnings::Policy P,
       checkRecursiveFunction(S, FD, Body, AC);
     }
   }
+
+  // Check for throw out of non-throwing function.
+  if (!Diags.isIgnored(diag::warn_throw_in_noexcept_func, D->getLocStart()))
+    if (const FunctionDecl *FD = dyn_cast<FunctionDecl>(D))
+      if (S.getLangOpts().CPlusPlus && isNoexcept(FD))
+        checkThrowInNonThrowingFunc(S, FD, AC);
 
   // If none of the previous checks caused a CFG build, trigger one here
   // for -Wtautological-overlap-compare

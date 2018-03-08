@@ -16,11 +16,12 @@
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/DiagnosticPrinter.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Instructions.h"
+#include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/Operator.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -203,9 +204,9 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         return false;  // no volatile/atomic accesses.
       }
       Constant *Ptr = getVal(SI->getOperand(1));
-      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr)) {
+      if (auto *FoldedPtr = ConstantFoldConstant(Ptr, DL, TLI)) {
         DEBUG(dbgs() << "Folding constant ptr expression: " << *Ptr);
-        Ptr = ConstantFoldConstantExpression(CE, DL, TLI);
+        Ptr = FoldedPtr;
         DEBUG(dbgs() << "; To: " << *Ptr << "\n");
       }
       if (!isSimpleEnoughPointerToCommit(Ptr)) {
@@ -249,8 +250,8 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
               Constant * const IdxList[] = {IdxZero, IdxZero};
 
               Ptr = ConstantExpr::getGetElementPtr(nullptr, Ptr, IdxList);
-              if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr))
-                Ptr = ConstantFoldConstantExpression(CE, DL, TLI);
+              if (auto *FoldedPtr = ConstantFoldConstant(Ptr, DL, TLI))
+                Ptr = FoldedPtr;
 
             // If we can't improve the situation by introspecting NewTy,
             // we have to give up.
@@ -324,8 +325,8 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
       }
 
       Constant *Ptr = getVal(LI->getOperand(0));
-      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(Ptr)) {
-        Ptr = ConstantFoldConstantExpression(CE, DL, TLI);
+      if (auto *FoldedPtr = ConstantFoldConstant(Ptr, DL, TLI)) {
+        Ptr = FoldedPtr;
         DEBUG(dbgs() << "Found a constant pointer expression, constant "
               "folding: " << *Ptr << "\n");
       }
@@ -401,7 +402,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
           Value *Ptr = PtrArg->stripPointerCasts();
           if (GlobalVariable *GV = dyn_cast<GlobalVariable>(Ptr)) {
             Type *ElemTy = GV->getValueType();
-            if (!Size->isAllOnesValue() &&
+            if (!Size->isMinusOne() &&
                 Size->getValue().getLimitedValue() >=
                     DL.getTypeStoreSize(ElemTy)) {
               Invariants.insert(GV);
@@ -438,7 +439,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
 
       if (Callee->isDeclaration()) {
         // If this is a function we can constant fold, do it.
-        if (Constant *C = ConstantFoldCall(Callee, Formals, TLI)) {
+        if (Constant *C = ConstantFoldCall(CS, Callee, Formals, TLI)) {
           InstResult = C;
           DEBUG(dbgs() << "Constant folded function call. Result: " <<
                 *InstResult << "\n");
@@ -486,7 +487,7 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
         ConstantInt *Val =
           dyn_cast<ConstantInt>(getVal(SI->getCondition()));
         if (!Val) return false;  // Cannot determine.
-        NextBB = SI->findCaseValue(Val).getCaseSuccessor();
+        NextBB = SI->findCaseValue(Val)->getCaseSuccessor();
       } else if (IndirectBrInst *IBI = dyn_cast<IndirectBrInst>(CurInst)) {
         Value *Val = getVal(IBI->getAddress())->stripPointerCasts();
         if (BlockAddress *BA = dyn_cast<BlockAddress>(Val))
@@ -512,8 +513,8 @@ bool Evaluator::EvaluateBlock(BasicBlock::iterator CurInst,
     }
 
     if (!CurInst->use_empty()) {
-      if (ConstantExpr *CE = dyn_cast<ConstantExpr>(InstResult))
-        InstResult = ConstantFoldConstantExpression(CE, DL, TLI);
+      if (auto *FoldedInstResult = ConstantFoldConstant(InstResult, DL, TLI))
+        InstResult = FoldedInstResult;
 
       setVal(&*CurInst, InstResult);
     }
@@ -537,7 +538,7 @@ bool Evaluator::EvaluateFunction(Function *F, Constant *&RetVal,
                                  const SmallVectorImpl<Constant*> &ActualArgs) {
   // Check to see if this function is already executing (recursion).  If so,
   // bail out.  TODO: we might want to accept limited recursion.
-  if (std::find(CallStack.begin(), CallStack.end(), F) != CallStack.end())
+  if (is_contained(CallStack, F))
     return false;
 
   CallStack.push_back(F);

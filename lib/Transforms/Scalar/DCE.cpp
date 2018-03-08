@@ -19,10 +19,10 @@
 #include "llvm/Transforms/Scalar/DCE.h"
 #include "llvm/ADT/SetVector.h"
 #include "llvm/ADT/Statistic.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/IR/InstIterator.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/Pass.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
 using namespace llvm;
@@ -123,10 +123,13 @@ static bool eliminateDeadCode(Function &F, TargetLibraryInfo *TLI) {
   return MadeChange;
 }
 
-PreservedAnalyses DCEPass::run(Function &F, AnalysisManager<Function> &AM) {
-  if (eliminateDeadCode(F, AM.getCachedResult<TargetLibraryAnalysis>(F)))
-    return PreservedAnalyses::none();
-  return PreservedAnalyses::all();
+PreservedAnalyses DCEPass::run(Function &F, FunctionAnalysisManager &AM) {
+  if (!eliminateDeadCode(F, AM.getCachedResult<TargetLibraryAnalysis>(F)))
+    return PreservedAnalyses::all();
+
+  PreservedAnalyses PA;
+  PA.preserveSet<CFGAnalyses>();
+  return PA;
 }
 
 namespace {

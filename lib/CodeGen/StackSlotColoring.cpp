@@ -11,7 +11,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/Passes.h"
 #include "llvm/ADT/BitVector.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
@@ -22,6 +21,7 @@
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineMemOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/PseudoSourceValue.h"
 #include "llvm/IR/Module.h"
 #include "llvm/Support/CommandLine.h"
@@ -32,7 +32,7 @@
 #include <vector>
 using namespace llvm;
 
-#define DEBUG_TYPE "stackslotcoloring"
+#define DEBUG_TYPE "stack-slot-coloring"
 
 static cl::opt<bool>
 DisableSharing("no-stack-slot-sharing",
@@ -116,12 +116,12 @@ namespace {
 char StackSlotColoring::ID = 0;
 char &llvm::StackSlotColoringID = StackSlotColoring::ID;
 
-INITIALIZE_PASS_BEGIN(StackSlotColoring, "stack-slot-coloring",
+INITIALIZE_PASS_BEGIN(StackSlotColoring, DEBUG_TYPE,
                 "Stack Slot Coloring", false, false)
 INITIALIZE_PASS_DEPENDENCY(SlotIndexes)
 INITIALIZE_PASS_DEPENDENCY(LiveStacks)
 INITIALIZE_PASS_DEPENDENCY(MachineLoopInfo)
-INITIALIZE_PASS_END(StackSlotColoring, "stack-slot-coloring",
+INITIALIZE_PASS_END(StackSlotColoring, DEBUG_TYPE,
                 "Stack Slot Coloring", false, false)
 
 namespace {
@@ -381,7 +381,6 @@ bool StackSlotColoring::RemoveDeadStores(MachineBasicBlock* MBB) {
        I != E; ++I) {
     if (DCELimit != -1 && (int)NumDead >= DCELimit)
       break;
-
     int FirstSS, SecondSS;
     if (TII->isStackSlotCopy(*I, FirstSS, SecondSS) && FirstSS == SecondSS &&
         FirstSS != -1) {
@@ -392,12 +391,18 @@ bool StackSlotColoring::RemoveDeadStores(MachineBasicBlock* MBB) {
     }
 
     MachineBasicBlock::iterator NextMI = std::next(I);
-    if (NextMI == MBB->end()) continue;
+    MachineBasicBlock::iterator ProbableLoadMI = I;
 
     unsigned LoadReg = 0;
     unsigned StoreReg = 0;
     if (!(LoadReg = TII->isLoadFromStackSlot(*I, FirstSS)))
       continue;
+    // Skip the ...pseudo debugging... instructions between a load and store.
+    while ((NextMI != E) && NextMI->isDebugValue()) {
+      ++NextMI;
+      ++I;
+    }
+    if (NextMI == E) continue;
     if (!(StoreReg = TII->isStoreToStackSlot(*NextMI, SecondSS)))
       continue;
     if (FirstSS != SecondSS || LoadReg != StoreReg || FirstSS == -1) continue;
@@ -407,7 +412,7 @@ bool StackSlotColoring::RemoveDeadStores(MachineBasicBlock* MBB) {
 
     if (NextMI->findRegisterUseOperandIdx(LoadReg, true, nullptr) != -1) {
       ++NumDead;
-      toErase.push_back(&*I);
+      toErase.push_back(&*ProbableLoadMI);
     }
 
     toErase.push_back(&*NextMI);
@@ -428,7 +433,7 @@ bool StackSlotColoring::runOnMachineFunction(MachineFunction &MF) {
              << "********** Function: " << MF.getName() << '\n';
     });
 
-  MFI = MF.getFrameInfo();
+  MFI = &MF.getFrameInfo();
   TII = MF.getSubtarget().getInstrInfo();
   LS = &getAnalysis<LiveStacks>();
   MBFI = &getAnalysis<MachineBlockFrequencyInfo>();

@@ -15,6 +15,7 @@
 #include "clang/FrontendTool/Utils.h"
 #include "clang/ARCMigrate/ARCMTActions.h"
 #include "clang/CodeGen/CodeGenAction.h"
+#include "clang/Config/config.h"
 #include "clang/Driver/Options.h"
 #include "clang/Frontend/CompilerInstance.h"
 #include "clang/Frontend/CompilerInvocation.h"
@@ -52,7 +53,10 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
   case EmitCodeGenOnly:        return llvm::make_unique<EmitCodeGenOnlyAction>();
   case EmitObj:                return llvm::make_unique<EmitObjAction>();
   case FixIt:                  return llvm::make_unique<FixItAction>();
-  case GenerateModule:         return llvm::make_unique<GenerateModuleAction>();
+  case GenerateModule:
+    return llvm::make_unique<GenerateModuleFromModuleMapAction>();
+  case GenerateModuleInterface:
+    return llvm::make_unique<GenerateModuleInterfaceAction>();
   case GeneratePCH:            return llvm::make_unique<GeneratePCHAction>();
   case GeneratePTH:            return llvm::make_unique<GeneratePTHAction>();
   case InitOnly:               return llvm::make_unique<InitOnlyAction>();
@@ -82,7 +86,8 @@ CreateFrontendBaseAction(CompilerInstance &CI) {
   case PrintDeclContext:       return llvm::make_unique<DeclContextPrintAction>();
   case PrintPreamble:          return llvm::make_unique<PrintPreambleAction>();
   case PrintPreprocessedInput: {
-    if (CI.getPreprocessorOutputOpts().RewriteIncludes)
+    if (CI.getPreprocessorOutputOpts().RewriteIncludes ||
+        CI.getPreprocessorOutputOpts().RewriteImports)
       return llvm::make_unique<RewriteIncludesAction>();
     return llvm::make_unique<PrintPreprocessedAction>();
   }
@@ -171,7 +176,7 @@ CreateFrontendAction(CompilerInstance &CI) {
 bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
   // Honor -help.
   if (Clang->getFrontendOpts().ShowHelp) {
-    std::unique_ptr<OptTable> Opts(driver::createDriverOptTable());
+    std::unique_ptr<OptTable> Opts = driver::createDriverOptTable();
     Opts->PrintHelp(llvm::outs(), "clang -cc1",
                     "LLVM 'Clang' Compiler: http://clang.llvm.org",
                     /*Include=*/ driver::options::CC1Option, /*Exclude=*/ 0);
@@ -228,6 +233,11 @@ bool clang::ExecuteCompilerInvocation(CompilerInstance *Clang) {
   if (Clang->getAnalyzerOpts()->ShowCheckerHelp) {
     ento::printCheckerHelp(llvm::outs(), Clang->getFrontendOpts().Plugins);
     return true;
+  }
+  if (Clang->getAnalyzerOpts()->ShowEnabledCheckerList) {
+    ento::printEnabledCheckerList(llvm::outs(),
+                                  Clang->getFrontendOpts().Plugins,
+                                  *Clang->getAnalyzerOpts());
   }
 #endif
 

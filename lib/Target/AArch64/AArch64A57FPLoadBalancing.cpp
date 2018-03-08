@@ -95,10 +95,6 @@ static bool isMla(MachineInstr *MI) {
   }
 }
 
-namespace llvm {
-static void initializeAArch64A57FPLoadBalancingPass(PassRegistry &);
-}
-
 //===----------------------------------------------------------------------===//
 
 namespace {
@@ -126,10 +122,10 @@ public:
 
   MachineFunctionProperties getRequiredProperties() const override {
     return MachineFunctionProperties().set(
-        MachineFunctionProperties::Property::AllVRegsAllocated);
+        MachineFunctionProperties::Property::NoVRegs);
   }
 
-  const char *getPassName() const override {
+  StringRef getPassName() const override {
     return "A57 FP Anti-dependency breaker";
   }
 
@@ -497,43 +493,30 @@ bool AArch64A57FPLoadBalancing::colorChainSet(std::vector<Chain*> GV,
 
 int AArch64A57FPLoadBalancing::scavengeRegister(Chain *G, Color C,
                                                 MachineBasicBlock &MBB) {
-  RegScavenger RS;
-  RS.enterBasicBlock(MBB);
-  RS.forward(MachineBasicBlock::iterator(G->getStart()));
-
   // Can we find an appropriate register that is available throughout the life
-  // of the chain?
-  unsigned RegClassID = G->getStart()->getDesc().OpInfo[0].RegClass;
-  BitVector AvailableRegs = RS.getRegsAvailable(TRI->getRegClass(RegClassID));
-  for (MachineBasicBlock::iterator I = G->begin(), E = G->end(); I != E; ++I) {
-    RS.forward(I);
-    AvailableRegs &= RS.getRegsAvailable(TRI->getRegClass(RegClassID));
-
-    // Remove any registers clobbered by a regmask or any def register that is
-    // immediately dead.
-    for (auto J : I->operands()) {
-      if (J.isRegMask())
-        AvailableRegs.clearBitsNotInMask(J.getRegMask());
-
-      if (J.isReg() && J.isDef()) {
-        MCRegAliasIterator AI(J.getReg(), TRI, /*IncludeSelf=*/true);
-        if (J.isDead())
-          for (; AI.isValid(); ++AI)
-            AvailableRegs.reset(*AI);
-#ifndef NDEBUG
-        else
-          for (; AI.isValid(); ++AI)
-            assert(!AvailableRegs[*AI] &&
-                   "Non-dead def should have been removed by now!");
-#endif
-      }
-    }
+  // of the chain? Simulate liveness backwards until the end of the chain.
+  LiveRegUnits Units(*TRI);
+  Units.addLiveOuts(MBB);
+  MachineBasicBlock::iterator I = MBB.end();
+  MachineBasicBlock::iterator ChainEnd = G->end();
+  while (I != ChainEnd) {
+    --I;
+    Units.stepBackward(*I);
   }
 
+  // Check which register units are alive throughout the chain.
+  MachineBasicBlock::iterator ChainBegin = G->begin();
+  assert(ChainBegin != ChainEnd && "Chain should contain instructions");
+  do {
+    --I;
+    Units.accumulate(*I);
+  } while (I != ChainBegin);
+
   // Make sure we allocate in-order, to get the cheapest registers first.
+  unsigned RegClassID = ChainBegin->getDesc().OpInfo[0].RegClass;
   auto Ord = RCI.getOrder(TRI->getRegClass(RegClassID));
   for (auto Reg : Ord) {
-    if (!AvailableRegs[Reg])
+    if (!Units.available(Reg))
       continue;
     if (C == getColor(Reg))
       return Reg;

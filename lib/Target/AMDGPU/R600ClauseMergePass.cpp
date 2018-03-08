@@ -62,11 +62,11 @@ private:
                        const MachineInstr &LatrCFAlu) const;
 
 public:
-  R600ClauseMergePass(TargetMachine &tm) : MachineFunctionPass(ID) { }
+  R600ClauseMergePass() : MachineFunctionPass(ID) { }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  const char *getPassName() const override;
+  StringRef getPassName() const override;
 };
 
 char R600ClauseMergePass::ID = 0;
@@ -201,13 +201,13 @@ bool R600ClauseMergePass::runOnMachineFunction(MachineFunction &MF) {
   return false;
 }
 
-const char *R600ClauseMergePass::getPassName() const {
+StringRef R600ClauseMergePass::getPassName() const {
   return "R600 Merge Clause Markers Pass";
 }
 
 } // end anonymous namespace
 
 
-llvm::FunctionPass *llvm::createR600ClauseMergePass(TargetMachine &TM) {
-  return new R600ClauseMergePass(TM);
+llvm::FunctionPass *llvm::createR600ClauseMergePass() {
+  return new R600ClauseMergePass();
 }

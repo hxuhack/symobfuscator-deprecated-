@@ -16,7 +16,6 @@
 #define LLVM_ANALYSIS_VALUETRACKING_H
 
 #include "llvm/IR/CallSite.h"
-#include "llvm/IR/ConstantRange.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/Support/DataTypes.h"
@@ -30,8 +29,10 @@ template <typename T> class ArrayRef;
   class DominatorTree;
   class GEPOperator;
   class Instruction;
+  struct KnownBits;
   class Loop;
   class LoopInfo;
+  class OptimizationRemarkEmitter;
   class MDNode;
   class StringRef;
   class TargetLibraryInfo;
@@ -49,73 +50,78 @@ template <typename T> class ArrayRef;
   /// where V is a vector, the known zero and known one values are the
   /// same width as the vector element, and the bit is set only if it is true
   /// for all of the elements in the vector.
-  void computeKnownBits(Value *V, APInt &KnownZero, APInt &KnownOne,
+  void computeKnownBits(const Value *V, KnownBits &Known,
                         const DataLayout &DL, unsigned Depth = 0,
                         AssumptionCache *AC = nullptr,
                         const Instruction *CxtI = nullptr,
-                        const DominatorTree *DT = nullptr);
+                        const DominatorTree *DT = nullptr,
+                        OptimizationRemarkEmitter *ORE = nullptr);
+  /// Returns the known bits rather than passing by reference.
+  KnownBits computeKnownBits(const Value *V, const DataLayout &DL,
+                             unsigned Depth = 0, AssumptionCache *AC = nullptr,
+                             const Instruction *CxtI = nullptr,
+                             const DominatorTree *DT = nullptr,
+                             OptimizationRemarkEmitter *ORE = nullptr);
   /// Compute known bits from the range metadata.
   /// \p KnownZero the set of bits that are known to be zero
   /// \p KnownOne the set of bits that are known to be one
   void computeKnownBitsFromRangeMetadata(const MDNode &Ranges,
-                                         APInt &KnownZero, APInt &KnownOne);
+                                         KnownBits &Known);
   /// Return true if LHS and RHS have no common bits set.
-  bool haveNoCommonBitsSet(Value *LHS, Value *RHS, const DataLayout &DL,
+  bool haveNoCommonBitsSet(const Value *LHS, const Value *RHS,
+                           const DataLayout &DL,
                            AssumptionCache *AC = nullptr,
                            const Instruction *CxtI = nullptr,
                            const DominatorTree *DT = nullptr);
-
-  /// Determine whether the sign bit is known to be zero or one. Convenience
-  /// wrapper around computeKnownBits.
-  void ComputeSignBit(Value *V, bool &KnownZero, bool &KnownOne,
-                      const DataLayout &DL, unsigned Depth = 0,
-                      AssumptionCache *AC = nullptr,
-                      const Instruction *CxtI = nullptr,
-                      const DominatorTree *DT = nullptr);
 
   /// Return true if the given value is known to have exactly one bit set when
   /// defined. For vectors return true if every element is known to be a power
   /// of two when defined. Supports values with integer or pointer type and
   /// vectors of integers. If 'OrZero' is set, then return true if the given
   /// value is either a power of two or zero.
-  bool isKnownToBeAPowerOfTwo(Value *V, const DataLayout &DL,
+  bool isKnownToBeAPowerOfTwo(const Value *V, const DataLayout &DL,
                               bool OrZero = false, unsigned Depth = 0,
                               AssumptionCache *AC = nullptr,
                               const Instruction *CxtI = nullptr,
                               const DominatorTree *DT = nullptr);
 
+  bool isOnlyUsedInZeroEqualityComparison(const Instruction *CxtI);
+  
   /// Return true if the given value is known to be non-zero when defined. For
   /// vectors, return true if every element is known to be non-zero when
-  /// defined. Supports values with integer or pointer type and vectors of
-  /// integers.
-  bool isKnownNonZero(Value *V, const DataLayout &DL, unsigned Depth = 0,
+  /// defined. For pointers, if the context instruction and dominator tree are
+  /// specified, perform context-sensitive analysis and return true if the
+  /// pointer couldn't possibly be null at the specified instruction.
+  /// Supports values with integer or pointer type and vectors of integers.
+  bool isKnownNonZero(const Value *V, const DataLayout &DL, unsigned Depth = 0,
                       AssumptionCache *AC = nullptr,
                       const Instruction *CxtI = nullptr,
                       const DominatorTree *DT = nullptr);
 
   /// Returns true if the give value is known to be non-negative.
-  bool isKnownNonNegative(Value *V, const DataLayout &DL, unsigned Depth = 0,
+  bool isKnownNonNegative(const Value *V, const DataLayout &DL,
+                          unsigned Depth = 0,
                           AssumptionCache *AC = nullptr,
                           const Instruction *CxtI = nullptr,
                           const DominatorTree *DT = nullptr);
 
   /// Returns true if the given value is known be positive (i.e. non-negative
   /// and non-zero).
-  bool isKnownPositive(Value *V, const DataLayout &DL, unsigned Depth = 0,
+  bool isKnownPositive(const Value *V, const DataLayout &DL, unsigned Depth = 0,
                        AssumptionCache *AC = nullptr,
                        const Instruction *CxtI = nullptr,
                        const DominatorTree *DT = nullptr);
 
   /// Returns true if the given value is known be negative (i.e. non-positive
   /// and non-zero).
-  bool isKnownNegative(Value *V, const DataLayout &DL, unsigned Depth = 0,
+  bool isKnownNegative(const Value *V, const DataLayout &DL, unsigned Depth = 0,
                        AssumptionCache *AC = nullptr,
                        const Instruction *CxtI = nullptr,
                        const DominatorTree *DT = nullptr);
 
   /// Return true if the given values are known to be non-equal when defined.
   /// Supports scalar integer types only.
-  bool isKnownNonEqual(Value *V1, Value *V2, const DataLayout &DL,
+  bool isKnownNonEqual(const Value *V1, const Value *V2, const DataLayout &DL,
                       AssumptionCache *AC = nullptr,
                       const Instruction *CxtI = nullptr,
                       const DominatorTree *DT = nullptr);
@@ -129,7 +135,8 @@ template <typename T> class ArrayRef;
   /// where V is a vector, the mask, known zero, and known one values are the
   /// same width as the vector element, and the bit is set only if it is true
   /// for all of the elements in the vector.
-  bool MaskedValueIsZero(Value *V, const APInt &Mask, const DataLayout &DL,
+  bool MaskedValueIsZero(const Value *V, const APInt &Mask,
+                         const DataLayout &DL,
                          unsigned Depth = 0, AssumptionCache *AC = nullptr,
                          const Instruction *CxtI = nullptr,
                          const DominatorTree *DT = nullptr);
@@ -141,7 +148,7 @@ template <typename T> class ArrayRef;
   /// equal to each other, so we return 3. For vectors, return the number of
   /// sign bits for the vector element with the mininum number of known sign
   /// bits.
-  unsigned ComputeNumSignBits(Value *Op, const DataLayout &DL,
+  unsigned ComputeNumSignBits(const Value *Op, const DataLayout &DL,
                               unsigned Depth = 0, AssumptionCache *AC = nullptr,
                               const Instruction *CxtI = nullptr,
                               const DominatorTree *DT = nullptr);
@@ -165,10 +172,26 @@ template <typename T> class ArrayRef;
   bool CannotBeNegativeZero(const Value *V, const TargetLibraryInfo *TLI,
                             unsigned Depth = 0);
 
-  /// Return true if we can prove that the specified FP value is either a NaN or
-  /// never less than 0.0.
-  bool CannotBeOrderedLessThanZero(const Value *V, const TargetLibraryInfo *TLI,
-                                   unsigned Depth = 0);
+  /// Return true if we can prove that the specified FP value is either NaN or
+  /// never less than -0.0.
+  ///
+  ///      NaN --> true
+  ///       +0 --> true
+  ///       -0 --> true
+  ///   x > +0 --> true
+  ///   x < -0 --> false
+  ///
+  bool CannotBeOrderedLessThanZero(const Value *V, const TargetLibraryInfo *TLI);
+
+  /// Return true if we can prove that the specified FP value's sign bit is 0.
+  ///
+  ///      NaN --> true/false (depending on the NaN's sign bit)
+  ///       +0 --> true
+  ///       -0 --> false
+  ///   x > +0 --> true
+  ///   x < -0 --> false
+  ///
+  bool SignBitMustBeZero(const Value *V, const TargetLibraryInfo *TLI);
 
   /// If the specified value can be set by repeating the same byte in memory,
   /// return the i8 value that it is represented with. This is true for all i8
@@ -198,9 +221,38 @@ template <typename T> class ArrayRef;
                                             DL);
   }
 
-  /// Returns true if the GEP is based on a pointer to a string (array of i8), 
-  /// and is indexing into this string.
-  bool isGEPBasedOnPointerToString(const GEPOperator *GEP);
+  /// Returns true if the GEP is based on a pointer to a string (array of
+  // \p CharSize integers) and is indexing into this string.
+  bool isGEPBasedOnPointerToString(const GEPOperator *GEP,
+                                   unsigned CharSize = 8);
+
+  /// Represents offset+length into a ConstantDataArray.
+  struct ConstantDataArraySlice {
+    /// ConstantDataArray pointer. nullptr indicates a zeroinitializer (a valid
+    /// initializer, it just doesn't fit the ConstantDataArray interface).
+    const ConstantDataArray *Array;
+    /// Slice starts at this Offset.
+    uint64_t Offset;
+    /// Length of the slice.
+    uint64_t Length;
+
+    /// Moves the Offset and adjusts Length accordingly.
+    void move(uint64_t Delta) {
+      assert(Delta < Length);
+      Offset += Delta;
+      Length -= Delta;
+    }
+    /// Convenience accessor for elements in the slice.
+    uint64_t operator[](unsigned I) const {
+      return Array==nullptr ? 0 : Array->getElementAsInteger(I + Offset);
+    }
+  };
+
+  /// Returns true if the value \p V is a pointer into a ContantDataArray.
+  /// If successful \p Index will point to a ConstantDataArray info object
+  /// with an appropriate offset.
+  bool getConstantDataArrayInfo(const Value *V, ConstantDataArraySlice &Slice,
+                                unsigned ElementSize, uint64_t Offset = 0);
 
   /// This function computes the length of a null-terminated C string pointed to
   /// by V. If successful, it returns true and returns the string in Str. If
@@ -213,7 +265,7 @@ template <typename T> class ArrayRef;
 
   /// If we can compute the length of the string pointed to by the specified
   /// pointer, return 'len+1'.  If we can't, return 0.
-  uint64_t GetStringLength(Value *V);
+  uint64_t GetStringLength(const Value *V, unsigned CharSize = 8);
 
   /// This method strips off any GEP address adjustments and pointer casts from
   /// the specified value, returning the original object being addressed. Note
@@ -259,6 +311,12 @@ template <typename T> class ArrayRef;
   void GetUnderlyingObjects(Value *V, SmallVectorImpl<Value *> &Objects,
                             const DataLayout &DL, LoopInfo *LI = nullptr,
                             unsigned MaxLookup = 6);
+
+  /// This is a wrapper around GetUnderlyingObjects and adds support for basic
+  /// ptrtoint+arithmetic+inttoptr sequences.
+  void getUnderlyingObjectsForCodeGen(const Value *V,
+                            SmallVectorImpl<Value *> &Objects,
+                            const DataLayout &DL);
 
   /// Return true if the only users of this pointer are lifetime markers.
   bool onlyUsedByLifetimeMarkers(const Value *V);
@@ -306,12 +364,12 @@ template <typename T> class ArrayRef;
   bool isKnownNonNull(const Value *V);
 
   /// Return true if this pointer couldn't possibly be null. If the context
-  /// instruction is specified, perform context-sensitive analysis and return
-  /// true if the pointer couldn't possibly be null at the specified
-  /// instruction.
+  /// instruction and dominator tree are specified, perform context-sensitive
+  /// analysis and return true if the pointer couldn't possibly be null at the
+  /// specified instruction.
   bool isKnownNonNullAt(const Value *V,
                         const Instruction *CtxI = nullptr,
-                        const DominatorTree *DT  = nullptr);
+                        const DominatorTree *DT = nullptr);
 
   /// Return true if it is valid to use the assumptions provided by an
   /// assume intrinsic, I, at the point in the control-flow identified by the
@@ -320,23 +378,25 @@ template <typename T> class ArrayRef;
                                const DominatorTree *DT = nullptr);
 
   enum class OverflowResult { AlwaysOverflows, MayOverflow, NeverOverflows };
-  OverflowResult computeOverflowForUnsignedMul(Value *LHS, Value *RHS,
+  OverflowResult computeOverflowForUnsignedMul(const Value *LHS,
+                                               const Value *RHS,
                                                const DataLayout &DL,
                                                AssumptionCache *AC,
                                                const Instruction *CxtI,
                                                const DominatorTree *DT);
-  OverflowResult computeOverflowForUnsignedAdd(Value *LHS, Value *RHS,
+  OverflowResult computeOverflowForUnsignedAdd(const Value *LHS,
+                                               const Value *RHS,
                                                const DataLayout &DL,
                                                AssumptionCache *AC,
                                                const Instruction *CxtI,
                                                const DominatorTree *DT);
-  OverflowResult computeOverflowForSignedAdd(Value *LHS, Value *RHS,
+  OverflowResult computeOverflowForSignedAdd(const Value *LHS, const Value *RHS,
                                              const DataLayout &DL,
                                              AssumptionCache *AC = nullptr,
                                              const Instruction *CxtI = nullptr,
                                              const DominatorTree *DT = nullptr);
   /// This version also leverages the sign bit of Add if known.
-  OverflowResult computeOverflowForSignedAdd(AddOperator *Add,
+  OverflowResult computeOverflowForSignedAdd(const AddOperator *Add,
                                              const DataLayout &DL,
                                              AssumptionCache *AC = nullptr,
                                              const Instruction *CxtI = nullptr,
@@ -345,7 +405,8 @@ template <typename T> class ArrayRef;
   /// Returns true if the arithmetic part of the \p II 's result is
   /// used only along the paths control dependent on the computation
   /// not overflowing, \p II being an <op>.with.overflow intrinsic.
-  bool isOverflowIntrinsicNoWrap(IntrinsicInst *II, DominatorTree &DT);
+  bool isOverflowIntrinsicNoWrap(const IntrinsicInst *II,
+                                 const DominatorTree &DT);
 
   /// Return true if this function can prove that the instruction I will
   /// always transfer execution to one of its successors (including the next
@@ -391,7 +452,7 @@ template <typename T> class ArrayRef;
   ///
   /// Note that this currently only considers the basic block that is
   /// the parent of I.
-  bool isKnownNotFullPoison(const Instruction *PoisonI);
+  bool programUndefinedIfFullPoison(const Instruction *PoisonI);
 
   /// \brief Specific patterns of select instructions we can match.
   enum SelectPatternFlavor {
@@ -445,11 +506,16 @@ template <typename T> class ArrayRef;
   ///
   SelectPatternResult matchSelectPattern(Value *V, Value *&LHS, Value *&RHS,
                                          Instruction::CastOps *CastOp = nullptr);
-
-  /// Parse out a conservative ConstantRange from !range metadata.
-  ///
-  /// E.g. if RangeMD is !{i32 0, i32 10, i32 15, i32 20} then return [0, 20).
-  ConstantRange getConstantRangeFromMetadata(MDNode &RangeMD);
+  static inline SelectPatternResult
+  matchSelectPattern(const Value *V, const Value *&LHS, const Value *&RHS,
+                     Instruction::CastOps *CastOp = nullptr) {
+    Value *L = const_cast<Value*>(LHS);
+    Value *R = const_cast<Value*>(RHS);
+    auto Result = matchSelectPattern(const_cast<Value*>(V), L, R);
+    LHS = L;
+    RHS = R;
+    return Result;
+  }
 
   /// Return true if RHS is known to be implied true by LHS.  Return false if
   /// RHS is known to be implied false by LHS.  Otherwise, return None if no
@@ -461,10 +527,12 @@ template <typename T> class ArrayRef;
   ///  T | T | F
   ///  F | T | T
   /// (A)
-  Optional<bool> isImpliedCondition(
-      Value *LHS, Value *RHS, const DataLayout &DL, bool InvertAPred = false,
-      unsigned Depth = 0, AssumptionCache *AC = nullptr,
-      const Instruction *CxtI = nullptr, const DominatorTree *DT = nullptr);
+  Optional<bool> isImpliedCondition(const Value *LHS, const Value *RHS,
+                                    const DataLayout &DL,
+                                    bool LHSIsFalse = false, unsigned Depth = 0,
+                                    AssumptionCache *AC = nullptr,
+                                    const Instruction *CxtI = nullptr,
+                                    const DominatorTree *DT = nullptr);
 } // end namespace llvm
 
 #endif

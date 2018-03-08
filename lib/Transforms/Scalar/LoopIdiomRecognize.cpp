@@ -11,6 +11,12 @@
 // non-loop form.  In cases that this kicks in, it can be a significant
 // performance win.
 //
+// If compiling for code size we avoid idiom recognition if the resulting
+// code could be larger than the code for the original loop. One way this could
+// happen is if the loop is not removable after idiom recognition due to the
+// presence of non-idiom instructions. The initial implementation of the
+// heuristics applies to idioms in multi-block loops.
+//
 //===----------------------------------------------------------------------===//
 //
 // TODO List:
@@ -40,7 +46,6 @@
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
 #include "llvm/Analysis/LoopPass.h"
-#include "llvm/Analysis/LoopPassManager.h"
 #include "llvm/Analysis/ScalarEvolutionAliasAnalysis.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
@@ -55,6 +60,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/BuildLibCalls.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
@@ -64,6 +70,12 @@ using namespace llvm;
 
 STATISTIC(NumMemSet, "Number of memset's formed from loop stores");
 STATISTIC(NumMemCpy, "Number of memcpy's formed from loop load+stores");
+
+static cl::opt<bool> UseLIRCodeSizeHeurs(
+    "use-lir-code-size-heurs",
+    cl::desc("Use loop idiom recognition code size heuristics when compiling"
+             "with -Os/-Oz"),
+    cl::init(true), cl::Hidden);
 
 namespace {
 
@@ -76,6 +88,7 @@ class LoopIdiomRecognize {
   TargetLibraryInfo *TLI;
   const TargetTransformInfo *TTI;
   const DataLayout *DL;
+  bool ApplyCodeSizeHeuristics;
 
 public:
   explicit LoopIdiomRecognize(AliasAnalysis *AA, DominatorTree *DT,
@@ -97,6 +110,16 @@ private:
   bool HasMemset;
   bool HasMemsetPattern;
   bool HasMemcpy;
+  /// Return code for isLegalStore()
+  enum LegalStoreKind {
+    None = 0,
+    Memset,
+    MemsetPattern,
+    Memcpy,
+    UnorderedAtomicMemcpy,
+    DontUse // Dummy retval never to be used. Allows catching errors in retval
+            // handling.
+  };
 
   /// \name Countable Loop Idiom Handling
   /// @{
@@ -106,8 +129,7 @@ private:
                       SmallVectorImpl<BasicBlock *> &ExitBlocks);
 
   void collectStores(BasicBlock *BB);
-  bool isLegalStore(StoreInst *SI, bool &ForMemset, bool &ForMemsetPattern,
-                    bool &ForMemcpy);
+  LegalStoreKind isLegalStore(StoreInst *SI);
   bool processLoopStores(SmallVectorImpl<StoreInst *> &SL, const SCEV *BECount,
                          bool ForMemset);
   bool processLoopMemSet(MemSetInst *MSI, const SCEV *BECount);
@@ -117,8 +139,10 @@ private:
                                Instruction *TheStore,
                                SmallPtrSetImpl<Instruction *> &Stores,
                                const SCEVAddRecExpr *Ev, const SCEV *BECount,
-                               bool NegStride);
+                               bool NegStride, bool IsLoopMemset = false);
   bool processLoopStoreOfLoopLoad(StoreInst *SI, const SCEV *BECount);
+  bool avoidLIRForMultiBlockLoop(bool IsMemset = false,
+                                 bool IsLoopMemset = false);
 
   /// @}
   /// \name Noncountable Loop Idiom Handling
@@ -129,6 +153,10 @@ private:
   bool recognizePopcount();
   void transformLoopToPopcount(BasicBlock *PreCondBB, Instruction *CntInst,
                                PHINode *CntPhi, Value *Var);
+  bool recognizeAndInsertCTLZ();
+  void transformLoopToCountable(BasicBlock *PreCondBB, Instruction *CntInst,
+                                PHINode *CntPhi, Value *Var, const DebugLoc DL,
+                                bool ZeroCheck, bool IsCntPhiUsedOutsideLoop);
 
   /// @}
 };
@@ -171,24 +199,12 @@ public:
 };
 } // End anonymous namespace.
 
-PreservedAnalyses LoopIdiomRecognizePass::run(Loop &L,
-                                              AnalysisManager<Loop> &AM) {
-  const auto &FAM =
-      AM.getResult<FunctionAnalysisManagerLoopProxy>(L).getManager();
-  Function *F = L.getHeader()->getParent();
-
-  // Use getCachedResult because Loop pass cannot trigger a function analysis.
-  auto *AA = FAM.getCachedResult<AAManager>(*F);
-  auto *DT = FAM.getCachedResult<DominatorTreeAnalysis>(*F);
-  auto *LI = FAM.getCachedResult<LoopAnalysis>(*F);
-  auto *SE = FAM.getCachedResult<ScalarEvolutionAnalysis>(*F);
-  auto *TLI = FAM.getCachedResult<TargetLibraryAnalysis>(*F);
-  const auto *TTI = FAM.getCachedResult<TargetIRAnalysis>(*F);
+PreservedAnalyses LoopIdiomRecognizePass::run(Loop &L, LoopAnalysisManager &AM,
+                                              LoopStandardAnalysisResults &AR,
+                                              LPMUpdater &) {
   const auto *DL = &L.getHeader()->getModule()->getDataLayout();
-  assert((AA && DT && LI && SE && TLI && TTI && DL) &&
-         "Analyses for Loop Idiom Recognition not available");
 
-  LoopIdiomRecognize LIR(AA, DT, LI, SE, TLI, TTI, DL);
+  LoopIdiomRecognize LIR(&AR.AA, &AR.DT, &AR.LI, &AR.SE, &AR.TLI, &AR.TTI, DL);
   if (!LIR.runOnLoop(&L))
     return PreservedAnalyses::all();
 
@@ -229,9 +245,13 @@ bool LoopIdiomRecognize::runOnLoop(Loop *L) {
   if (Name == "memset" || Name == "memcpy")
     return false;
 
-  HasMemset = TLI->has(LibFunc::memset);
-  HasMemsetPattern = TLI->has(LibFunc::memset_pattern16);
-  HasMemcpy = TLI->has(LibFunc::memcpy);
+  // Determine if code size heuristics need to be applied.
+  ApplyCodeSizeHeuristics =
+      L->getHeader()->getParent()->optForSize() && UseLIRCodeSizeHeurs;
+
+  HasMemset = TLI->has(LibFunc_memset);
+  HasMemsetPattern = TLI->has(LibFunc_memset_pattern16);
+  HasMemcpy = TLI->has(LibFunc_memcpy);
 
   if (HasMemset || HasMemsetPattern || HasMemcpy)
     if (SE->hasLoopInvariantBackedgeTakenCount(L))
@@ -332,15 +352,24 @@ static Constant *getMemSetPatternValue(Value *V, const DataLayout *DL) {
   return ConstantArray::get(AT, std::vector<Constant *>(ArraySize, C));
 }
 
-bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
-                                      bool &ForMemsetPattern, bool &ForMemcpy) {
+LoopIdiomRecognize::LegalStoreKind
+LoopIdiomRecognize::isLegalStore(StoreInst *SI) {
+
   // Don't touch volatile stores.
-  if (!SI->isSimple())
-    return false;
+  if (SI->isVolatile())
+    return LegalStoreKind::None;
+  // We only want simple or unordered-atomic stores.
+  if (!SI->isUnordered())
+    return LegalStoreKind::None;
+
+  // Don't convert stores of non-integral pointer types to memsets (which stores
+  // integers).
+  if (DL->isNonIntegralPointerType(SI->getValueOperand()->getType()))
+    return LegalStoreKind::None;
 
   // Avoid merging nontemporal stores.
   if (SI->getMetadata(LLVMContext::MD_nontemporal))
-    return false;
+    return LegalStoreKind::None;
 
   Value *StoredVal = SI->getValueOperand();
   Value *StorePtr = SI->getPointerOperand();
@@ -348,7 +377,7 @@ bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
   // Reject stores that are so large that they overflow an unsigned.
   uint64_t SizeInBits = DL->getTypeSizeInBits(StoredVal->getType());
   if ((SizeInBits & 7) || (SizeInBits >> 32) != 0)
-    return false;
+    return LegalStoreKind::None;
 
   // See if the pointer expression is an AddRec like {base,+,1} on the current
   // loop, which indicates a strided store.  If we have something else, it's a
@@ -356,11 +385,11 @@ bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
   const SCEVAddRecExpr *StoreEv =
       dyn_cast<SCEVAddRecExpr>(SE->getSCEV(StorePtr));
   if (!StoreEv || StoreEv->getLoop() != CurLoop || !StoreEv->isAffine())
-    return false;
+    return LegalStoreKind::None;
 
   // Check to see if we have a constant stride.
   if (!isa<SCEVConstant>(StoreEv->getOperand(1)))
-    return false;
+    return LegalStoreKind::None;
 
   // See if the store can be turned into a memset.
 
@@ -371,22 +400,23 @@ bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
   Value *SplatValue = isBytewiseValue(StoredVal);
   Constant *PatternValue = nullptr;
 
+  // Note: memset and memset_pattern on unordered-atomic is yet not supported
+  bool UnorderedAtomic = SI->isUnordered() && !SI->isSimple();
+
   // If we're allowed to form a memset, and the stored value would be
   // acceptable for memset, use it.
-  if (HasMemset && SplatValue &&
+  if (!UnorderedAtomic && HasMemset && SplatValue &&
       // Verify that the stored value is loop invariant.  If not, we can't
       // promote the memset.
       CurLoop->isLoopInvariant(SplatValue)) {
     // It looks like we can use SplatValue.
-    ForMemset = true;
-    return true;
-  } else if (HasMemsetPattern &&
+    return LegalStoreKind::Memset;
+  } else if (!UnorderedAtomic && HasMemsetPattern &&
              // Don't create memset_pattern16s with address spaces.
              StorePtr->getType()->getPointerAddressSpace() == 0 &&
              (PatternValue = getMemSetPatternValue(StoredVal, DL))) {
     // It looks like we can use PatternValue!
-    ForMemsetPattern = true;
-    return true;
+    return LegalStoreKind::MemsetPattern;
   }
 
   // Otherwise, see if the store can be turned into a memcpy.
@@ -396,12 +426,17 @@ bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
     APInt Stride = getStoreStride(StoreEv);
     unsigned StoreSize = getStoreSizeInBytes(SI, DL);
     if (StoreSize != Stride && StoreSize != -Stride)
-      return false;
+      return LegalStoreKind::None;
 
     // The store must be feeding a non-volatile load.
     LoadInst *LI = dyn_cast<LoadInst>(SI->getValueOperand());
-    if (!LI || !LI->isSimple())
-      return false;
+
+    // Only allow non-volatile loads
+    if (!LI || LI->isVolatile())
+      return LegalStoreKind::None;
+    // Only allow simple or unordered-atomic loads
+    if (!LI->isUnordered())
+      return LegalStoreKind::None;
 
     // See if the pointer expression is an AddRec like {base,+,1} on the current
     // loop, which indicates a strided load.  If we have something else, it's a
@@ -409,18 +444,19 @@ bool LoopIdiomRecognize::isLegalStore(StoreInst *SI, bool &ForMemset,
     const SCEVAddRecExpr *LoadEv =
         dyn_cast<SCEVAddRecExpr>(SE->getSCEV(LI->getPointerOperand()));
     if (!LoadEv || LoadEv->getLoop() != CurLoop || !LoadEv->isAffine())
-      return false;
+      return LegalStoreKind::None;
 
     // The store and load must share the same stride.
     if (StoreEv->getOperand(1) != LoadEv->getOperand(1))
-      return false;
+      return LegalStoreKind::None;
 
     // Success.  This store can be converted into a memcpy.
-    ForMemcpy = true;
-    return true;
+    UnorderedAtomic = UnorderedAtomic || LI->isAtomic();
+    return UnorderedAtomic ? LegalStoreKind::UnorderedAtomicMemcpy
+                           : LegalStoreKind::Memcpy;
   }
   // This store can't be transformed into a memset/memcpy.
-  return false;
+  return LegalStoreKind::None;
 }
 
 void LoopIdiomRecognize::collectStores(BasicBlock *BB) {
@@ -432,24 +468,29 @@ void LoopIdiomRecognize::collectStores(BasicBlock *BB) {
     if (!SI)
       continue;
 
-    bool ForMemset = false;
-    bool ForMemsetPattern = false;
-    bool ForMemcpy = false;
     // Make sure this is a strided store with a constant stride.
-    if (!isLegalStore(SI, ForMemset, ForMemsetPattern, ForMemcpy))
-      continue;
-
-    // Save the store locations.
-    if (ForMemset) {
+    switch (isLegalStore(SI)) {
+    case LegalStoreKind::None:
+      // Nothing to do
+      break;
+    case LegalStoreKind::Memset: {
       // Find the base pointer.
       Value *Ptr = GetUnderlyingObject(SI->getPointerOperand(), *DL);
       StoreRefsForMemset[Ptr].push_back(SI);
-    } else if (ForMemsetPattern) {
+    } break;
+    case LegalStoreKind::MemsetPattern: {
       // Find the base pointer.
       Value *Ptr = GetUnderlyingObject(SI->getPointerOperand(), *DL);
       StoreRefsForMemsetPattern[Ptr].push_back(SI);
-    } else if (ForMemcpy)
+    } break;
+    case LegalStoreKind::Memcpy:
+    case LegalStoreKind::UnorderedAtomicMemcpy:
       StoreRefsForMemcpy.push_back(SI);
+      break;
+    default:
+      assert(false && "unhandled return value");
+      break;
+    }
   }
 }
 
@@ -487,7 +528,7 @@ bool LoopIdiomRecognize::runOnLoopBlock(
     Instruction *Inst = &*I++;
     // Look for memset instructions, which may be optimized to a larger memset.
     if (MemSetInst *MSI = dyn_cast<MemSetInst>(Inst)) {
-      WeakVH InstPtr(&*I);
+      WeakTrackingVH InstPtr(&*I);
       if (!processLoopMemSet(MSI, BECount))
         continue;
       MadeChange = true;
@@ -689,7 +730,7 @@ bool LoopIdiomRecognize::processLoopMemSet(MemSetInst *MSI,
   bool NegStride = SizeInBytes == -Stride;
   return processLoopStridedStore(Pointer, (unsigned)SizeInBytes,
                                  MSI->getAlignment(), SplatValue, MSI, MSIs, Ev,
-                                 BECount, NegStride);
+                                 BECount, NegStride, /*IsLoopMemset=*/true);
 }
 
 /// mayLoopAccessLocation - Return true if the specified loop might access the
@@ -745,7 +786,7 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     Value *DestPtr, unsigned StoreSize, unsigned StoreAlignment,
     Value *StoredVal, Instruction *TheStore,
     SmallPtrSetImpl<Instruction *> &Stores, const SCEVAddRecExpr *Ev,
-    const SCEV *BECount, bool NegStride) {
+    const SCEV *BECount, bool NegStride, bool IsLoopMemset) {
   Value *SplatValue = isBytewiseValue(StoredVal);
   Constant *PatternValue = nullptr;
 
@@ -771,6 +812,11 @@ bool LoopIdiomRecognize::processLoopStridedStore(
   if (NegStride)
     Start = getStartForNegStride(Start, BECount, IntPtr, StoreSize, SE);
 
+  // TODO: ideally we should still be able to generate memset if SCEV expander
+  // is taught to generate the dependencies at the latest point.
+  if (!isSafeToExpand(Start, *SE))
+    return false;
+
   // Okay, we have a strided store "p[i]" of a splattable value.  We can turn
   // this into a memset in the loop preheader now if we want.  However, this
   // would be unsafe to do if there is anything else in the loop that may read
@@ -786,6 +832,9 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     return false;
   }
 
+  if (avoidLIRForMultiBlockLoop(/*IsMemset=*/true, IsLoopMemset))
+    return false;
+
   // Okay, everything looks good, insert the memset.
 
   // The # stored bytes is (BECount+1)*Size.  Expand the trip count out to
@@ -798,6 +847,11 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     NumBytesS = SE->getMulExpr(NumBytesS, SE->getConstant(IntPtr, StoreSize),
                                SCEV::FlagNUW);
   }
+
+  // TODO: ideally we should still be able to generate memset if SCEV expander
+  // is taught to generate the dependencies at the latest point.
+  if (!isSafeToExpand(NumBytesS, *SE))
+    return false;
 
   Value *NumBytes =
       Expander.expandCodeFor(NumBytesS, IntPtr, Preheader->getTerminator());
@@ -813,7 +867,7 @@ bool LoopIdiomRecognize::processLoopStridedStore(
     Module *M = TheStore->getModule();
     Value *MSP =
         M->getOrInsertFunction("memset_pattern16", Builder.getVoidTy(),
-                               Int8PtrTy, Int8PtrTy, IntPtr, (void *)nullptr);
+                               Int8PtrTy, Int8PtrTy, IntPtr);
     inferLibFuncAttributes(*M->getFunction("memset_pattern16"), *TLI);
 
     // Otherwise we should form a memset_pattern16.  PatternValue is known to be
@@ -841,10 +895,10 @@ bool LoopIdiomRecognize::processLoopStridedStore(
 
 /// If the stored value is a strided load in the same loop with the same stride
 /// this may be transformable into a memcpy.  This kicks in for stuff like
-///   for (i) A[i] = B[i];
+/// for (i) A[i] = B[i];
 bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
                                                     const SCEV *BECount) {
-  assert(SI->isSimple() && "Expected only non-volatile stores.");
+  assert(SI->isUnordered() && "Expected only non-volatile non-ordered stores.");
 
   Value *StorePtr = SI->getPointerOperand();
   const SCEVAddRecExpr *StoreEv = cast<SCEVAddRecExpr>(SE->getSCEV(StorePtr));
@@ -854,7 +908,7 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
 
   // The store must be feeding a non-volatile load.
   LoadInst *LI = cast<LoadInst>(SI->getValueOperand());
-  assert(LI->isSimple() && "Expected only non-volatile stores.");
+  assert(LI->isUnordered() && "Expected only non-volatile non-ordered loads.");
 
   // See if the pointer expression is an AddRec like {base,+,1} on the current
   // loop, which indicates a strided load.  If we have something else, it's a
@@ -917,6 +971,9 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
     return false;
   }
 
+  if (avoidLIRForMultiBlockLoop())
+    return false;
+
   // Okay, everything is safe, we can transform this!
 
   // The # stored bytes is (BECount+1)*Size.  Expand the trip count out to
@@ -925,6 +982,7 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
 
   const SCEV *NumBytesS =
       SE->getAddExpr(BECount, SE->getOne(IntPtrTy), SCEV::FlagNUW);
+
   if (StoreSize != 1)
     NumBytesS = SE->getMulExpr(NumBytesS, SE->getConstant(IntPtrTy, StoreSize),
                                SCEV::FlagNUW);
@@ -932,9 +990,37 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
   Value *NumBytes =
       Expander.expandCodeFor(NumBytesS, IntPtrTy, Preheader->getTerminator());
 
-  CallInst *NewCall =
-      Builder.CreateMemCpy(StoreBasePtr, LoadBasePtr, NumBytes,
-                           std::min(SI->getAlignment(), LI->getAlignment()));
+  unsigned Align = std::min(SI->getAlignment(), LI->getAlignment());
+  CallInst *NewCall = nullptr;
+  // Check whether to generate an unordered atomic memcpy:
+  //  If the load or store are atomic, then they must neccessarily be unordered
+  //  by previous checks.
+  if (!SI->isAtomic() && !LI->isAtomic())
+    NewCall = Builder.CreateMemCpy(StoreBasePtr, LoadBasePtr, NumBytes, Align);
+  else {
+    // We cannot allow unaligned ops for unordered load/store, so reject
+    // anything where the alignment isn't at least the element size.
+    if (Align < StoreSize)
+      return false;
+
+    // If the element.atomic memcpy is not lowered into explicit
+    // loads/stores later, then it will be lowered into an element-size
+    // specific lib call. If the lib call doesn't exist for our store size, then
+    // we shouldn't generate the memcpy.
+    if (StoreSize > TTI->getAtomicMemIntrinsicMaxElementSize())
+      return false;
+
+    NewCall = Builder.CreateElementUnorderedAtomicMemCpy(
+        StoreBasePtr, LoadBasePtr, NumBytes, StoreSize);
+
+    // Propagate alignment info onto the pointer args. Note that unordered
+    // atomic loads/stores are *required* by the spec to have an alignment
+    // but non-atomic loads/stores may not.
+    NewCall->addParamAttr(0, Attribute::getWithAlignment(NewCall->getContext(),
+                                                         SI->getAlignment()));
+    NewCall->addParamAttr(1, Attribute::getWithAlignment(NewCall->getContext(),
+                                                         LI->getAlignment()));
+  }
   NewCall->setDebugLoc(SI->getDebugLoc());
 
   DEBUG(dbgs() << "  Formed memcpy: " << *NewCall << "\n"
@@ -948,14 +1034,31 @@ bool LoopIdiomRecognize::processLoopStoreOfLoopLoad(StoreInst *SI,
   return true;
 }
 
+// When compiling for codesize we avoid idiom recognition for a multi-block loop
+// unless it is a loop_memset idiom or a memset/memcpy idiom in a nested loop.
+//
+bool LoopIdiomRecognize::avoidLIRForMultiBlockLoop(bool IsMemset,
+                                                   bool IsLoopMemset) {
+  if (ApplyCodeSizeHeuristics && CurLoop->getNumBlocks() > 1) {
+    if (!CurLoop->getParentLoop() && (!IsMemset || !IsLoopMemset)) {
+      DEBUG(dbgs() << "  " << CurLoop->getHeader()->getParent()->getName()
+                   << " : LIR " << (IsMemset ? "Memset" : "Memcpy")
+                   << " avoided: multi-block top-level loop\n");
+      return true;
+    }
+  }
+
+  return false;
+}
+
 bool LoopIdiomRecognize::runOnNoncountableLoop() {
-  return recognizePopcount();
+  return recognizePopcount() || recognizeAndInsertCTLZ();
 }
 
 /// Check if the given conditional branch is based on the comparison between
 /// a variable and zero, and if the variable is non-zero, the control yields to
 /// the loop entry. If the branch matches the behavior, the variable involved
-/// in the comparion is returned. This function will be called to see if the
+/// in the comparison is returned. This function will be called to see if the
 /// precondition and postcondition of the loop are in desirable form.
 static Value *matchCondition(BranchInst *BI, BasicBlock *LoopEntry) {
   if (!BI || !BI->isConditional())
@@ -974,6 +1077,17 @@ static Value *matchCondition(BranchInst *BI, BasicBlock *LoopEntry) {
       (Pred == ICmpInst::ICMP_EQ && BI->getSuccessor(1) == LoopEntry))
     return Cond->getOperand(0);
 
+  return nullptr;
+}
+
+// Check if the recurrence variable `VarX` is in the right form to create
+// the idiom. Returns the value coerced to a PHINode if so.
+static PHINode *getRecurrenceVar(Value *VarX, Instruction *DefX,
+                                 BasicBlock *LoopEntry) {
+  auto *PhiX = dyn_cast<PHINode>(VarX);
+  if (PhiX && PhiX->getParent() == LoopEntry &&
+      (PhiX->getOperand(0) == DefX || PhiX->getOperand(1) == DefX))
+    return PhiX;
   return nullptr;
 }
 
@@ -1046,19 +1160,15 @@ static bool detectPopcountIdiom(Loop *CurLoop, BasicBlock *PreCondBB,
     if (!Dec ||
         !((SubInst->getOpcode() == Instruction::Sub && Dec->isOne()) ||
           (SubInst->getOpcode() == Instruction::Add &&
-           Dec->isAllOnesValue()))) {
+           Dec->isMinusOne()))) {
       return false;
     }
   }
 
   // step 3: Check the recurrence of variable X
-  {
-    PhiX = dyn_cast<PHINode>(VarX1);
-    if (!PhiX ||
-        (PhiX->getOperand(0) != DefX2 && PhiX->getOperand(1) != DefX2)) {
-      return false;
-    }
-  }
+  PhiX = getRecurrenceVar(VarX1, DefX2, LoopEntry);
+  if (!PhiX)
+    return false;
 
   // step 4: Find the instruction which count the population: cnt2 = cnt1 + 1
   {
@@ -1074,8 +1184,8 @@ static bool detectPopcountIdiom(Loop *CurLoop, BasicBlock *PreCondBB,
       if (!Inc || !Inc->isOne())
         continue;
 
-      PHINode *Phi = dyn_cast<PHINode>(Inst->getOperand(0));
-      if (!Phi || Phi->getParent() != LoopEntry)
+      PHINode *Phi = getRecurrenceVar(Inst->getOperand(0), Inst, LoopEntry);
+      if (!Phi)
         continue;
 
       // Check if the result of the instruction is live of the loop.
@@ -1114,6 +1224,169 @@ static bool detectPopcountIdiom(Loop *CurLoop, BasicBlock *PreCondBB,
   return true;
 }
 
+/// Return true if the idiom is detected in the loop.
+///
+/// Additionally:
+/// 1) \p CntInst is set to the instruction Counting Leading Zeros (CTLZ)
+///       or nullptr if there is no such.
+/// 2) \p CntPhi is set to the corresponding phi node
+///       or nullptr if there is no such.
+/// 3) \p Var is set to the value whose CTLZ could be used.
+/// 4) \p DefX is set to the instruction calculating Loop exit condition.
+///
+/// The core idiom we are trying to detect is:
+/// \code
+///    if (x0 == 0)
+///      goto loop-exit // the precondition of the loop
+///    cnt0 = init-val;
+///    do {
+///       x = phi (x0, x.next);   //PhiX
+///       cnt = phi(cnt0, cnt.next);
+///
+///       cnt.next = cnt + 1;
+///        ...
+///       x.next = x >> 1;   // DefX
+///        ...
+///    } while(x.next != 0);
+///
+/// loop-exit:
+/// \endcode
+static bool detectCTLZIdiom(Loop *CurLoop, PHINode *&PhiX,
+                            Instruction *&CntInst, PHINode *&CntPhi,
+                            Instruction *&DefX) {
+  BasicBlock *LoopEntry;
+  Value *VarX = nullptr;
+
+  DefX = nullptr;
+  PhiX = nullptr;
+  CntInst = nullptr;
+  CntPhi = nullptr;
+  LoopEntry = *(CurLoop->block_begin());
+
+  // step 1: Check if the loop-back branch is in desirable form.
+  if (Value *T = matchCondition(
+          dyn_cast<BranchInst>(LoopEntry->getTerminator()), LoopEntry))
+    DefX = dyn_cast<Instruction>(T);
+  else
+    return false;
+
+  // step 2: detect instructions corresponding to "x.next = x >> 1"
+  if (!DefX || DefX->getOpcode() != Instruction::AShr)
+    return false;
+  if (ConstantInt *Shft = dyn_cast<ConstantInt>(DefX->getOperand(1)))
+    if (!Shft || !Shft->isOne())
+      return false;
+  VarX = DefX->getOperand(0);
+
+  // step 3: Check the recurrence of variable X
+  PhiX = getRecurrenceVar(VarX, DefX, LoopEntry);
+  if (!PhiX)
+    return false;
+
+  // step 4: Find the instruction which count the CTLZ: cnt.next = cnt + 1
+  // TODO: We can skip the step. If loop trip count is known (CTLZ),
+  //       then all uses of "cnt.next" could be optimized to the trip count
+  //       plus "cnt0". Currently it is not optimized.
+  //       This step could be used to detect POPCNT instruction:
+  //       cnt.next = cnt + (x.next & 1)
+  for (BasicBlock::iterator Iter = LoopEntry->getFirstNonPHI()->getIterator(),
+                            IterE = LoopEntry->end();
+       Iter != IterE; Iter++) {
+    Instruction *Inst = &*Iter;
+    if (Inst->getOpcode() != Instruction::Add)
+      continue;
+
+    ConstantInt *Inc = dyn_cast<ConstantInt>(Inst->getOperand(1));
+    if (!Inc || !Inc->isOne())
+      continue;
+
+    PHINode *Phi = getRecurrenceVar(Inst->getOperand(0), Inst, LoopEntry);
+    if (!Phi)
+      continue;
+
+    CntInst = Inst;
+    CntPhi = Phi;
+    break;
+  }
+  if (!CntInst)
+    return false;
+
+  return true;
+}
+
+/// Recognize CTLZ idiom in a non-countable loop and convert the loop
+/// to countable (with CTLZ trip count).
+/// If CTLZ inserted as a new trip count returns true; otherwise, returns false.
+bool LoopIdiomRecognize::recognizeAndInsertCTLZ() {
+  // Give up if the loop has multiple blocks or multiple backedges.
+  if (CurLoop->getNumBackEdges() != 1 || CurLoop->getNumBlocks() != 1)
+    return false;
+
+  Instruction *CntInst, *DefX;
+  PHINode *CntPhi, *PhiX;
+  if (!detectCTLZIdiom(CurLoop, PhiX, CntInst, CntPhi, DefX))
+    return false;
+
+  bool IsCntPhiUsedOutsideLoop = false;
+  for (User *U : CntPhi->users())
+    if (!CurLoop->contains(dyn_cast<Instruction>(U))) {
+      IsCntPhiUsedOutsideLoop = true;
+      break;
+    }
+  bool IsCntInstUsedOutsideLoop = false;
+  for (User *U : CntInst->users())
+    if (!CurLoop->contains(dyn_cast<Instruction>(U))) {
+      IsCntInstUsedOutsideLoop = true;
+      break;
+    }
+  // If both CntInst and CntPhi are used outside the loop the profitability
+  // is questionable.
+  if (IsCntInstUsedOutsideLoop && IsCntPhiUsedOutsideLoop)
+    return false;
+
+  // For some CPUs result of CTLZ(X) intrinsic is undefined
+  // when X is 0. If we can not guarantee X != 0, we need to check this
+  // when expand.
+  bool ZeroCheck = false;
+  // It is safe to assume Preheader exist as it was checked in
+  // parent function RunOnLoop.
+  BasicBlock *PH = CurLoop->getLoopPreheader();
+  Value *InitX = PhiX->getIncomingValueForBlock(PH);
+  // If we check X != 0 before entering the loop we don't need a zero
+  // check in CTLZ intrinsic, but only if Cnt Phi is not used outside of the
+  // loop (if it is used we count CTLZ(X >> 1)).
+  if (!IsCntPhiUsedOutsideLoop)
+    if (BasicBlock *PreCondBB = PH->getSinglePredecessor())
+      if (BranchInst *PreCondBr =
+          dyn_cast<BranchInst>(PreCondBB->getTerminator())) {
+        if (matchCondition(PreCondBr, PH) == InitX)
+          ZeroCheck = true;
+      }
+
+  // Check if CTLZ intrinsic is profitable. Assume it is always profitable
+  // if we delete the loop (the loop has only 6 instructions):
+  //  %n.addr.0 = phi [ %n, %entry ], [ %shr, %while.cond ]
+  //  %i.0 = phi [ %i0, %entry ], [ %inc, %while.cond ]
+  //  %shr = ashr %n.addr.0, 1
+  //  %tobool = icmp eq %shr, 0
+  //  %inc = add nsw %i.0, 1
+  //  br i1 %tobool
+
+  IRBuilder<> Builder(PH->getTerminator());
+  SmallVector<const Value *, 2> Ops =
+      {InitX, ZeroCheck ? Builder.getTrue() : Builder.getFalse()};
+  ArrayRef<const Value *> Args(Ops);
+  if (CurLoop->getHeader()->size() != 6 &&
+      TTI->getIntrinsicCost(Intrinsic::ctlz, InitX->getType(), Args) >
+          TargetTransformInfo::TCC_Basic)
+    return false;
+
+  const DebugLoc DL = DefX->getDebugLoc();
+  transformLoopToCountable(PH, CntInst, CntPhi, InitX, DL, ZeroCheck,
+                           IsCntPhiUsedOutsideLoop);
+  return true;
+}
+
 /// Recognizes a population count idiom in a non-countable loop.
 ///
 /// If detected, transforms the relevant code to issue the popcount intrinsic
@@ -1139,9 +1412,7 @@ bool LoopIdiomRecognize::recognizePopcount() {
 
   // It should have a preheader containing nothing but an unconditional branch.
   BasicBlock *PH = CurLoop->getLoopPreheader();
-  if (!PH)
-    return false;
-  if (&PH->front() != PH->getTerminator())
+  if (!PH || &PH->front() != PH->getTerminator())
     return false;
   auto *EntryBI = dyn_cast<BranchInst>(PH->getTerminator());
   if (!EntryBI || EntryBI->isConditional())
@@ -1177,6 +1448,134 @@ static CallInst *createPopcntIntrinsic(IRBuilder<> &IRBuilder, Value *Val,
   CI->setDebugLoc(DL);
 
   return CI;
+}
+
+static CallInst *createCTLZIntrinsic(IRBuilder<> &IRBuilder, Value *Val,
+                                     const DebugLoc &DL, bool ZeroCheck) {
+  Value *Ops[] = {Val, ZeroCheck ? IRBuilder.getTrue() : IRBuilder.getFalse()};
+  Type *Tys[] = {Val->getType()};
+
+  Module *M = IRBuilder.GetInsertBlock()->getParent()->getParent();
+  Value *Func = Intrinsic::getDeclaration(M, Intrinsic::ctlz, Tys);
+  CallInst *CI = IRBuilder.CreateCall(Func, Ops);
+  CI->setDebugLoc(DL);
+
+  return CI;
+}
+
+/// Transform the following loop:
+/// loop:
+///   CntPhi = PHI [Cnt0, CntInst]
+///   PhiX = PHI [InitX, DefX]
+///   CntInst = CntPhi + 1
+///   DefX = PhiX >> 1
+//    LOOP_BODY
+///   Br: loop if (DefX != 0)
+/// Use(CntPhi) or Use(CntInst)
+///
+/// Into:
+/// If CntPhi used outside the loop:
+///   CountPrev = BitWidth(InitX) - CTLZ(InitX >> 1)
+///   Count = CountPrev + 1
+/// else
+///   Count = BitWidth(InitX) - CTLZ(InitX)
+/// loop:
+///   CntPhi = PHI [Cnt0, CntInst]
+///   PhiX = PHI [InitX, DefX]
+///   PhiCount = PHI [Count, Dec]
+///   CntInst = CntPhi + 1
+///   DefX = PhiX >> 1
+///   Dec = PhiCount - 1
+///   LOOP_BODY
+///   Br: loop if (Dec != 0)
+/// Use(CountPrev + Cnt0) // Use(CntPhi)
+/// or
+/// Use(Count + Cnt0) // Use(CntInst)
+///
+/// If LOOP_BODY is empty the loop will be deleted.
+/// If CntInst and DefX are not used in LOOP_BODY they will be removed.
+void LoopIdiomRecognize::transformLoopToCountable(
+    BasicBlock *Preheader, Instruction *CntInst, PHINode *CntPhi, Value *InitX,
+    const DebugLoc DL, bool ZeroCheck, bool IsCntPhiUsedOutsideLoop) {
+  BranchInst *PreheaderBr = dyn_cast<BranchInst>(Preheader->getTerminator());
+
+  // Step 1: Insert the CTLZ instruction at the end of the preheader block
+  //   Count = BitWidth - CTLZ(InitX);
+  // If there are uses of CntPhi create:
+  //   CountPrev = BitWidth - CTLZ(InitX >> 1);
+  IRBuilder<> Builder(PreheaderBr);
+  Builder.SetCurrentDebugLocation(DL);
+  Value *CTLZ, *Count, *CountPrev, *NewCount, *InitXNext;
+
+  if (IsCntPhiUsedOutsideLoop)
+    InitXNext = Builder.CreateAShr(InitX,
+                                   ConstantInt::get(InitX->getType(), 1));
+  else
+    InitXNext = InitX;
+  CTLZ = createCTLZIntrinsic(Builder, InitXNext, DL, ZeroCheck);
+  Count = Builder.CreateSub(
+      ConstantInt::get(CTLZ->getType(),
+                       CTLZ->getType()->getIntegerBitWidth()),
+      CTLZ);
+  if (IsCntPhiUsedOutsideLoop) {
+    CountPrev = Count;
+    Count = Builder.CreateAdd(
+        CountPrev,
+        ConstantInt::get(CountPrev->getType(), 1));
+  }
+  if (IsCntPhiUsedOutsideLoop)
+    NewCount = Builder.CreateZExtOrTrunc(CountPrev,
+        cast<IntegerType>(CntInst->getType()));
+  else
+    NewCount = Builder.CreateZExtOrTrunc(Count,
+        cast<IntegerType>(CntInst->getType()));
+
+  // If the CTLZ counter's initial value is not zero, insert Add Inst.
+  Value *CntInitVal = CntPhi->getIncomingValueForBlock(Preheader);
+  ConstantInt *InitConst = dyn_cast<ConstantInt>(CntInitVal);
+  if (!InitConst || !InitConst->isZero())
+    NewCount = Builder.CreateAdd(NewCount, CntInitVal);
+
+  // Step 2: Insert new IV and loop condition:
+  // loop:
+  //   ...
+  //   PhiCount = PHI [Count, Dec]
+  //   ...
+  //   Dec = PhiCount - 1
+  //   ...
+  //   Br: loop if (Dec != 0)
+  BasicBlock *Body = *(CurLoop->block_begin());
+  auto *LbBr = dyn_cast<BranchInst>(Body->getTerminator());
+  ICmpInst *LbCond = cast<ICmpInst>(LbBr->getCondition());
+  Type *Ty = Count->getType();
+
+  PHINode *TcPhi = PHINode::Create(Ty, 2, "tcphi", &Body->front());
+
+  Builder.SetInsertPoint(LbCond);
+  Instruction *TcDec = cast<Instruction>(
+      Builder.CreateSub(TcPhi, ConstantInt::get(Ty, 1),
+                        "tcdec", false, true));
+
+  TcPhi->addIncoming(Count, Preheader);
+  TcPhi->addIncoming(TcDec, Body);
+
+  CmpInst::Predicate Pred =
+      (LbBr->getSuccessor(0) == Body) ? CmpInst::ICMP_NE : CmpInst::ICMP_EQ;
+  LbCond->setPredicate(Pred);
+  LbCond->setOperand(0, TcDec);
+  LbCond->setOperand(1, ConstantInt::get(Ty, 0));
+
+  // Step 3: All the references to the original counter outside
+  //  the loop are replaced with the NewCount -- the value returned from
+  //  __builtin_ctlz(x).
+  if (IsCntPhiUsedOutsideLoop)
+    CntPhi->replaceUsesOutsideBlock(NewCount, Body);
+  else
+    CntInst->replaceUsesOutsideBlock(NewCount, Body);
+
+  // step 4: Forget the "non-computable" trip-count SCEV associated with the
+  //   loop. The loop would otherwise not be deleted even if it becomes empty.
+  SE->forgetLoop(CurLoop);
 }
 
 void LoopIdiomRecognize::transformLoopToPopcount(BasicBlock *PreCondBB,

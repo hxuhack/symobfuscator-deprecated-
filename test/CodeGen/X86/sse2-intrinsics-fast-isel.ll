@@ -1227,14 +1227,12 @@ define <4 x float> @test_mm_cvtsd_ss_load(<4 x float> %a0, <2 x double>* %p1) {
 ; X32-LABEL: test_mm_cvtsd_ss_load:
 ; X32:       # BB#0:
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movaps (%eax), %xmm1
-; X32-NEXT:    cvtsd2ss %xmm1, %xmm0
+; X32-NEXT:    cvtsd2ss (%eax), %xmm0
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_cvtsd_ss_load:
 ; X64:       # BB#0:
-; X64-NEXT:    movaps (%rdi), %xmm1
-; X64-NEXT:    cvtsd2ss %xmm1, %xmm0
+; X64-NEXT:    cvtsd2ss (%rdi), %xmm0
 ; X64-NEXT:    retq
   %a1 = load <2 x double>, <2 x double>* %p1
   %res = call <4 x float> @llvm.x86.sse2.cvtsd2ss(<4 x float> %a0, <2 x double> %a1)
@@ -1259,15 +1257,12 @@ define i32 @test_mm_cvtsi128_si32(<2 x i64> %a0) nounwind {
 define <2 x double> @test_mm_cvtsi32_sd(<2 x double> %a0, i32 %a1) nounwind {
 ; X32-LABEL: test_mm_cvtsi32_sd:
 ; X32:       # BB#0:
-; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    cvtsi2sdl %eax, %xmm1
-; X32-NEXT:    movsd {{.*#+}} xmm0 = xmm1[0],xmm0[1]
+; X32-NEXT:    cvtsi2sdl {{[0-9]+}}(%esp), %xmm0
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_cvtsi32_sd:
 ; X64:       # BB#0:
-; X64-NEXT:    cvtsi2sdl %edi, %xmm1
-; X64-NEXT:    movsd {{.*#+}} xmm0 = xmm1[0],xmm0[1]
+; X64-NEXT:    cvtsi2sdl %edi, %xmm0
 ; X64-NEXT:    retq
   %cvt = sitofp i32 %a1 to double
   %res = insertelement <2 x double> %a0, double %cvt, i32 0
@@ -1277,7 +1272,7 @@ define <2 x double> @test_mm_cvtsi32_sd(<2 x double> %a0, i32 %a1) nounwind {
 define <2 x i64> @test_mm_cvtsi32_si128(i32 %a0) nounwind {
 ; X32-LABEL: test_mm_cvtsi32_si128:
 ; X32:       # BB#0:
-; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
+; X32-NEXT:    movss {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_cvtsi32_si128:
@@ -1295,14 +1290,12 @@ define <2 x i64> @test_mm_cvtsi32_si128(i32 %a0) nounwind {
 define <2 x double> @test_mm_cvtss_sd(<2 x double> %a0, <4 x float> %a1) nounwind {
 ; X32-LABEL: test_mm_cvtss_sd:
 ; X32:       # BB#0:
-; X32-NEXT:    cvtss2sd %xmm1, %xmm1
-; X32-NEXT:    movsd {{.*#+}} xmm0 = xmm1[0],xmm0[1]
+; X32-NEXT:    cvtss2sd %xmm1, %xmm0
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_cvtss_sd:
 ; X64:       # BB#0:
-; X64-NEXT:    cvtss2sd %xmm1, %xmm1
-; X64-NEXT:    movsd {{.*#+}} xmm0 = xmm1[0],xmm0[1]
+; X64-NEXT:    cvtss2sd %xmm1, %xmm0
 ; X64-NEXT:    retq
   %ext = extractelement <4 x float> %a1, i32 0
   %cvt = fpext float %ext to double
@@ -1525,12 +1518,12 @@ define <2 x i64> @test_mm_loadl_epi64(<2 x i64> %a0, <2 x i64>* %a1) nounwind {
 ; X32-LABEL: test_mm_loadl_epi64:
 ; X32:       # BB#0:
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    movq {{.*#+}} xmm0 = mem[0],zero
+; X32-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_loadl_epi64:
 ; X64:       # BB#0:
-; X64-NEXT:    movq {{.*#+}} xmm0 = mem[0],zero
+; X64-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
 ; X64-NEXT:    retq
   %bc = bitcast <2 x i64>* %a1 to i64*
   %ld = load i64, i64* %bc, align 1
@@ -2083,7 +2076,7 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm2
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3],xmm2[4],xmm1[4],xmm2[5],xmm1[5],xmm2[6],xmm1[6],xmm2[7],xmm1[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2094,8 +2087,8 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm1
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3],xmm1[4],xmm3[4],xmm1[5],xmm3[5],xmm1[6],xmm3[6],xmm1[7],xmm3[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1],xmm1[2],xmm2[2],xmm1[3],xmm2[3],xmm1[4],xmm2[4],xmm1[5],xmm2[5],xmm1[6],xmm2[6],xmm1[7],xmm2[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2106,7 +2099,7 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm3
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3],xmm3[4],xmm2[4],xmm3[5],xmm2[5],xmm3[6],xmm2[6],xmm3[7],xmm2[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2117,27 +2110,27 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3],xmm0[4],xmm4[4],xmm0[5],xmm4[5],xmm0[6],xmm4[6],xmm0[7],xmm4[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3],xmm0[4],xmm2[4],xmm0[5],xmm2[5],xmm0[6],xmm2[6],xmm0[7],xmm2[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3],xmm0[4],xmm3[4],xmm0[5],xmm3[5],xmm0[6],xmm3[6],xmm0[7],xmm3[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3],xmm0[4],xmm1[4],xmm0[5],xmm1[5],xmm0[6],xmm1[6],xmm0[7],xmm1[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_set_epi8:
 ; X64:       # BB#0:
 ; X64-NEXT:    movzbl %dil, %eax
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
+; X64-NEXT:    movzbl %sil, %eax
 ; X64-NEXT:    movd %eax, %xmm1
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
-; X64-NEXT:    movzbl %r8b, %eax
-; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
-; X64-NEXT:    movd %eax, %xmm2
-; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3],xmm2[4],xmm1[4],xmm2[5],xmm1[5],xmm2[6],xmm1[6],xmm2[7],xmm1[7]
 ; X64-NEXT:    movzbl %dl, %eax
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
+; X64-NEXT:    movzbl %cl, %eax
+; X64-NEXT:    movd %eax, %xmm2
+; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
+; X64-NEXT:    movzbl %r8b, %eax
+; X64-NEXT:    movd %eax, %xmm0
+; X64-NEXT:    movzbl %r9b, %eax
 ; X64-NEXT:    movd %eax, %xmm3
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
@@ -2145,20 +2138,20 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm1
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3],xmm1[4],xmm3[4],xmm1[5],xmm3[5],xmm1[6],xmm3[6],xmm1[7],xmm3[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1],xmm1[2],xmm2[2],xmm1[3],xmm2[3],xmm1[4],xmm2[4],xmm1[5],xmm2[5],xmm1[6],xmm2[6],xmm1[7],xmm2[7]
-; X64-NEXT:    movzbl %sil, %eax
+; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1]
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm2
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X64-NEXT:    movzbl %r9b, %eax
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm3
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3],xmm3[4],xmm2[4],xmm3[5],xmm2[5],xmm3[6],xmm2[6],xmm3[7],xmm2[7]
-; X64-NEXT:    movzbl %cl, %eax
+; X64-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3]
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm2
@@ -2168,9 +2161,9 @@ define <2 x i64> @test_mm_set_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %a
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3],xmm0[4],xmm4[4],xmm0[5],xmm4[5],xmm0[6],xmm4[6],xmm0[7],xmm4[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3],xmm0[4],xmm2[4],xmm0[5],xmm2[5],xmm0[6],xmm2[6],xmm0[7],xmm2[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3],xmm0[4],xmm3[4],xmm0[5],xmm3[5],xmm0[6],xmm3[6],xmm0[7],xmm3[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3],xmm0[4],xmm1[4],xmm0[5],xmm1[5],xmm0[6],xmm1[6],xmm0[7],xmm1[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <16 x i8> undef,  i8 %a15, i32 0
   %res1  = insertelement <16 x i8> %res0,  i8 %a14, i32 1
@@ -2213,11 +2206,11 @@ define <2 x i64> @test_mm_set_epi16(i16 %a0, i16 %a1, i16 %a2, i16 %a3, i16 %a4,
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm3[0],xmm4[1],xmm3[1],xmm4[2],xmm3[2],xmm4[3],xmm3[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm2[0],xmm4[1],xmm2[1],xmm4[2],xmm2[2],xmm4[3],xmm2[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm4 = xmm4[0],xmm2[0],xmm4[1],xmm2[1]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm6 = xmm6[0],xmm5[0],xmm6[1],xmm5[1],xmm6[2],xmm5[2],xmm6[3],xmm5[3]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm7[0],xmm0[1],xmm7[1],xmm0[2],xmm7[2],xmm0[3],xmm7[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1],xmm0[2],xmm6[2],xmm0[3],xmm6[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm4[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_set_epi16:
@@ -2225,20 +2218,20 @@ define <2 x i64> @test_mm_set_epi16(i16 %a0, i16 %a1, i16 %a2, i16 %a3, i16 %a4,
 ; X64-NEXT:    movw {{[0-9]+}}(%rsp), %r10w
 ; X64-NEXT:    movw {{[0-9]+}}(%rsp), %ax
 ; X64-NEXT:    movd %edi, %xmm0
-; X64-NEXT:    movd %r8d, %xmm1
+; X64-NEXT:    movd %esi, %xmm1
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3]
 ; X64-NEXT:    movd %edx, %xmm0
-; X64-NEXT:    movd %eax, %xmm2
+; X64-NEXT:    movd %ecx, %xmm2
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
-; X64-NEXT:    movd %esi, %xmm0
+; X64-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
+; X64-NEXT:    movd %r8d, %xmm0
 ; X64-NEXT:    movd %r9d, %xmm1
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3]
-; X64-NEXT:    movd %ecx, %xmm3
+; X64-NEXT:    movd %eax, %xmm3
 ; X64-NEXT:    movd %r10d, %xmm0
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm2[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <8 x i16> undef, i16 %a7, i32 0
   %res1  = insertelement <8 x i16> %res0, i16 %a6, i32 1
@@ -2261,18 +2254,18 @@ define <2 x i64> @test_mm_set_epi32(i32 %a0, i32 %a1, i32 %a2, i32 %a3) nounwind
 ; X32-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
-; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_set_epi32:
 ; X64:       # BB#0:
 ; X64-NEXT:    movd %edi, %xmm0
-; X64-NEXT:    movd %edx, %xmm1
+; X64-NEXT:    movd %esi, %xmm1
 ; X64-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
-; X64-NEXT:    movd %esi, %xmm2
+; X64-NEXT:    movd %edx, %xmm2
 ; X64-NEXT:    movd %ecx, %xmm0
 ; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
-; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <4 x i32> undef, i32 %a3, i32 0
   %res1  = insertelement <4 x i32> %res0, i32 %a2, i32 1
@@ -2289,17 +2282,17 @@ define <2 x i64> @test_mm_set_epi64x(i64 %a0, i64 %a1) nounwind {
 ; X32:       # BB#0:
 ; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
-; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
+; X32-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
+; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero
-; X32-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
 ; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_set_epi64x:
 ; X64:       # BB#0:
-; X64-NEXT:    movd %rdi, %xmm1
-; X64-NEXT:    movd %rsi, %xmm0
+; X64-NEXT:    movq %rdi, %xmm1
+; X64-NEXT:    movq %rsi, %xmm0
 ; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <2 x i64> undef, i64 %a1, i32 0
@@ -2325,10 +2318,26 @@ define <2 x double> @test_mm_set_pd(double %a0, double %a1) nounwind {
   ret <2 x double> %res1
 }
 
+define <2 x double> @test_mm_set_pd1(double %a0) nounwind {
+; X32-LABEL: test_mm_set_pd1:
+; X32:       # BB#0:
+; X32-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
+; X32-NEXT:    movlhps {{.*#+}} xmm0 = xmm0[0,0]
+; X32-NEXT:    retl
+;
+; X64-LABEL: test_mm_set_pd1:
+; X64:       # BB#0:
+; X64-NEXT:    movlhps {{.*#+}} xmm0 = xmm0[0,0]
+; X64-NEXT:    retq
+  %res0  = insertelement <2 x double> undef, double %a0, i32 0
+  %res1  = insertelement <2 x double> %res0, double %a0, i32 1
+  ret <2 x double> %res1
+}
+
 define <2 x double> @test_mm_set_sd(double %a0) nounwind {
 ; X32-LABEL: test_mm_set_sd:
 ; X32:       # BB#0:
-; X32-NEXT:    movsd {{.*#+}} xmm0 = mem[0],zero
+; X32-NEXT:    movq {{.*#+}} xmm0 = mem[0],zero
 ; X32-NEXT:    movq {{.*#+}} xmm0 = xmm0[0],zero
 ; X32-NEXT:    retl
 ;
@@ -2432,15 +2441,14 @@ define <2 x i64> @test_mm_set1_epi64x(i64 %a0) nounwind {
 ; X32-LABEL: test_mm_set1_epi64x:
 ; X32:       # BB#0:
 ; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,0,1,1]
 ; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
-; X32-NEXT:    pshufd {{.*#+}} xmm1 = xmm1[0,0,1,1]
 ; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X32-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,1,0,1]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_set1_epi64x:
 ; X64:       # BB#0:
-; X64-NEXT:    movd %rdi, %xmm0
+; X64-NEXT:    movq %rdi, %xmm0
 ; X64-NEXT:    pshufd {{.*#+}} xmm0 = xmm0[0,1,0,1]
 ; X64-NEXT:    retq
   %res0  = insertelement <2 x i64> undef, i64 %a0, i32 0
@@ -2477,7 +2485,7 @@ define <2 x i64> @test_mm_setr_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm2
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3],xmm2[4],xmm1[4],xmm2[5],xmm1[5],xmm2[6],xmm1[6],xmm2[7],xmm1[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2488,8 +2496,8 @@ define <2 x i64> @test_mm_setr_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm1
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3],xmm1[4],xmm3[4],xmm1[5],xmm3[5],xmm1[6],xmm3[6],xmm1[7],xmm3[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1],xmm1[2],xmm2[2],xmm1[3],xmm2[3],xmm1[4],xmm2[4],xmm1[5],xmm2[5],xmm1[6],xmm2[6],xmm1[7],xmm2[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2500,7 +2508,7 @@ define <2 x i64> @test_mm_setr_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm3
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3],xmm3[4],xmm2[4],xmm3[5],xmm2[5],xmm3[6],xmm2[6],xmm3[7],xmm2[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3]
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
@@ -2511,9 +2519,9 @@ define <2 x i64> @test_mm_setr_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %
 ; X32-NEXT:    movzbl {{[0-9]+}}(%esp), %eax
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3],xmm0[4],xmm4[4],xmm0[5],xmm4[5],xmm0[6],xmm4[6],xmm0[7],xmm4[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3],xmm0[4],xmm2[4],xmm0[5],xmm2[5],xmm0[6],xmm2[6],xmm0[7],xmm2[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3],xmm0[4],xmm3[4],xmm0[5],xmm3[5],xmm0[6],xmm3[6],xmm0[7],xmm3[7]
-; X32-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3],xmm0[4],xmm1[4],xmm0[5],xmm1[5],xmm0[6],xmm1[6],xmm0[7],xmm1[7]
+; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_setr_epi8:
@@ -2525,46 +2533,46 @@ define <2 x i64> @test_mm_setr_epi8(i8 %a0, i8 %a1, i8 %a2, i8 %a3, i8 %a4, i8 %
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl %cl, %eax
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm2
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3],xmm2[4],xmm1[4],xmm2[5],xmm1[5],xmm2[6],xmm1[6],xmm2[7],xmm1[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl %r9b, %eax
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm3
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl %sil, %eax
+; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm1
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3],xmm1[4],xmm0[4],xmm1[5],xmm0[5],xmm1[6],xmm0[6],xmm1[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3],xmm1[4],xmm3[4],xmm1[5],xmm3[5],xmm1[6],xmm3[6],xmm1[7],xmm3[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1],xmm1[2],xmm2[2],xmm1[3],xmm2[3],xmm1[4],xmm2[4],xmm1[5],xmm2[5],xmm1[6],xmm2[6],xmm1[7],xmm2[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm3[0],xmm1[1],xmm3[1],xmm1[2],xmm3[2],xmm1[3],xmm3[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm2[0],xmm1[1],xmm2[1]
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
 ; X64-NEXT:    movd %eax, %xmm2
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
-; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movzbl %dl, %eax
-; X64-NEXT:    movd %eax, %xmm3
-; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3],xmm3[4],xmm2[4],xmm3[5],xmm2[5],xmm3[6],xmm2[6],xmm3[7],xmm2[7]
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
+; X64-NEXT:    movzbl %r9b, %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    movzbl %r8b, %eax
+; X64-NEXT:    movd %eax, %xmm3
+; X64-NEXT:    punpcklbw {{.*#+}} xmm3 = xmm3[0],xmm0[0],xmm3[1],xmm0[1],xmm3[2],xmm0[2],xmm3[3],xmm0[3],xmm3[4],xmm0[4],xmm3[5],xmm0[5],xmm3[6],xmm0[6],xmm3[7],xmm0[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm3 = xmm3[0],xmm2[0],xmm3[1],xmm2[1],xmm3[2],xmm2[2],xmm3[3],xmm2[3]
+; X64-NEXT:    movzbl %cl, %eax
+; X64-NEXT:    movd %eax, %xmm0
+; X64-NEXT:    movzbl %dl, %eax
 ; X64-NEXT:    movd %eax, %xmm2
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3],xmm2[4],xmm0[4],xmm2[5],xmm0[5],xmm2[6],xmm0[6],xmm2[7],xmm0[7]
-; X64-NEXT:    movzbl {{[0-9]+}}(%rsp), %eax
+; X64-NEXT:    movzbl %sil, %eax
 ; X64-NEXT:    movd %eax, %xmm4
 ; X64-NEXT:    movzbl %dil, %eax
 ; X64-NEXT:    movd %eax, %xmm0
 ; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3],xmm0[4],xmm4[4],xmm0[5],xmm4[5],xmm0[6],xmm4[6],xmm0[7],xmm4[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3],xmm0[4],xmm2[4],xmm0[5],xmm2[5],xmm0[6],xmm2[6],xmm0[7],xmm2[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3],xmm0[4],xmm3[4],xmm0[5],xmm3[5],xmm0[6],xmm3[6],xmm0[7],xmm3[7]
-; X64-NEXT:    punpcklbw {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3],xmm0[4],xmm1[4],xmm0[5],xmm1[5],xmm0[6],xmm1[6],xmm0[7],xmm1[7]
+; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <16 x i8> undef,  i8 %a0 , i32 0
   %res1  = insertelement <16 x i8> %res0,  i8 %a1 , i32 1
@@ -2607,11 +2615,11 @@ define <2 x i64> @test_mm_setr_epi16(i16 %a0, i16 %a1, i16 %a2, i16 %a3, i16 %a4
 ; X32-NEXT:    movd %eax, %xmm0
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm3[0],xmm4[1],xmm3[1],xmm4[2],xmm3[2],xmm4[3],xmm3[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm4 = xmm4[0],xmm2[0],xmm4[1],xmm2[1],xmm4[2],xmm2[2],xmm4[3],xmm2[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm4 = xmm4[0],xmm2[0],xmm4[1],xmm2[1]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm6 = xmm6[0],xmm5[0],xmm6[1],xmm5[1],xmm6[2],xmm5[2],xmm6[3],xmm5[3]
 ; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm7[0],xmm0[1],xmm7[1],xmm0[2],xmm7[2],xmm0[3],xmm7[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1],xmm0[2],xmm6[2],xmm0[3],xmm6[3]
-; X32-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm4[0],xmm0[1],xmm4[1],xmm0[2],xmm4[2],xmm0[3],xmm4[3]
+; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm6[0],xmm0[1],xmm6[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm4[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_setr_epi16:
@@ -2619,20 +2627,20 @@ define <2 x i64> @test_mm_setr_epi16(i16 %a0, i16 %a1, i16 %a2, i16 %a3, i16 %a4
 ; X64-NEXT:    movw {{[0-9]+}}(%rsp), %ax
 ; X64-NEXT:    movw {{[0-9]+}}(%rsp), %r10w
 ; X64-NEXT:    movd %eax, %xmm0
-; X64-NEXT:    movd %ecx, %xmm1
+; X64-NEXT:    movd %r10d, %xmm1
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3]
 ; X64-NEXT:    movd %r9d, %xmm0
-; X64-NEXT:    movd %esi, %xmm2
+; X64-NEXT:    movd %r8d, %xmm2
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm0[0],xmm2[1],xmm0[1],xmm2[2],xmm0[2],xmm2[3],xmm0[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1],xmm2[2],xmm1[2],xmm2[3],xmm1[3]
-; X64-NEXT:    movd %r10d, %xmm0
+; X64-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
+; X64-NEXT:    movd %ecx, %xmm0
 ; X64-NEXT:    movd %edx, %xmm1
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1],xmm1[2],xmm0[2],xmm1[3],xmm0[3]
-; X64-NEXT:    movd %r8d, %xmm3
+; X64-NEXT:    movd %esi, %xmm3
 ; X64-NEXT:    movd %edi, %xmm0
 ; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm3[0],xmm0[1],xmm3[1],xmm0[2],xmm3[2],xmm0[3],xmm3[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1],xmm0[2],xmm1[2],xmm0[3],xmm1[3]
-; X64-NEXT:    punpcklwd {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1],xmm0[2],xmm2[2],xmm0[3],xmm2[3]
+; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm2[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <8 x i16> undef, i16 %a0, i32 0
   %res1  = insertelement <8 x i16> %res0, i16 %a1, i32 1
@@ -2655,18 +2663,18 @@ define <2 x i64> @test_mm_setr_epi32(i32 %a0, i32 %a1, i32 %a2, i32 %a3) nounwin
 ; X32-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
-; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_setr_epi32:
 ; X64:       # BB#0:
 ; X64-NEXT:    movd %ecx, %xmm0
-; X64-NEXT:    movd %esi, %xmm1
+; X64-NEXT:    movd %edx, %xmm1
 ; X64-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
-; X64-NEXT:    movd %edx, %xmm2
+; X64-NEXT:    movd %esi, %xmm2
 ; X64-NEXT:    movd %edi, %xmm0
 ; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
-; X64-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
+; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <4 x i32> undef, i32 %a0, i32 0
   %res1  = insertelement <4 x i32> %res0, i32 %a1, i32 1
@@ -2683,17 +2691,17 @@ define <2 x i64> @test_mm_setr_epi64x(i64 %a0, i64 %a1) nounwind {
 ; X32:       # BB#0:
 ; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
-; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm1[0],xmm0[1],xmm1[1]
-; X32-NEXT:    movd {{.*#+}} xmm1 = mem[0],zero,zero,zero
+; X32-NEXT:    punpckldq {{.*#+}} xmm1 = xmm1[0],xmm0[0],xmm1[1],xmm0[1]
+; X32-NEXT:    movd {{.*#+}} xmm0 = mem[0],zero,zero,zero
 ; X32-NEXT:    movd {{.*#+}} xmm2 = mem[0],zero,zero,zero
-; X32-NEXT:    punpckldq {{.*#+}} xmm2 = xmm2[0],xmm1[0],xmm2[1],xmm1[1]
 ; X32-NEXT:    punpckldq {{.*#+}} xmm0 = xmm0[0],xmm2[0],xmm0[1],xmm2[1]
+; X32-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_setr_epi64x:
 ; X64:       # BB#0:
-; X64-NEXT:    movd %rsi, %xmm1
-; X64-NEXT:    movd %rdi, %xmm0
+; X64-NEXT:    movq %rsi, %xmm1
+; X64-NEXT:    movq %rdi, %xmm0
 ; X64-NEXT:    punpcklqdq {{.*#+}} xmm0 = xmm0[0],xmm1[0]
 ; X64-NEXT:    retq
   %res0  = insertelement <2 x i64> undef, i64 %a0, i32 0
@@ -2941,13 +2949,13 @@ define <2 x double> @test_mm_sqrt_sd(<2 x double> %a0, <2 x double> %a1) nounwin
 ; X32-LABEL: test_mm_sqrt_sd:
 ; X32:       # BB#0:
 ; X32-NEXT:    sqrtsd %xmm0, %xmm1
-; X32-NEXT:    movaps %xmm1, %xmm0
+; X32-NEXT:    movapd %xmm1, %xmm0
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_sqrt_sd:
 ; X64:       # BB#0:
 ; X64-NEXT:    sqrtsd %xmm0, %xmm1
-; X64-NEXT:    movaps %xmm1, %xmm0
+; X64-NEXT:    movapd %xmm1, %xmm0
 ; X64-NEXT:    retq
   %call = call <2 x double> @llvm.x86.sse2.sqrt.sd(<2 x double> %a0)
   %ext0 = extractelement <2 x double> %call, i32 0
@@ -3233,13 +3241,13 @@ define void @test_mm_storeh_sd(double *%a0, <2 x double> %a1) {
 ; X32-LABEL: test_mm_storeh_sd:
 ; X32:       # BB#0:
 ; X32-NEXT:    movl {{[0-9]+}}(%esp), %eax
-; X32-NEXT:    shufpd {{.*#+}} xmm0 = xmm0[1,0]
+; X32-NEXT:    movhlps {{.*#+}} xmm0 = xmm0[1,1]
 ; X32-NEXT:    movsd %xmm0, (%eax)
 ; X32-NEXT:    retl
 ;
 ; X64-LABEL: test_mm_storeh_sd:
 ; X64:       # BB#0:
-; X64-NEXT:    shufpd {{.*#+}} xmm0 = xmm0[1,0]
+; X64-NEXT:    movhlps {{.*#+}} xmm0 = xmm0[1,1]
 ; X64-NEXT:    movsd %xmm0, (%rdi)
 ; X64-NEXT:    retq
   %ext = extractelement <2 x double> %a1, i32 1
@@ -3256,7 +3264,7 @@ define void @test_mm_storel_epi64(<2 x i64> *%a0, <2 x i64> %a1) {
 ;
 ; X64-LABEL: test_mm_storel_epi64:
 ; X64:       # BB#0:
-; X64-NEXT:    movd %xmm0, %rax
+; X64-NEXT:    movq %xmm0, %rax
 ; X64-NEXT:    movq %rax, (%rdi)
 ; X64-NEXT:    retq
   %ext = extractelement <2 x i64> %a1, i32 0

@@ -16,17 +16,12 @@
 #ifndef LLVM_LIB_TARGET_AMDGPU_AMDGPUINSTRINFO_H
 #define LLVM_LIB_TARGET_AMDGPU_AMDGPUINSTRINFO_H
 
+#include "AMDGPU.h"
+#include "Utils/AMDGPUBaseInfo.h"
 #include "llvm/Target/TargetInstrInfo.h"
 
 #define GET_INSTRINFO_HEADER
-#define GET_INSTRINFO_ENUM
-#define GET_INSTRINFO_OPERAND_ENUM
 #include "AMDGPUGenInstrInfo.inc"
-
-#define OPCODE_IS_ZERO_INT AMDGPU::PRED_SETE_INT
-#define OPCODE_IS_NOT_ZERO_INT AMDGPU::PRED_SETNE_INT
-#define OPCODE_IS_ZERO AMDGPU::PRED_SETE
-#define OPCODE_IS_NOT_ZERO AMDGPU::PRED_SETNE
 
 namespace llvm {
 
@@ -40,11 +35,11 @@ private:
   const AMDGPUSubtarget &ST;
 
   virtual void anchor();
+protected:
+  AMDGPUAS AMDGPUASI;
 
 public:
   explicit AMDGPUInstrInfo(const AMDGPUSubtarget &st);
-
-  bool enableClusterLoads() const override;
 
   bool shouldScheduleLoadsNear(SDNode *Load1, SDNode *Load2,
                                int64_t Offset1, int64_t Offset2,
@@ -59,15 +54,6 @@ public:
   /// equivalent opcode that writes \p Channels Channels.
   int getMaskedMIMGOp(uint16_t Opcode, unsigned Channels) const;
 };
-
-namespace AMDGPU {
-  LLVM_READONLY
-  int16_t getNamedOperandIdx(uint16_t Opcode, uint16_t NamedIndex);
-}  // End namespace AMDGPU
-
 } // End llvm namespace
-
-#define AMDGPU_FLAG_REGISTER_LOAD  (UINT64_C(1) << 63)
-#define AMDGPU_FLAG_REGISTER_STORE (UINT64_C(1) << 62)
 
 #endif

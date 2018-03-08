@@ -20,7 +20,11 @@ namespace llvm {
 /// The sample profiler data loader pass.
 class SampleProfileLoaderPass : public PassInfoMixin<SampleProfileLoaderPass> {
 public:
-  PreservedAnalyses run(Module &M, AnalysisManager<Module> &AM);
+  PreservedAnalyses run(Module &M, ModuleAnalysisManager &AM);
+  SampleProfileLoaderPass(std::string File = "") : ProfileFileName(File) {}
+
+private:
+  std::string ProfileFileName;
 };
 
 } // End llvm namespace

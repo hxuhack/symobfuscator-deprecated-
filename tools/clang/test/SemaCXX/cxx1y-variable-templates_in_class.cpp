@@ -17,8 +17,7 @@ class A {
   template<typename T> CONST float right<float,T> = 5;  // expected-error {{member 'right' declared as a template}}
   template<> static CONST int right<int,int> = 7;       // expected-error {{explicit specialization of 'right' in class scope}}
   template<> static CONST float right<float,int>;       // expected-error {{explicit specialization of 'right' in class scope}}
-  template static CONST int right<int,int>;     // expected-error {{template specialization requires 'template<>'}} \
-                                                // expected-error {{explicit specialization of 'right' in class scope}}
+  template static CONST int right<int,int>;     // expected-error {{expected '<' after 'template'}}
 };
 
 namespace out_of_line {
@@ -26,10 +25,10 @@ namespace out_of_line {
     template<typename T, typename T0> static CONST T right = T(100);
     template<typename T> static CONST T right<T,int> = T(5);
   };
-  template<> CONST int B0::right<int,int> = 7;
-  template CONST int B0::right<int,int>;
-  template<> CONST int B0::right<int,float>;
-  template CONST int B0::right<int,float>;
+  template<> CONST int B0::right<int,int> = 7; // expected-note {{previous}}
+  template CONST int B0::right<int,int>; // expected-warning {{has no effect}}
+  template<> CONST int B0::right<int,float>; // expected-note {{previous}}
+  template CONST int B0::right<int,float>; // expected-warning {{has no effect}}
 
   class B1 {
     template<typename T, typename T0> static CONST T right;
@@ -166,8 +165,7 @@ namespace constexpred {
     template<typename T> constexpr float right<float,T> = 5;  // expected-error {{non-static data member cannot be constexpr; did you intend to make it static?}}
     template<> static constexpr int right<int,int> = 7;       // expected-error {{explicit specialization of 'right' in class scope}}
     template<> static constexpr float right<float,int>;       // expected-error {{explicit specialization of 'right' in class scope}}
-    template static constexpr int right<int,int>;     // expected-error {{template specialization requires 'template<>'}} \
-                                                  // expected-error {{explicit specialization of 'right' in class scope}}
+    template static constexpr int right<int,int>;     // expected-error {{expected '<' after 'template'}}
   };
 }
 #endif

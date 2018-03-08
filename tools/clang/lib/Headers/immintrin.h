@@ -69,9 +69,44 @@
    Intel documents these as being in immintrin.h, and
    they depend on typedefs from avxintrin.h. */
 
+/// \brief Converts a 256-bit vector of [8 x float] into a 128-bit vector
+///    containing 16-bit half-precision float values.
+///
+/// \headerfile <x86intrin.h>
+///
+/// \code
+/// __m128i _mm256_cvtps_ph(__m256 a, const int imm);
+/// \endcode
+///
+/// This intrinsic corresponds to the <c> VCVTPS2PH </c> instruction.
+///
+/// \param a
+///    A 256-bit vector containing 32-bit single-precision float values to be
+///    converted to 16-bit half-precision float values.
+/// \param imm
+///    An immediate value controlling rounding using bits [2:0]: \n
+///    000: Nearest \n
+///    001: Down \n
+///    010: Up \n
+///    011: Truncate \n
+///    1XX: Use MXCSR.RC for rounding
+/// \returns A 128-bit vector containing the converted 16-bit half-precision
+///    float values.
 #define _mm256_cvtps_ph(a, imm) __extension__ ({ \
  (__m128i)__builtin_ia32_vcvtps2ph256((__v8sf)(__m256)(a), (imm)); })
 
+/// \brief Converts a 128-bit vector containing 16-bit half-precision float
+///    values into a 256-bit vector of [8 x float].
+///
+/// \headerfile <x86intrin.h>
+///
+/// This intrinsic corresponds to the <c> VCVTPH2PS </c> instruction.
+///
+/// \param __a
+///    A 128-bit vector containing 16-bit half-precision float values to be
+///    converted to 32-bit single-precision float values.
+/// \returns A vector of [8 x float] containing the converted 32-bit
+///    single-precision float values.
 static __inline __m256 __attribute__((__always_inline__, __nodebug__, __target__("f16c")))
 _mm256_cvtph_ps(__m128i __a)
 {
@@ -109,6 +144,10 @@ _mm256_cvtph_ps(__m128i __a)
 
 #if !defined(_MSC_VER) || __has_feature(modules) || defined(__AVX512CD__)
 #include <avx512cdintrin.h>
+#endif
+
+#if !defined(_MSC_VER) || __has_feature(modules) || defined(__AVX512VPOPCNTDQ__)
+#include <avx512vpopcntdqintrin.h>
 #endif
 
 #if !defined(_MSC_VER) || __has_feature(modules) || defined(__AVX512DQ__)
@@ -173,6 +212,15 @@ _rdrand32_step(unsigned int *__p)
   return __builtin_ia32_rdrand32_step(__p);
 }
 
+#ifdef __x86_64__
+static __inline__ int __attribute__((__always_inline__, __nodebug__, __target__("rdrnd")))
+_rdrand64_step(unsigned long long *__p)
+{
+  return __builtin_ia32_rdrand64_step(__p);
+}
+#endif
+#endif /* __RDRND__ */
+
 /* __bit_scan_forward */
 static __inline__ int __attribute__((__always_inline__, __nodebug__))
 _bit_scan_forward(int __A) {
@@ -184,15 +232,6 @@ static __inline__ int __attribute__((__always_inline__, __nodebug__))
 _bit_scan_reverse(int __A) {
   return 31 - __builtin_clz(__A);
 }
-
-#ifdef __x86_64__
-static __inline__ int __attribute__((__always_inline__, __nodebug__, __target__("rdrnd")))
-_rdrand64_step(unsigned long long *__p)
-{
-  return __builtin_ia32_rdrand64_step(__p);
-}
-#endif
-#endif /* __RDRND__ */
 
 #if !defined(_MSC_VER) || __has_feature(modules) || defined(__FSGSBASE__)
 #ifdef __x86_64__

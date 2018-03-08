@@ -28,8 +28,8 @@
 #include "llvm/Support/Mutex.h"
 #include "llvm/Support/SwapByteOrder.h"
 #include <map>
-#include <unordered_map>
 #include <system_error>
+#include <unordered_map>
 
 using namespace llvm;
 using namespace llvm::object;
@@ -149,26 +149,41 @@ public:
   /// The size of this relocation (MachO specific).
   unsigned Size;
 
+  // COFF specific.
+  bool IsTargetThumbFunc;
+
   RelocationEntry(unsigned id, uint64_t offset, uint32_t type, int64_t addend)
       : SectionID(id), Offset(offset), RelType(type), Addend(addend),
-        SymOffset(0), IsPCRel(false), Size(0) {}
+        SymOffset(0), IsPCRel(false), Size(0), IsTargetThumbFunc(false) {}
 
   RelocationEntry(unsigned id, uint64_t offset, uint32_t type, int64_t addend,
                   uint64_t symoffset)
       : SectionID(id), Offset(offset), RelType(type), Addend(addend),
-        SymOffset(symoffset), IsPCRel(false), Size(0) {}
+        SymOffset(symoffset), IsPCRel(false), Size(0),
+        IsTargetThumbFunc(false) {}
 
   RelocationEntry(unsigned id, uint64_t offset, uint32_t type, int64_t addend,
                   bool IsPCRel, unsigned Size)
       : SectionID(id), Offset(offset), RelType(type), Addend(addend),
-        SymOffset(0), IsPCRel(IsPCRel), Size(Size) {}
+        SymOffset(0), IsPCRel(IsPCRel), Size(Size), IsTargetThumbFunc(false) {}
 
   RelocationEntry(unsigned id, uint64_t offset, uint32_t type, int64_t addend,
                   unsigned SectionA, uint64_t SectionAOffset, unsigned SectionB,
                   uint64_t SectionBOffset, bool IsPCRel, unsigned Size)
       : SectionID(id), Offset(offset), RelType(type),
         Addend(SectionAOffset - SectionBOffset + addend), IsPCRel(IsPCRel),
-        Size(Size) {
+        Size(Size), IsTargetThumbFunc(false) {
+    Sections.SectionA = SectionA;
+    Sections.SectionB = SectionB;
+  }
+
+  RelocationEntry(unsigned id, uint64_t offset, uint32_t type, int64_t addend,
+                  unsigned SectionA, uint64_t SectionAOffset, unsigned SectionB,
+                  uint64_t SectionBOffset, bool IsPCRel, unsigned Size,
+                  bool IsTargetThumbFunc)
+      : SectionID(id), Offset(offset), RelType(type),
+        Addend(SectionAOffset - SectionBOffset + addend), IsPCRel(IsPCRel),
+        Size(Size), IsTargetThumbFunc(IsTargetThumbFunc) {
     Sections.SectionA = SectionA;
     Sections.SectionB = SectionB;
   }
@@ -198,21 +213,24 @@ public:
   }
 };
 
-/// @brief Symbol info for RuntimeDyld. 
-class SymbolTableEntry : public JITSymbolBase {
+/// @brief Symbol info for RuntimeDyld.
+class SymbolTableEntry {
 public:
   SymbolTableEntry()
-    : JITSymbolBase(JITSymbolFlags::None), Offset(0), SectionID(0) {}
+      : Offset(0), SectionID(0) {}
 
   SymbolTableEntry(unsigned SectionID, uint64_t Offset, JITSymbolFlags Flags)
-    : JITSymbolBase(Flags), Offset(Offset), SectionID(SectionID) {}
+      : Offset(Offset), SectionID(SectionID), Flags(Flags) {}
 
   unsigned getSectionID() const { return SectionID; }
   uint64_t getOffset() const { return Offset; }
 
+  JITSymbolFlags getFlags() const { return Flags; }
+
 private:
   uint64_t Offset;
   unsigned SectionID;
+  JITSymbolFlags Flags;
 };
 
 typedef StringMap<SymbolTableEntry> RTDyldSymbolTable;
@@ -227,7 +245,7 @@ protected:
   RuntimeDyld::MemoryManager &MemMgr;
 
   // The symbol resolver to use for external symbols.
-  RuntimeDyld::SymbolResolver &Resolver;
+  JITSymbolResolver &Resolver;
 
   // Attached RuntimeDyldChecker instance. Null if no instance attached.
   RuntimeDyldCheckerImpl *Checker;
@@ -272,6 +290,7 @@ protected:
   Triple::ArchType Arch;
   bool IsTargetLittleEndian;
   bool IsMipsO32ABI;
+  bool IsMipsN32ABI;
   bool IsMipsN64ABI;
 
   // True if all sections should be passed to the memory manager, false if only
@@ -335,6 +354,7 @@ protected:
 
   virtual void setMipsABI(const ObjectFile &Obj) {
     IsMipsO32ABI = false;
+    IsMipsN32ABI = false;
     IsMipsN64ABI = false;
   }
 
@@ -397,7 +417,7 @@ protected:
                        StubMap &Stubs) = 0;
 
   /// \brief Resolve relocations to external symbols.
-  void resolveExternalSymbols();
+  Error resolveExternalSymbols();
 
   // \brief Compute an upper bound of the memory that is required to load all
   // sections
@@ -406,12 +426,23 @@ protected:
                               uint64_t &RODataSize, uint32_t &RODataAlign,
                               uint64_t &RWDataSize, uint32_t &RWDataAlign);
 
+  // \brief Compute GOT size
+  unsigned computeGOTSize(const ObjectFile &Obj);
+
   // \brief Compute the stub buffer size required for a section
   unsigned computeSectionStubBufSize(const ObjectFile &Obj,
                                      const SectionRef &Section);
 
   // \brief Implementation of the generic part of the loadObject algorithm.
   Expected<ObjSectionToIDMap> loadObjectImpl(const object::ObjectFile &Obj);
+
+  // \brief Return size of Global Offset Table (GOT) entry
+  virtual size_t getGOTEntrySize() { return 0; }
+
+  // \brief Return true if the relocation R may require allocating a GOT entry.
+  virtual bool relocationNeedsGot(const RelocationRef &R) const {
+    return false;
+  }
 
   // \brief Return true if the relocation R may require allocating a stub.
   virtual bool relocationNeedsStub(const RelocationRef &R) const {
@@ -420,7 +451,7 @@ protected:
 
 public:
   RuntimeDyldImpl(RuntimeDyld::MemoryManager &MemMgr,
-                  RuntimeDyld::SymbolResolver &Resolver)
+                  JITSymbolResolver &Resolver)
     : MemMgr(MemMgr), Resolver(Resolver), Checker(nullptr),
       ProcessAllSections(false), HasError(false) {
   }
@@ -451,7 +482,7 @@ public:
     return getSectionAddress(SymInfo.getSectionID()) + SymInfo.getOffset();
   }
 
-  RuntimeDyld::SymbolInfo getSymbol(StringRef Name) const {
+  JITEvaluatedSymbol getSymbol(StringRef Name) const {
     // FIXME: Just look up as a function for now. Overly simple of course.
     // Work in progress.
     RTDyldSymbolTable::const_iterator pos = GlobalSymbolTable.find(Name);
@@ -462,7 +493,7 @@ public:
     if (SymEntry.getSectionID() != AbsoluteSymbolSection)
       SectionAddr = getSectionLoadAddress(SymEntry.getSectionID());
     uint64_t TargetAddr = SectionAddr + SymEntry.getOffset();
-    return RuntimeDyld::SymbolInfo(TargetAddr, SymEntry.getFlags());
+    return JITEvaluatedSymbol(TargetAddr, SymEntry.getFlags());
   }
 
   void resolveRelocations();
@@ -484,7 +515,7 @@ public:
 
   virtual void registerEHFrames();
 
-  virtual void deregisterEHFrames();
+  void deregisterEHFrames();
 
   virtual Error finalizeLoad(const ObjectFile &ObjImg,
                              ObjSectionToIDMap &SectionMap) {

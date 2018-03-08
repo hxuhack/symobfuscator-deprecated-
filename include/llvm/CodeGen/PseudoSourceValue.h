@@ -42,7 +42,8 @@ public:
     ConstantPool,
     FixedStack,
     GlobalValueCallEntry,
-    ExternalSymbolCallEntry
+    ExternalSymbolCallEntry,
+    TargetCustom
   };
 
 private:
@@ -67,6 +68,9 @@ public:
   bool isGOT() const { return Kind == GOT; }
   bool isConstantPool() const { return Kind == ConstantPool; }
   bool isJumpTable() const { return Kind == JumpTable; }
+  unsigned getTargetCustom() const {
+    return (Kind >= TargetCustom) ? ((Kind+1) - TargetCustom) : 0;
+  }
 
   /// Test whether the memory pointed to by this PseudoSourceValue has a
   /// constant value.
@@ -90,7 +94,7 @@ public:
   explicit FixedStackPseudoSourceValue(int FI)
       : PseudoSourceValue(FixedStack), FI(FI) {}
 
-  static inline bool classof(const PseudoSourceValue *V) {
+  static bool classof(const PseudoSourceValue *V) {
     return V->kind() == FixedStack;
   }
 
@@ -122,7 +126,7 @@ class GlobalValuePseudoSourceValue : public CallEntryPseudoSourceValue {
 public:
   GlobalValuePseudoSourceValue(const GlobalValue *GV);
 
-  static inline bool classof(const PseudoSourceValue *V) {
+  static bool classof(const PseudoSourceValue *V) {
     return V->kind() == GlobalValueCallEntry;
   }
 
@@ -136,7 +140,7 @@ class ExternalSymbolPseudoSourceValue : public CallEntryPseudoSourceValue {
 public:
   ExternalSymbolPseudoSourceValue(const char *ES);
 
-  static inline bool classof(const PseudoSourceValue *V) {
+  static bool classof(const PseudoSourceValue *V) {
     return V->kind() == ExternalSymbolCallEntry;
   }
 

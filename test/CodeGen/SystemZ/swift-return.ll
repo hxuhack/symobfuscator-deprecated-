@@ -49,10 +49,9 @@ declare swiftcc { i16, i8 } @gen(i32)
 ; CHECK: a %r2, 172(%r15)
 ; CHECK: a %r2, 176(%r15)
 ; CHECK-O0-LABEL: test2:
-; CHECK-O0: la %[[REG1:r[0-9]+]], 168(%r15)
 ; CHECK-O0: st %r2, [[SPILL1:[0-9]+]](%r15)
-; CHECK-O0: lgr %r2, %[[REG1]]
 ; CHECK-O0: l %r3, [[SPILL1]](%r15)
+; CHECK-O0: la %r2, 168(%r15)
 ; CHECK-O0: brasl %r14, gen2
 ; CHECK-O0-DAG: l %r{{.*}}, 184(%r15)
 ; CHECK-O0-DAG: l %r{{.*}}, 180(%r15)
@@ -190,11 +189,11 @@ define void @consume_i1_ret() {
   %v6 = extractvalue { i1, i1, i1, i1 } %call, 2
   %v7 = extractvalue { i1, i1, i1, i1 } %call, 3
   %val = zext i1 %v3 to i32
-  store i32 %val, i32* @var
+  store volatile i32 %val, i32* @var
   %val2 = zext i1 %v5 to i32
-  store i32 %val2, i32* @var
+  store volatile i32 %val2, i32* @var
   %val3 = zext i1 %v6 to i32
-  store i32 %val3, i32* @var
+  store volatile i32 %val3, i32* @var
   %val4 = zext i1 %v7 to i32
   store i32 %val4, i32* @var
   ret void

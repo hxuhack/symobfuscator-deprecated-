@@ -406,7 +406,8 @@ private:
 };
 
 class AnalysisDeclContextManager {
-  typedef llvm::DenseMap<const Decl*, AnalysisDeclContext*> ContextMap;
+  typedef llvm::DenseMap<const Decl *, std::unique_ptr<AnalysisDeclContext>>
+      ContextMap;
 
   ContextMap Contexts;
   LocationContextManager LocContexts;
@@ -425,6 +426,7 @@ public:
                              bool addImplicitDtors = false,
                              bool addInitializers = false,
                              bool addTemporaryDtors = false,
+                             bool addLifetime = false,
                              bool synthesizeBodies = false,
                              bool addStaticInitBranches = false,
                              bool addCXXNewAllocator = true,
