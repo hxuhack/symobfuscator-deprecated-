@@ -16,9 +16,4 @@ documentation setup.
 If you are writing a package for LLVM, see docs/Packaging.rst for our
 suggestions.
 
---------------------------------
-Command:
-mkdir build
-cd build
-cmake -DCMAKE_BUILD_TYPE=Release ../symobfuscator
-make -j7
+
