@@ -354,14 +354,8 @@ namespace {
       // If fla annotations
       if(toObfuscate(flag, &F, "bcf")) 
       {
-        errs() << "----------------------------------------";
-        errs() << F;
         bogus(F);
-        errs() << "----------------------------------------";
-        errs() << F;
         doF(F);
-        errs() << "----------------------------------------";
-        errs() << F;
         return true;
       }
       return false;
@@ -441,7 +435,8 @@ namespace {
           DEBUG_WITH_TYPE("cfg", errs() << "bcf: Function's not been modified \n");
         }
         firstTime = false;
-      }while(--NumObfTimes > 0);
+      }
+      while(--NumObfTimes > 0);
     }
 
     /* addBogusFlow
@@ -456,7 +451,7 @@ namespace {
       // We do this way, so we don't have to adjust all the phi nodes, metadatas and so on
       // for the first block. We have to let the phi nodes in the first part, because they
       // actually are updated in the second part according to them.
-      Instruction *i1 = &*basicBlock->begin(); // ?????
+      Instruction *i1 = &*basicBlock->begin();
       if(basicBlock->getFirstNonPHIOrDbgOrLifetime())
         i1 = basicBlock->getFirstNonPHIOrDbgOrLifetime();
       Twine *var;
@@ -604,13 +599,13 @@ namespace {
               switch(llvm::cryptoutils->get_range(4)){ // to improve
                 case 0: //do nothing
                   break;
-                case 1: op = BinaryOperator::CreateNeg(i->getOperand(0),*var, &*i); // ?????
-                    op1 = BinaryOperator::Create(Instruction::Add, op, i->getOperand(1),"gen", &*i); // ?????
+                case 1: op = BinaryOperator::CreateNeg(i->getOperand(0),*var, &*i);
+                    op1 = BinaryOperator::Create(Instruction::Add, op, i->getOperand(1),"gen", &*i);
                     break;
-                case 2: op1 = BinaryOperator::Create(Instruction::Sub, i->getOperand(0), i->getOperand(1), *var, &*i); // ?????
-                    op = BinaryOperator::Create(Instruction::Mul, op1, i->getOperand(1),"gen", &*i); // ?????
+                case 2: op1 = BinaryOperator::Create(Instruction::Sub, i->getOperand(0), i->getOperand(1), *var, &*i);
+                    op = BinaryOperator::Create(Instruction::Mul, op1, i->getOperand(1),"gen", &*i);
                     break;
-                case 3: op = BinaryOperator::Create(Instruction::Shl, i->getOperand(0), i->getOperand(1), *var, &*i); // ?????
+                case 3: op = BinaryOperator::Create(Instruction::Shl, i->getOperand(0), i->getOperand(1), *var, &*i);
                     break;
               }
             }
@@ -623,11 +618,11 @@ namespace {
               switch(llvm::cryptoutils->get_range(3)){ // can be improved
                 case 0: //do nothing
                   break;
-                case 1: op = BinaryOperator::CreateFNeg(i->getOperand(0), *var, &*i); // ?????
-                    op1 = BinaryOperator::Create(Instruction::FAdd, op, i->getOperand(1),"gen", &*i); // ?????
+                case 1: op = BinaryOperator::CreateFNeg(i->getOperand(0), *var, &*i);
+                    op1 = BinaryOperator::Create(Instruction::FAdd, op, i->getOperand(1),"gen", &*i);
                     break;
-                case 2: op = BinaryOperator::Create(Instruction::FSub, i->getOperand(0), i->getOperand(1), *var, &*i); // ?????
-                    op1 = BinaryOperator::Create(Instruction::FMul, op, i->getOperand(1), "gen", &*i); // ?????
+                case 2: op = BinaryOperator::Create(Instruction::FSub, i->getOperand(0), i->getOperand(1), *var, &*i);
+                    op1 = BinaryOperator::Create(Instruction::FMul, op, i->getOperand(1), "gen", &*i);
                     break;
               }
             }
@@ -759,9 +754,8 @@ namespace {
         return false;
       }
 
-      const DataLayout &DL = M.getDataLayout(); // ?????
-      AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst); // ?????
-      StoreInst* jSI = new StoreInst(arg, jAI, inst);
+      const DataLayout &DL = M.getDataLayout();
+      AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst);
       LoadInst* jLI = new LoadInst(jAI, "", inst);
       
       vector<Value*> vecProp;
@@ -792,7 +786,7 @@ namespace {
       BranchInst::Create(((BranchInst*) inst)->getSuccessor(0), ((BranchInst*) inst)->getSuccessor(1),(Value *) cmpCI, ((BranchInst*) inst)->getParent());
       inst->eraseFromParent();
     
-      return true; // ?????
+      return true;
     }
 
     bool InsertParaOpq(Module &M, Instruction* inst, Value* arg, int type){
@@ -802,9 +796,8 @@ namespace {
         return false;
       }
 
-      const DataLayout &DL = M.getDataLayout(); // ?????
-      AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst); // ?????
-      StoreInst* jSI = new StoreInst(arg, jAI, inst);
+      const DataLayout &DL = M.getDataLayout();
+      AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst);
       LoadInst* jLI = new LoadInst(jAI, "", inst);
       
       vector<Value*> vecProp;
@@ -849,6 +842,7 @@ namespace {
               ((BranchInst*) inst)->getParent());
         inst->eraseFromParent(); // erase the branch
       }
+      return true;
     }
 
     bool InsertArrayOpq(Module &M, Instruction* inst, Value* arg){
@@ -858,11 +852,8 @@ namespace {
         return false;
       }
 
-      LLVMContext& context = M.getContext();
-
-      const DataLayout &DL = M.getDataLayout(); // ?????
+      const DataLayout &DL = M.getDataLayout();
       AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst);
-      StoreInst* jSI = new StoreInst(arg, jAI, inst);
       LoadInst* jLI = new LoadInst(jAI, "", inst);
 
       BinaryOperator* remBO;
@@ -878,8 +869,8 @@ namespace {
 
       ArrayType* arAT = ArrayType::get(i64Type, 5);
 
-      AllocaInst* array1AI = new AllocaInst(arAT, DL.getAllocaAddrSpace(), "", inst); // ?????
-      AllocaInst* array2AI = new AllocaInst(arAT, DL.getAllocaAddrSpace(), "", inst); // ?????
+      AllocaInst* array1AI = new AllocaInst(arAT, DL.getAllocaAddrSpace(), "", inst);
+      AllocaInst* array2AI = new AllocaInst(arAT, DL.getAllocaAddrSpace(), "", inst);
 
       std::vector<Value*> vec00;
       vec00.push_back(ci0_32);
@@ -901,29 +892,6 @@ namespace {
       vec04.push_back(ci0_32);
       vec04.push_back(ci4_64);
       ArrayRef<Value*> ar04(vec04);
-      Instruction* a10EPI = GetElementPtrInst::CreateInBounds((Value *) array1AI, ar00, "l1_arrayidx", inst);
-      Instruction* a11EPI = GetElementPtrInst::CreateInBounds((Value *) array1AI, ar01, "l1_arrayidx", inst);
-      Instruction* a12EPI = GetElementPtrInst::CreateInBounds((Value *) array1AI, ar02, "l1_arrayidx", inst);
-      Instruction* a13EPI = GetElementPtrInst::CreateInBounds((Value *) array1AI, ar03, "l1_arrayidx", inst);
-      Instruction* a14EPI = GetElementPtrInst::CreateInBounds((Value *) array1AI, ar04, "l1_arrayidx", inst);
-
-      Instruction* a20EPI = GetElementPtrInst::CreateInBounds((Value *) array2AI, ar00, "l2_arrayidx", inst);
-      Instruction* a21EPI = GetElementPtrInst::CreateInBounds((Value *) array2AI, ar01, "l2_arrayidx", inst);
-      Instruction* a22EPI = GetElementPtrInst::CreateInBounds((Value *) array2AI, ar02, "l2_arrayidx", inst);
-      Instruction* a23EPI = GetElementPtrInst::CreateInBounds((Value *) array2AI, ar03, "l2_arrayidx", inst);
-      Instruction* a24EPI = GetElementPtrInst::CreateInBounds((Value *) array2AI, ar04, "l2_arrayidx", inst);
-
-      StoreInst* a10SI = new StoreInst(ci0_64, a10EPI, inst);
-      StoreInst* a11SI = new StoreInst(ci1_64, a11EPI, inst);
-      StoreInst* a12SI = new StoreInst(ci2_64, a12EPI, inst);
-      StoreInst* a13SI = new StoreInst(ci3_64, a13EPI, inst);
-      StoreInst* a14SI = new StoreInst(ci4_64, a14EPI, inst);
-
-      StoreInst* a20SI = new StoreInst(ci0_64, a20EPI, inst);
-      StoreInst* a21SI = new StoreInst(ci1_64, a21EPI, inst);
-      StoreInst* a22SI = new StoreInst(ci2_64, a22EPI, inst);
-      StoreInst* a23SI = new StoreInst(ci3_64, a23EPI, inst);
-      StoreInst* a24SI = new StoreInst(ci4_64, a24EPI, inst);
 
       std::vector<Value*> l1Vec;
       l1Vec.push_back(ci0_32);
@@ -942,6 +910,8 @@ namespace {
       ICmpInst* arCI = new ICmpInst(inst, ICmpInst::ICMP_NE, l2LI, ci5_64, "cmp");
       BranchInst::Create(((BranchInst*) inst)->getSuccessor(0), ((BranchInst*) inst)->getSuccessor(1),(Value *) arCI, ((BranchInst*) inst)->getParent());
       inst->eraseFromParent(); // erase the branch
+
+      return true;
     }
 
     bool InsertFloatOpq(Module& M, Instruction* inst, Value* arg){
@@ -950,19 +920,11 @@ namespace {
         return false;
 
       LLVMContext& context = M.getContext();
-      ConstantFP* divCFP = ConstantFP::get(context, APFloat(1.000000e+01));
       ConstantFP* conCFP = ConstantFP::get(context, APFloat(1.000000e-01));
       
-      const DataLayout &DL = M.getDataLayout(); // ?????
-      AllocaInst* fpAI = new AllocaInst(floatType, DL.getAllocaAddrSpace(), "", inst); // ?????
-      AllocaInst* jAI = new AllocaInst(argType, DL.getAllocaAddrSpace(), "", inst); // ?????
-      StoreInst* jSI = new StoreInst(arg, jAI, inst);
-      LoadInst* jLI = new LoadInst(jAI, "", inst);
+      const DataLayout &DL = M.getDataLayout();
+      AllocaInst* fpAI = new AllocaInst(floatType, DL.getAllocaAddrSpace(), "", inst);
 
-      CastInst* jdbCI = new SIToFPInst(jLI, doubleType, "conv", inst);
-      BinaryOperator* divBO = BinaryOperator::Create(Instruction::FDiv, jdbCI, divCFP, "div", inst);
-      CastInst* divBI = new FPTruncInst(divBO, floatType, "conv1", inst);
-      StoreInst* divSI = new StoreInst(divBI, fpAI, false, inst);
       LoadInst* fpLI = new LoadInst(fpAI, "", inst);
       CastInst* cmpCI = new FPExtInst(fpLI, doubleType, "conv2", inst);
 
@@ -972,6 +934,8 @@ namespace {
             ((BranchInst*) inst)->getSuccessor(0), fpCMP,
             ((BranchInst*) inst)->getParent());
       inst->eraseFromParent(); // erase the branch
+
+      return true;
     }
     /* doFinalization
      *
@@ -984,7 +948,7 @@ namespace {
       DEBUG_WITH_TYPE("gen", errs()<<"bcf: Starting doFinalization...\n");
       Module* module = F.getParent();
       Module& M = *module;
-      LLVMContext& context = M.getContext();
+
       //For creating symbolic opaque predicates
       Value *argValue;
       Type* argType;
