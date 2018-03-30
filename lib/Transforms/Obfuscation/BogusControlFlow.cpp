@@ -451,9 +451,9 @@ namespace {
       // We do this way, so we don't have to adjust all the phi nodes, metadatas and so on
       // for the first block. We have to let the phi nodes in the first part, because they
       // actually are updated in the second part according to them.
-      Instruction *i1 = &*basicBlock->begin();
-      if(basicBlock->getFirstNonPHIOrDbgOrLifetime())
-        i1 = basicBlock->getFirstNonPHIOrDbgOrLifetime();
+      BasicBlock::iterator i1 = basicBlock->begin();
+        if(basicBlock->getFirstNonPHIOrDbgOrLifetime())
+            i1 = (BasicBlock::iterator)basicBlock->getFirstNonPHIOrDbgOrLifetime();
       Twine *var;
       var = new Twine("originalBB");
       BasicBlock *originalBB = basicBlock->splitBasicBlock(i1, *var);
@@ -1005,7 +1005,6 @@ namespace {
         if(argType == NULL){
           InsertDefaultOpq(M, inst);
         } else {
-          //LOG(L_INFO) << "complex_control = " << complex_control;
           if(argType->isIntegerTy()){
             int opqId;
             if(complex_control < OpqNum || OpqNum == 0)
@@ -1015,31 +1014,37 @@ namespace {
             } 
             else 
             {
-              opqId = 100;//the default opaque predicate  
+              opqId = 100; //the default opaque predicate  
             }
             switch(opqId){
               case 1:{
                      InsertArrayOpq(M, inst, argValue);
+                     errs() << "1\n";
                      break;
                    }
               case 2:{
                      InsertFloatOpq(M, inst, argValue);
+                     errs() << "2\n";
                      break;
                    }
               case 3:{
                      InsertFproOpq(M, inst, argValue);
+                     errs() << "3\n";
                      break;
                    }
               case 4:{
                      InsertParaOpq(M, inst, argValue, 1);
+                     errs() << "4\n";
                      break;
                    }
               case 5:{
                      InsertParaOpq(M, inst, argValue, 2);
+                     errs() << "5\n";
                      break;
                    }
               default:{
-                    InsertDefaultOpq(M, inst);
+                      InsertDefaultOpq(M, inst);
+                      errs() << "Default\n";
                     break;
                   }
             }
