@@ -62,8 +62,8 @@
 #include <cctype>
 #include <cstring>
 #include <system_error>
-#include <unordered_map>
 #include <utility>
+#include <unordered_map>
 
 using namespace llvm;
 using namespace object;
@@ -191,7 +191,7 @@ cl::opt<bool> PrintFaultMaps("fault-map-section",
 
 cl::opt<DIDumpType> llvm::DwarfDumpType(
     "dwarf", cl::init(DIDT_Null), cl::desc("Dump of dwarf debug sections:"),
-    cl::values(clEnumValN(DIDT_DebugFrame, "frames", ".debug_frame")));
+    cl::values(clEnumValN(DIDT_Frames, "frames", ".debug_frame")));
 
 cl::opt<bool> PrintSource(
     "source",
@@ -362,11 +362,29 @@ static const Target *getTarget(const ObjectFile *Obj = nullptr) {
   llvm::Triple TheTriple("unknown-unknown-unknown");
   if (TripleName.empty()) {
     if (Obj) {
-      TheTriple = Obj->makeTriple();
+      auto Arch = Obj->getArch();
+      TheTriple.setArch(Triple::ArchType(Arch));
+
+      // For ARM targets, try to use the build attributes to build determine
+      // the build target. Target features are also added, but later during
+      // disassembly.
+      if (Arch == Triple::arm || Arch == Triple::armeb) {
+        Obj->setARMSubArch(TheTriple);
+      }
+
+      // TheTriple defaults to ELF, and COFF doesn't have an environment:
+      // the best we can do here is indicate that it is mach-o.
+      if (Obj->isMachO())
+        TheTriple.setObjectFormat(Triple::MachO);
+
+      if (Obj->isCOFF()) {
+        const auto COFFObj = dyn_cast<COFFObjectFile>(Obj);
+        if (COFFObj->getArch() == Triple::thumb)
+          TheTriple.setTriple("thumbv7-windows");
+      }
     }
   } else {
     TheTriple.setTriple(Triple::normalize(TripleName));
-
     // Use the triple, but also try to combine with ARM build attributes.
     if (Obj) {
       auto Arch = Obj->getArch();
@@ -400,7 +418,7 @@ namespace {
 class SourcePrinter {
 protected:
   DILineInfo OldLineInfo;
-  const ObjectFile *Obj = nullptr;
+  const ObjectFile *Obj;
   std::unique_ptr<symbolize::LLVMSymbolizer> Symbolizer;
   // File name to file contents of source
   std::unordered_map<std::string, std::unique_ptr<MemoryBuffer>> SourceCache;
@@ -408,22 +426,22 @@ protected:
   std::unordered_map<std::string, std::vector<StringRef>> LineCache;
 
 private:
-  bool cacheSource(const std::string& File);
+  bool cacheSource(std::string File);
 
 public:
-  SourcePrinter() = default;
+  virtual ~SourcePrinter() {}
+  SourcePrinter() : Obj(nullptr), Symbolizer(nullptr) {}
   SourcePrinter(const ObjectFile *Obj, StringRef DefaultArch) : Obj(Obj) {
     symbolize::LLVMSymbolizer::Options SymbolizerOpts(
         DILineInfoSpecifier::FunctionNameKind::None, true, false, false,
         DefaultArch);
     Symbolizer.reset(new symbolize::LLVMSymbolizer(SymbolizerOpts));
   }
-  virtual ~SourcePrinter() = default;
   virtual void printSourceLine(raw_ostream &OS, uint64_t Address,
                                StringRef Delimiter = "; ");
 };
 
-bool SourcePrinter::cacheSource(const std::string& File) {
+bool SourcePrinter::cacheSource(std::string File) {
   auto BufferOrError = MemoryBuffer::getFile(File);
   if (!BufferOrError)
     return false;
@@ -491,7 +509,7 @@ static bool isArmElf(const ObjectFile *Obj) {
 
 class PrettyPrinter {
 public:
-  virtual ~PrettyPrinter() = default;
+  virtual ~PrettyPrinter(){}
   virtual void printInst(MCInstPrinter &IP, const MCInst *MI,
                          ArrayRef<uint8_t> Bytes, uint64_t Address,
                          raw_ostream &OS, StringRef Annot,
@@ -865,19 +883,8 @@ static void printRelocationTargetName(const MachOObjectFile *O,
   } else {
     section_iterator SI = O->section_begin();
     // Adjust for the fact that sections are 1-indexed.
-    if (Val == 0) {
-      fmt << "0 (?,?)";
-      return;
-    }
-    uint32_t i = Val - 1;
-    while (i != 0 && SI != O->section_end()) {
-      i--;
-      advance(SI, 1);
-    }
-    if (SI == O->section_end())
-      fmt << Val << " (?,?)";
-    else
-      SI->getName(S);
+    advance(SI, Val - 1);
+    SI->getName(S);
   }
 
   fmt << S;
@@ -1216,7 +1223,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
   MCObjectFileInfo MOFI;
   MCContext Ctx(AsmInfo.get(), MRI.get(), &MOFI);
   // FIXME: for now initialize MCObjectFileInfo with default values
-  MOFI.InitMCObjectFileInfo(Triple(TripleName), false, Ctx);
+  MOFI.InitMCObjectFileInfo(Triple(TripleName), false, CodeModel::Default, Ctx);
 
   std::unique_ptr<MCDisassembler> DisAsm(
     TheTarget->createMCDisassembler(*STI, Ctx));
@@ -1643,7 +1650,7 @@ static void DisassembleObject(const ObjectFile *Obj, bool InlineRelocs) {
                 outs() << " <" << TargetName;
                 uint64_t Disp = Target - TargetAddress;
                 if (Disp)
-                  outs() << "+0x" << Twine::utohexstr(Disp);
+                  outs() << "+0x" << utohexstr(Disp);
                 outs() << '>';
               }
             }
@@ -2074,10 +2081,11 @@ static void DumpObject(ObjectFile *o, const Archive *a = nullptr) {
   if (PrintFaultMaps)
     printFaultMaps(o);
   if (DwarfDumpType != DIDT_Null) {
-    std::unique_ptr<DIContext> DICtx = DWARFContext::create(*o);
+    std::unique_ptr<DIContext> DICtx(new DWARFContextInMemory(*o));
     // Dump the complete DWARF structure.
     DIDumpOptions DumpOpts;
     DumpOpts.DumpType = DwarfDumpType;
+    DumpOpts.DumpEH = true;
     DICtx->dump(outs(), DumpOpts);
   }
 }
@@ -2197,7 +2205,8 @@ int main(int argc, char **argv) {
     return 2;
   }
 
-  llvm::for_each(InputFilenames, DumpInput);
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
+                DumpInput);
 
   return EXIT_SUCCESS;
 }

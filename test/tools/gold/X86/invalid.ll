@@ -1,4 +1,4 @@
-; RUN: not %gold -plugin %llvmshlibdir/LLVMgold%shlibext \
+; RUN: not %gold -plugin %llvmshlibdir/LLVMgold.so \
 ; RUN:    %p/Inputs/invalid.bc -o %t2 2>&1 | FileCheck %s
 
 ; test that only one error gets printed

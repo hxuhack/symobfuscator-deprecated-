@@ -8,15 +8,9 @@
         bl #2
         beq #2
 
-@ CHECK: error: invalid instruction, any one of the following would fix this:
+@ CHECK: error: instruction requires: thumb
 @ CHECK:        b #2
-@ CHECK: note: instruction requires: thumb
-@ CHECK: note: invalid operand for instruction
-@ CHECK: error: invalid instruction, any one of the following would fix this:
+@ CHECK: error: instruction requires: thumb
 @ CHECK:        bl #2
-@ CHECK: note: instruction requires: thumb
-@ CHECK: note: invalid operand for instruction
-@ CHECK: error: invalid instruction, any one of the following would fix this:
+@ CHECK: error: instruction requires: thumb
 @ CHECK:        beq #2
-@ CHECK: note: instruction requires: thumb
-@ CHECK: note: invalid operand for instruction

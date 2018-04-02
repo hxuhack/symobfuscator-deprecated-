@@ -61,13 +61,11 @@ class TBAAVerifier {
   /// \name Helper functions used by \c visitTBAAMetadata.
   /// @{
   MDNode *getFieldNodeFromTBAABaseNode(Instruction &I, const MDNode *BaseNode,
-                                       APInt &Offset, bool IsNewFormat);
+                                       APInt &Offset);
   TBAAVerifier::TBAABaseNodeSummary verifyTBAABaseNode(Instruction &I,
-                                                       const MDNode *BaseNode,
-                                                       bool IsNewFormat);
+                                                       const MDNode *BaseNode);
   TBAABaseNodeSummary verifyTBAABaseNodeImpl(Instruction &I,
-                                             const MDNode *BaseNode,
-                                             bool IsNewFormat);
+                                             const MDNode *BaseNode);
 
   bool isValidScalarTBAANode(const MDNode *MD);
   /// @}

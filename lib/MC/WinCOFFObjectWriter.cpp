@@ -145,8 +145,7 @@ public:
 
   bool UseBigObj;
 
-  WinCOFFObjectWriter(std::unique_ptr<MCWinCOFFObjectTargetWriter> MOTW,
-                      raw_pwrite_stream &OS);
+  WinCOFFObjectWriter(MCWinCOFFObjectTargetWriter *MOTW, raw_pwrite_stream &OS);
 
   void reset() override {
     memset(&Header, 0, sizeof(Header));
@@ -223,9 +222,9 @@ void COFFSymbol::set_name_offset(uint32_t Offset) {
 //------------------------------------------------------------------------------
 // WinCOFFObjectWriter class implementation
 
-WinCOFFObjectWriter::WinCOFFObjectWriter(
-    std::unique_ptr<MCWinCOFFObjectTargetWriter> MOTW, raw_pwrite_stream &OS)
-    : MCObjectWriter(OS, true), TargetObjectWriter(std::move(MOTW)) {
+WinCOFFObjectWriter::WinCOFFObjectWriter(MCWinCOFFObjectTargetWriter *MOTW,
+                                         raw_pwrite_stream &OS)
+    : MCObjectWriter(OS, true), TargetObjectWriter(MOTW) {
   Header.Machine = TargetObjectWriter->getMachine();
 }
 
@@ -1085,7 +1084,8 @@ void MCWinCOFFObjectTargetWriter::anchor() {}
 //------------------------------------------------------------------------------
 // WinCOFFObjectWriter factory function
 
-std::unique_ptr<MCObjectWriter> llvm::createWinCOFFObjectWriter(
-    std::unique_ptr<MCWinCOFFObjectTargetWriter> MOTW, raw_pwrite_stream &OS) {
-  return llvm::make_unique<WinCOFFObjectWriter>(std::move(MOTW), OS);
+MCObjectWriter *
+llvm::createWinCOFFObjectWriter(MCWinCOFFObjectTargetWriter *MOTW,
+                                raw_pwrite_stream &OS) {
+  return new WinCOFFObjectWriter(MOTW, OS);
 }

@@ -883,7 +883,8 @@ int main(int argc, char **argv) {
     InputFilenames.push_back("a.out");
 
   MoreThanOneFile = InputFilenames.size() > 1;
-  llvm::for_each(InputFilenames, printFileSectionSizes);
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
+                printFileSectionSizes);
   if (OutputFormat == berkeley && TotalSizes)
     printBerkelyTotals();
 

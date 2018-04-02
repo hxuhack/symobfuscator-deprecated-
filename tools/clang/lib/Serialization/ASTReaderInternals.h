@@ -1,4 +1,4 @@
-//===- ASTReaderInternals.h - AST Reader Internals --------------*- C++ -*-===//
+//===--- ASTReaderInternals.h - AST Reader Internals ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,29 +10,23 @@
 //  This file provides internal definitions used in the AST reader.
 //
 //===----------------------------------------------------------------------===//
-
 #ifndef LLVM_CLANG_LIB_SERIALIZATION_ASTREADERINTERNALS_H
 #define LLVM_CLANG_LIB_SERIALIZATION_ASTREADERINTERNALS_H
 
 #include "MultiOnDiskHashTable.h"
 #include "clang/AST/DeclarationName.h"
-#include "clang/Basic/LLVM.h"
 #include "clang/Serialization/ASTBitCodes.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
+#include "llvm/Support/Endian.h"
 #include "llvm/Support/OnDiskHashTable.h"
-#include <ctime>
 #include <utility>
 
 namespace clang {
 
 class ASTReader;
-class FileEntry;
-struct HeaderFileInfo;
 class HeaderSearch;
-class IdentifierTable;
-class ObjCMethodDecl;
+struct HeaderFileInfo;
+class FileEntry;
   
 namespace serialization {
 
@@ -51,14 +45,12 @@ public:
   static const int MaxTables = 4;
 
   /// The lookup result is a list of global declaration IDs.
-  using data_type = SmallVector<DeclID, 4>;
-
+  typedef llvm::SmallVector<DeclID, 4> data_type;
   struct data_type_builder {
     data_type &Data;
     llvm::DenseSet<DeclID> Found;
 
     data_type_builder(data_type &D) : Data(D) {}
-
     void insert(DeclID ID) {
       // Just use a linear scan unless we have more than a few IDs.
       if (Found.empty() && !Data.empty()) {
@@ -78,15 +70,15 @@ public:
         Data.push_back(ID);
     }
   };
-  using hash_value_type = unsigned;
-  using offset_type = unsigned;
-  using file_type = ModuleFile *;
+  typedef unsigned hash_value_type;
+  typedef unsigned offset_type;
+  typedef ModuleFile *file_type;
 
-  using external_key_type = DeclarationName;
-  using internal_key_type = DeclarationNameKey;
+  typedef DeclarationName external_key_type;
+  typedef DeclarationNameKey internal_key_type;
 
   explicit ASTDeclContextNameLookupTrait(ASTReader &Reader, ModuleFile &F)
-      : Reader(Reader), F(F) {}
+    : Reader(Reader), F(F) { }
 
   static bool EqualKey(const internal_key_type &a, const internal_key_type &b) {
     return a == b;
@@ -95,7 +87,6 @@ public:
   static hash_value_type ComputeHash(const internal_key_type &Key) {
     return Key.getHash();
   }
-
   static internal_key_type GetInternalKey(const external_key_type &Name) {
     return Name;
   }
@@ -128,13 +119,14 @@ struct DeclContextLookupTable {
 /// functionality for accessing the on-disk hash table of identifiers
 /// in an AST file. Different subclasses customize that functionality
 /// based on what information they are interested in. Those subclasses
-/// must provide the \c data_type type and the ReadData operation, only.
+/// must provide the \c data_type typedef and the ReadData operation,
+/// only.
 class ASTIdentifierLookupTraitBase {
 public:
-  using external_key_type = StringRef;
-  using internal_key_type = StringRef;
-  using hash_value_type = unsigned;
-  using offset_type = unsigned;
+  typedef StringRef external_key_type;
+  typedef StringRef internal_key_type;
+  typedef unsigned hash_value_type;
+  typedef unsigned offset_type;
 
   static bool EqualKey(const internal_key_type& a, const internal_key_type& b) {
     return a == b;
@@ -167,11 +159,11 @@ class ASTIdentifierLookupTrait : public ASTIdentifierLookupTraitBase {
   IdentifierInfo *KnownII;
   
 public:
-  using data_type = IdentifierInfo *;
+  typedef IdentifierInfo * data_type;
 
   ASTIdentifierLookupTrait(ASTReader &Reader, ModuleFile &F,
                            IdentifierInfo *II = nullptr)
-      : Reader(Reader), F(F), KnownII(II) {}
+    : Reader(Reader), F(F), KnownII(II) { }
 
   data_type ReadData(const internal_key_type& k,
                      const unsigned char* d,
@@ -184,8 +176,8 @@ public:
   
 /// \brief The on-disk hash table used to contain information about
 /// all of the identifiers in the program.
-using ASTIdentifierLookupTable =
-    llvm::OnDiskIterableChainedHashTable<ASTIdentifierLookupTrait>;
+typedef llvm::OnDiskIterableChainedHashTable<ASTIdentifierLookupTrait>
+  ASTIdentifierLookupTable;
 
 /// \brief Class that performs lookup for a selector's entries in the global
 /// method pool stored in an AST file.
@@ -204,13 +196,13 @@ public:
     SmallVector<ObjCMethodDecl *, 2> Factory;
   };
   
-  using external_key_type = Selector;
-  using internal_key_type = external_key_type;
-  using hash_value_type = unsigned;
-  using offset_type = unsigned;
+  typedef Selector external_key_type;
+  typedef external_key_type internal_key_type;
+  typedef unsigned hash_value_type;
+  typedef unsigned offset_type;
   
-  ASTSelectorLookupTrait(ASTReader &Reader, ModuleFile &F)
-      : Reader(Reader), F(F) {}
+  ASTSelectorLookupTrait(ASTReader &Reader, ModuleFile &F) 
+    : Reader(Reader), F(F) { }
   
   static bool EqualKey(const internal_key_type& a,
                        const internal_key_type& b) {
@@ -230,8 +222,8 @@ public:
 };
   
 /// \brief The on-disk hash table used for the global method pool.
-using ASTSelectorLookupTable =
-    llvm::OnDiskChainedHashTable<ASTSelectorLookupTrait>;
+typedef llvm::OnDiskChainedHashTable<ASTSelectorLookupTrait>
+  ASTSelectorLookupTable;
   
 /// \brief Trait class used to search the on-disk hash table containing all of
 /// the header search information.
@@ -249,7 +241,7 @@ class HeaderFileInfoTrait {
   const char *FrameworkStrings;
 
 public:
-  using external_key_type = const FileEntry *;
+  typedef const FileEntry *external_key_type;
 
   struct internal_key_type {
     off_t Size;
@@ -257,16 +249,15 @@ public:
     StringRef Filename;
     bool Imported;
   };
-
-  using internal_key_ref = const internal_key_type &;
+  typedef const internal_key_type &internal_key_ref;
   
-  using data_type = HeaderFileInfo;
-  using hash_value_type = unsigned;
-  using offset_type = unsigned;
+  typedef HeaderFileInfo data_type;
+  typedef unsigned hash_value_type;
+  typedef unsigned offset_type;
   
   HeaderFileInfoTrait(ASTReader &Reader, ModuleFile &M, HeaderSearch *HS,
                       const char *FrameworkStrings)
-      : Reader(Reader), M(M), HS(HS), FrameworkStrings(FrameworkStrings) {}
+  : Reader(Reader), M(M), HS(HS), FrameworkStrings(FrameworkStrings) { }
   
   static hash_value_type ComputeHash(internal_key_ref ikey);
   internal_key_type GetInternalKey(const FileEntry *FE);
@@ -281,13 +272,12 @@ public:
 };
 
 /// \brief The on-disk hash table used for known header files.
-using HeaderFileInfoLookupTable =
-    llvm::OnDiskChainedHashTable<HeaderFileInfoTrait>;
+typedef llvm::OnDiskChainedHashTable<HeaderFileInfoTrait>
+  HeaderFileInfoLookupTable;
   
-} // namespace reader
+} // end namespace clang::serialization::reader
+} // end namespace clang::serialization
+} // end namespace clang
 
-} // namespace serialization
 
-} // namespace clang
-
-#endif // LLVM_CLANG_LIB_SERIALIZATION_ASTREADERINTERNALS_H
+#endif

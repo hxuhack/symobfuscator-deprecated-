@@ -18,8 +18,6 @@
 #include "AMDGPUTargetStreamer.h"
 #include "InstPrinter/AMDGPUInstPrinter.h"
 #include "SIDefines.h"
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInstrInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
@@ -62,8 +60,7 @@ static MCInstPrinter *createAMDGPUMCInstPrinter(const Triple &T,
                                                 const MCAsmInfo &MAI,
                                                 const MCInstrInfo &MII,
                                                 const MCRegisterInfo &MRI) {
-  return T.getArch() == Triple::r600 ? new R600InstPrinter(MAI, MII, MRI) : 
-                                       new AMDGPUInstPrinter(MAI, MII, MRI);
+  return new AMDGPUInstPrinter(MAI, MII, MRI);
 }
 
 static MCTargetStreamer *createAMDGPUAsmTargetStreamer(MCStreamer &S,
@@ -80,12 +77,12 @@ static MCTargetStreamer * createAMDGPUObjectTargetStreamer(
 }
 
 static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-                                    std::unique_ptr<MCAsmBackend> &&MAB,
-                                    raw_pwrite_stream &OS,
-                                    std::unique_ptr<MCCodeEmitter> &&Emitter,
-                                    bool RelaxAll) {
-  return createAMDGPUELFStreamer(T, Context, std::move(MAB), OS,
-                                 std::move(Emitter), RelaxAll);
+                                    MCAsmBackend &MAB, raw_pwrite_stream &OS,
+                                    MCCodeEmitter *Emitter, bool RelaxAll) {
+  if (T.getOS() == Triple::AMDHSA)
+    return createAMDGPUELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
+
+  return createELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
 }
 
 extern "C" void LLVMInitializeAMDGPUTargetMC() {

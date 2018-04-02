@@ -648,7 +648,7 @@ bool ReduceSimplifyCFG::TestBlocks(std::vector<const BasicBlock *> &BBs) {
         ++BBIt;
         continue;
       }
-      simplifyCFG(&*BBIt++, TTI);
+      SimplifyCFG(&*BBIt++, TTI, 1);
     }
   // Verify we didn't break anything
   std::vector<std::string> Passes;

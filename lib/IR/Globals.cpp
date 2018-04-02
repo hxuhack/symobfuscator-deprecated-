@@ -67,7 +67,6 @@ void GlobalValue::copyAttributesFrom(const GlobalValue *Src) {
   setVisibility(Src->getVisibility());
   setUnnamedAddr(Src->getUnnamedAddr());
   setDLLStorageClass(Src->getDLLStorageClass());
-  setDSOLocal(Src->isDSOLocal());
 }
 
 void GlobalValue::removeFromParent() {

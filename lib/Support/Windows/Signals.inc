@@ -212,14 +212,8 @@ static StringRef Argv0;
 enum {
 #if defined(_M_X64)
   NativeMachineType = IMAGE_FILE_MACHINE_AMD64
-#elif defined(_M_ARM64)
-  NativeMachineType = IMAGE_FILE_MACHINE_ARM64
-#elif defined(_M_IX86)
-  NativeMachineType = IMAGE_FILE_MACHINE_I386
-#elif defined(_M_ARM)
-  NativeMachineType = IMAGE_FILE_MACHINE_ARMNT
 #else
-  NativeMachineType = IMAGE_FILE_MACHINE_UNKNOWN
+  NativeMachineType = IMAGE_FILE_MACHINE_I386
 #endif
 };
 
@@ -324,18 +318,18 @@ static void PrintStackTraceForThread(llvm::raw_ostream &OS, HANDLE hProcess,
     using namespace llvm;
     // Print the PC in hexadecimal.
     DWORD64 PC = StackFrame.AddrPC.Offset;
-#if defined(_M_X64) || defined(_M_ARM64)
+#if defined(_M_X64)
     OS << format("0x%016llX", PC);
-#elif defined(_M_IX86) || defined(_M_ARM)
+#elif defined(_M_IX86)
     OS << format("0x%08lX", static_cast<DWORD>(PC));
 #endif
 
 // Print the parameters.  Assume there are four.
-#if defined(_M_X64) || defined(_M_ARM64)
+#if defined(_M_X64)
     OS << format(" (0x%016llX 0x%016llX 0x%016llX 0x%016llX)",
             StackFrame.Params[0], StackFrame.Params[1], StackFrame.Params[2],
             StackFrame.Params[3]);
-#elif defined(_M_IX86) || defined(_M_ARM)
+#elif defined(_M_IX86)
     OS << format(" (0x%08lX 0x%08lX 0x%08lX 0x%08lX)",
             static_cast<DWORD>(StackFrame.Params[0]),
             static_cast<DWORD>(StackFrame.Params[1]),
@@ -532,14 +526,10 @@ void llvm::sys::PrintStackTrace(raw_ostream &OS) {
   StackFrame.AddrPC.Offset = Context.Rip;
   StackFrame.AddrStack.Offset = Context.Rsp;
   StackFrame.AddrFrame.Offset = Context.Rbp;
-#elif defined(_M_IX86)
+#else
   StackFrame.AddrPC.Offset = Context.Eip;
   StackFrame.AddrStack.Offset = Context.Esp;
   StackFrame.AddrFrame.Offset = Context.Ebp;
-#elif defined(_M_ARM64) || defined(_M_ARM)
-  StackFrame.AddrPC.Offset = Context.Pc;
-  StackFrame.AddrStack.Offset = Context.Sp;
-  StackFrame.AddrFrame.Offset = Context.Fp;
 #endif
   StackFrame.AddrPC.Mode = AddrModeFlat;
   StackFrame.AddrStack.Mode = AddrModeFlat;
@@ -813,13 +803,6 @@ static LONG WINAPI LLVMUnhandledExceptionFilter(LPEXCEPTION_POINTERS ep) {
   StackFrame.AddrStack.Offset = ep->ContextRecord->Esp;
   StackFrame.AddrStack.Mode = AddrModeFlat;
   StackFrame.AddrFrame.Offset = ep->ContextRecord->Ebp;
-  StackFrame.AddrFrame.Mode = AddrModeFlat;
-#elif defined(_M_ARM64) || defined(_M_ARM)
-  StackFrame.AddrPC.Offset = ep->ContextRecord->Pc;
-  StackFrame.AddrPC.Mode = AddrModeFlat;
-  StackFrame.AddrStack.Offset = ep->ContextRecord->Sp;
-  StackFrame.AddrStack.Mode = AddrModeFlat;
-  StackFrame.AddrFrame.Offset = ep->ContextRecord->Fp;
   StackFrame.AddrFrame.Mode = AddrModeFlat;
 #endif
 

@@ -24,54 +24,28 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/SROA.h"
-#include "llvm/ADT/APInt.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/SmallBitVector.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/ADT/iterator.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/Loads.h"
 #include "llvm/Analysis/PtrUseVisitor.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constant.h"
-#include "llvm/IR/ConstantFolder.h"
+#include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DIBuilder.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/IR/DebugInfo.h"
 #include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/Dominators.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/GetElementPtrTypeIterator.h"
-#include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/IRBuilder.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/IR/PassManager.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Use.h"
-#include "llvm/IR/User.h"
-#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
+#include "llvm/Support/Chrono.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
@@ -81,17 +55,6 @@
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/PromoteMemToReg.h"
-#include <algorithm>
-#include <cassert>
-#include <chrono>
-#include <cstddef>
-#include <cstdint>
-#include <cstring>
-#include <iterator>
-#include <string>
-#include <tuple>
-#include <utility>
-#include <vector>
 
 #ifndef NDEBUG
 // We only use this for a debug check.
@@ -124,18 +87,11 @@ static cl::opt<bool> SROARandomShuffleSlices("sroa-random-shuffle-slices",
 static cl::opt<bool> SROAStrictInbounds("sroa-strict-inbounds", cl::init(false),
                                         cl::Hidden);
 
-/// Hidden option to allow more aggressive splitting.
-static cl::opt<bool>
-SROASplitNonWholeAllocaSlices("sroa-split-nonwhole-alloca-slices",
-                              cl::init(false), cl::Hidden);
-
 namespace {
-
 /// \brief A custom IRBuilder inserter which prefixes all names, but only in
 /// Assert builds.
 class IRBuilderPrefixedInserter : public IRBuilderDefaultInserter {
   std::string Prefix;
-
   const Twine getNameWithPrefix(const Twine &Name) const {
     return Name.isTriviallyEmpty() ? Name : Prefix + Name;
   }
@@ -151,9 +107,11 @@ protected:
   }
 };
 
-/// \brief Provide a type for IRBuilder that drops names in release builds.
-using IRBuilderTy = IRBuilder<ConstantFolder, IRBuilderPrefixedInserter>;
+/// \brief Provide a typedef for IRBuilder that drops names in release builds.
+using IRBuilderTy = llvm::IRBuilder<ConstantFolder, IRBuilderPrefixedInserter>;
+}
 
+namespace {
 /// \brief A used slice of an alloca.
 ///
 /// This structure represents a slice of an alloca used by some instruction. It
@@ -162,18 +120,17 @@ using IRBuilderTy = IRBuilder<ConstantFolder, IRBuilderPrefixedInserter>;
 /// or not when forming partitions of the alloca.
 class Slice {
   /// \brief The beginning offset of the range.
-  uint64_t BeginOffset = 0;
+  uint64_t BeginOffset;
 
   /// \brief The ending offset, not included in the range.
-  uint64_t EndOffset = 0;
+  uint64_t EndOffset;
 
   /// \brief Storage for both the use of this slice and whether it can be
   /// split.
   PointerIntPair<Use *, 1, bool> UseAndIsSplittable;
 
 public:
-  Slice() = default;
-
+  Slice() : BeginOffset(), EndOffset() {}
   Slice(uint64_t BeginOffset, uint64_t EndOffset, Use *U, bool IsSplittable)
       : BeginOffset(BeginOffset), EndOffset(EndOffset),
         UseAndIsSplittable(U, IsSplittable) {}
@@ -223,15 +180,12 @@ public:
   }
   bool operator!=(const Slice &RHS) const { return !operator==(RHS); }
 };
-
 } // end anonymous namespace
 
 namespace llvm {
-
 template <typename T> struct isPodLike;
 template <> struct isPodLike<Slice> { static const bool value = true; };
-
-} // end namespace llvm
+}
 
 /// \brief Representation of the alloca slices.
 ///
@@ -253,15 +207,13 @@ public:
 
   /// \brief Support for iterating over the slices.
   /// @{
-  using iterator = SmallVectorImpl<Slice>::iterator;
-  using range = iterator_range<iterator>;
-
+  typedef SmallVectorImpl<Slice>::iterator iterator;
+  typedef iterator_range<iterator> range;
   iterator begin() { return Slices.begin(); }
   iterator end() { return Slices.end(); }
 
-  using const_iterator = SmallVectorImpl<Slice>::const_iterator;
-  using const_range = iterator_range<const_iterator>;
-
+  typedef SmallVectorImpl<Slice>::const_iterator const_iterator;
+  typedef iterator_range<const_iterator> const_range;
   const_iterator begin() const { return Slices.begin(); }
   const_iterator end() const { return Slices.end(); }
   /// @}
@@ -312,7 +264,6 @@ public:
 private:
   template <typename DerivedT, typename RetT = void> class BuilderBase;
   class SliceBuilder;
-
   friend class AllocaSlices::SliceBuilder;
 
 #if !defined(NDEBUG) || defined(LLVM_ENABLE_DUMP)
@@ -369,7 +320,7 @@ private:
   friend class AllocaSlices;
   friend class AllocaSlices::partition_iterator;
 
-  using iterator = AllocaSlices::iterator;
+  typedef AllocaSlices::iterator iterator;
 
   /// \brief The beginning and ending offsets of the alloca for this
   /// partition.
@@ -452,12 +403,12 @@ class AllocaSlices::partition_iterator
 
   /// \brief We also need to keep track of the maximum split end offset seen.
   /// FIXME: Do we really?
-  uint64_t MaxSplitSliceEndOffset = 0;
+  uint64_t MaxSplitSliceEndOffset;
 
   /// \brief Sets the partition to be empty at given iterator, and sets the
   /// end iterator.
   partition_iterator(AllocaSlices::iterator SI, AllocaSlices::iterator SE)
-      : P(SI), SE(SE) {
+      : P(SI), SE(SE), MaxSplitSliceEndOffset(0) {
     // If not already at the end, advance our state to form the initial
     // partition.
     if (SI != SE)
@@ -481,21 +432,19 @@ class AllocaSlices::partition_iterator
         // Remove the uses which have ended in the prior partition. This
         // cannot change the max split slice end because we just checked that
         // the prior partition ended prior to that max.
-        P.SplitTails.erase(llvm::remove_if(P.SplitTails,
-                                           [&](Slice *S) {
-                                             return S->endOffset() <=
-                                                    P.EndOffset;
-                                           }),
-                           P.SplitTails.end());
-        assert(llvm::any_of(P.SplitTails,
-                            [&](Slice *S) {
-                              return S->endOffset() == MaxSplitSliceEndOffset;
-                            }) &&
+        P.SplitTails.erase(
+            remove_if(P.SplitTails,
+                      [&](Slice *S) { return S->endOffset() <= P.EndOffset; }),
+            P.SplitTails.end());
+        assert(any_of(P.SplitTails,
+                      [&](Slice *S) {
+                        return S->endOffset() == MaxSplitSliceEndOffset;
+                      }) &&
                "Could not find the current max split slice offset!");
-        assert(llvm::all_of(P.SplitTails,
-                            [&](Slice *S) {
-                              return S->endOffset() <= MaxSplitSliceEndOffset;
-                            }) &&
+        assert(all_of(P.SplitTails,
+                      [&](Slice *S) {
+                        return S->endOffset() <= MaxSplitSliceEndOffset;
+                      }) &&
                "Max split slice end offset is not actually the max!");
       }
     }
@@ -659,8 +608,7 @@ static Value *foldPHINodeOrSelectInst(Instruction &I) {
 class AllocaSlices::SliceBuilder : public PtrUseVisitor<SliceBuilder> {
   friend class PtrUseVisitor<SliceBuilder>;
   friend class InstVisitor<SliceBuilder>;
-
-  using Base = PtrUseVisitor<SliceBuilder>;
+  typedef PtrUseVisitor<SliceBuilder> Base;
 
   const uint64_t AllocSize;
   AllocaSlices &AS;
@@ -1048,9 +996,8 @@ AllocaSlices::AllocaSlices(const DataLayout &DL, AllocaInst &AI)
     return;
   }
 
-  Slices.erase(
-      llvm::remove_if(Slices, [](const Slice &S) { return S.isDead(); }),
-      Slices.end());
+  Slices.erase(remove_if(Slices, [](const Slice &S) { return S.isDead(); }),
+               Slices.end());
 
 #ifndef NDEBUG
   if (SROARandomShuffleSlices) {
@@ -1873,12 +1820,11 @@ static VectorType *isVectorPromotionViable(Partition &P, const DataLayout &DL) {
   // do that until all the backends are known to produce good code for all
   // integer vector types.
   if (!HaveCommonEltTy) {
-    CandidateTys.erase(
-        llvm::remove_if(CandidateTys,
-                        [](VectorType *VTy) {
-                          return !VTy->getElementType()->isIntegerTy();
-                        }),
-        CandidateTys.end());
+    CandidateTys.erase(remove_if(CandidateTys,
+                                 [](VectorType *VTy) {
+                                   return !VTy->getElementType()->isIntegerTy();
+                                 }),
+                       CandidateTys.end());
 
     // If there were no integer vector types, give up.
     if (CandidateTys.empty())
@@ -2205,9 +2151,8 @@ static Value *insertVector(IRBuilderTy &IRB, Value *Old, Value *V,
 class llvm::sroa::AllocaSliceRewriter
     : public InstVisitor<AllocaSliceRewriter, bool> {
   // Befriend the base class so it can delegate to private visit methods.
-  friend class InstVisitor<AllocaSliceRewriter, bool>;
-
-  using Base = InstVisitor<AllocaSliceRewriter, bool>;
+  friend class llvm::InstVisitor<AllocaSliceRewriter, bool>;
+  typedef llvm::InstVisitor<AllocaSliceRewriter, bool> Base;
 
   const DataLayout &DL;
   AllocaSlices &AS;
@@ -2237,18 +2182,16 @@ class llvm::sroa::AllocaSliceRewriter
 
   // The original offset of the slice currently being rewritten relative to
   // the original alloca.
-  uint64_t BeginOffset = 0;
-  uint64_t EndOffset = 0;
-
+  uint64_t BeginOffset, EndOffset;
   // The new offsets of the slice currently being rewritten relative to the
   // original alloca.
   uint64_t NewBeginOffset, NewEndOffset;
 
   uint64_t SliceSize;
-  bool IsSplittable = false;
-  bool IsSplit = false;
-  Use *OldUse = nullptr;
-  Instruction *OldPtr = nullptr;
+  bool IsSplittable;
+  bool IsSplit;
+  Use *OldUse;
+  Instruction *OldPtr;
 
   // Track post-rewrite users which are PHI nodes and Selects.
   SmallSetVector<PHINode *, 8> &PHIUsers;
@@ -2278,7 +2221,8 @@ public:
         VecTy(PromotableVecTy),
         ElementTy(VecTy ? VecTy->getElementType() : nullptr),
         ElementSize(VecTy ? DL.getTypeSizeInBits(ElementTy) / 8 : 0),
-        PHIUsers(PHIUsers), SelectUsers(SelectUsers),
+        BeginOffset(), EndOffset(), IsSplittable(), IsSplit(), OldUse(),
+        OldPtr(), PHIUsers(PHIUsers), SelectUsers(SelectUsers),
         IRB(NewAI.getContext(), ConstantFolder()) {
     if (VecTy) {
       assert((DL.getTypeSizeInBits(ElementTy) % 8) == 0 &&
@@ -3043,7 +2987,6 @@ private:
 };
 
 namespace {
-
 /// \brief Visitor to rewrite aggregate loads and stores as scalar.
 ///
 /// This pass aggressively rewrites all aggregate loads and stores on
@@ -3051,7 +2994,7 @@ namespace {
 /// with scalar loads and stores.
 class AggLoadStoreRewriter : public InstVisitor<AggLoadStoreRewriter, bool> {
   // Befriend the base class so it can delegate to private visit methods.
-  friend class InstVisitor<AggLoadStoreRewriter, bool>;
+  friend class llvm::InstVisitor<AggLoadStoreRewriter, bool>;
 
   /// Queue of pointer uses to analyze and potentially rewrite.
   SmallVector<Use *, 8> Queue;
@@ -3094,15 +3037,12 @@ private:
   protected:
     /// The builder used to form new instructions.
     IRBuilderTy IRB;
-
     /// The indices which to be used with insert- or extractvalue to select the
     /// appropriate value within the aggregate.
     SmallVector<unsigned, 4> Indices;
-
     /// The indices to a GEP instruction which will move Ptr to the correct slot
     /// within the aggregate.
     SmallVector<Value *, 4> GEPIndices;
-
     /// The base pointer of the original op, used as a base for GEPing the
     /// split operations.
     Value *Ptr;
@@ -3253,8 +3193,7 @@ private:
     return false;
   }
 };
-
-} // end anonymous namespace
+}
 
 /// \brief Strip aggregate type wrapping.
 ///
@@ -3546,60 +3485,58 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
   // match relative to their starting offset. We have to verify this prior to
   // any rewriting.
   Stores.erase(
-      llvm::remove_if(Stores,
-                      [&UnsplittableLoads, &SplitOffsetsMap](StoreInst *SI) {
-                        // Lookup the load we are storing in our map of split
-                        // offsets.
-                        auto *LI = cast<LoadInst>(SI->getValueOperand());
-                        // If it was completely unsplittable, then we're done,
-                        // and this store can't be pre-split.
-                        if (UnsplittableLoads.count(LI))
-                          return true;
+      remove_if(Stores,
+                [&UnsplittableLoads, &SplitOffsetsMap](StoreInst *SI) {
+                  // Lookup the load we are storing in our map of split
+                  // offsets.
+                  auto *LI = cast<LoadInst>(SI->getValueOperand());
+                  // If it was completely unsplittable, then we're done,
+                  // and this store can't be pre-split.
+                  if (UnsplittableLoads.count(LI))
+                    return true;
 
-                        auto LoadOffsetsI = SplitOffsetsMap.find(LI);
-                        if (LoadOffsetsI == SplitOffsetsMap.end())
-                          return false; // Unrelated loads are definitely safe.
-                        auto &LoadOffsets = LoadOffsetsI->second;
+                  auto LoadOffsetsI = SplitOffsetsMap.find(LI);
+                  if (LoadOffsetsI == SplitOffsetsMap.end())
+                    return false; // Unrelated loads are definitely safe.
+                  auto &LoadOffsets = LoadOffsetsI->second;
 
-                        // Now lookup the store's offsets.
-                        auto &StoreOffsets = SplitOffsetsMap[SI];
+                  // Now lookup the store's offsets.
+                  auto &StoreOffsets = SplitOffsetsMap[SI];
 
-                        // If the relative offsets of each split in the load and
-                        // store match exactly, then we can split them and we
-                        // don't need to remove them here.
-                        if (LoadOffsets.Splits == StoreOffsets.Splits)
-                          return false;
+                  // If the relative offsets of each split in the load and
+                  // store match exactly, then we can split them and we
+                  // don't need to remove them here.
+                  if (LoadOffsets.Splits == StoreOffsets.Splits)
+                    return false;
 
-                        DEBUG(dbgs()
-                              << "    Mismatched splits for load and store:\n"
-                              << "      " << *LI << "\n"
-                              << "      " << *SI << "\n");
+                  DEBUG(dbgs() << "    Mismatched splits for load and store:\n"
+                               << "      " << *LI << "\n"
+                               << "      " << *SI << "\n");
 
-                        // We've found a store and load that we need to split
-                        // with mismatched relative splits. Just give up on them
-                        // and remove both instructions from our list of
-                        // candidates.
-                        UnsplittableLoads.insert(LI);
-                        return true;
-                      }),
+                  // We've found a store and load that we need to split
+                  // with mismatched relative splits. Just give up on them
+                  // and remove both instructions from our list of
+                  // candidates.
+                  UnsplittableLoads.insert(LI);
+                  return true;
+                }),
       Stores.end());
   // Now we have to go *back* through all the stores, because a later store may
   // have caused an earlier store's load to become unsplittable and if it is
   // unsplittable for the later store, then we can't rely on it being split in
   // the earlier store either.
-  Stores.erase(llvm::remove_if(Stores,
-                               [&UnsplittableLoads](StoreInst *SI) {
-                                 auto *LI =
-                                     cast<LoadInst>(SI->getValueOperand());
-                                 return UnsplittableLoads.count(LI);
-                               }),
+  Stores.erase(remove_if(Stores,
+                         [&UnsplittableLoads](StoreInst *SI) {
+                           auto *LI = cast<LoadInst>(SI->getValueOperand());
+                           return UnsplittableLoads.count(LI);
+                         }),
                Stores.end());
   // Once we've established all the loads that can't be split for some reason,
   // filter any that made it into our list out.
-  Loads.erase(llvm::remove_if(Loads,
-                              [&UnsplittableLoads](LoadInst *LI) {
-                                return UnsplittableLoads.count(LI);
-                              }),
+  Loads.erase(remove_if(Loads,
+                        [&UnsplittableLoads](LoadInst *LI) {
+                          return UnsplittableLoads.count(LI);
+                        }),
               Loads.end());
 
   // If no loads or stores are left, there is no pre-splitting to be done for
@@ -3867,8 +3804,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
   }
 
   // Remove the killed slices that have ben pre-split.
-  AS.erase(llvm::remove_if(AS, [](const Slice &S) { return S.isDead(); }),
-           AS.end());
+  AS.erase(remove_if(AS, [](const Slice &S) { return S.isDead(); }), AS.end());
 
   // Insert our new slices. This will sort and merge them into the sorted
   // sequence.
@@ -3883,7 +3819,7 @@ bool SROA::presplitLoadsAndStores(AllocaInst &AI, AllocaSlices &AS) {
   // Finally, don't try to promote any allocas that new require re-splitting.
   // They have already been added to the worklist above.
   PromotableAllocas.erase(
-      llvm::remove_if(
+      remove_if(
           PromotableAllocas,
           [&](AllocaInst *AI) { return ResplitPromotableAllocas.count(AI); }),
       PromotableAllocas.end());
@@ -4053,58 +3989,27 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
   // First try to pre-split loads and stores.
   Changed |= presplitLoadsAndStores(AI, AS);
 
-  // Now that we have identified any pre-splitting opportunities,
-  // mark loads and stores unsplittable except for the following case.
-  // We leave a slice splittable if all other slices are disjoint or fully
-  // included in the slice, such as whole-alloca loads and stores.
-  // If we fail to split these during pre-splitting, we want to force them
-  // to be rewritten into a partition.
+  // Now that we have identified any pre-splitting opportunities, mark any
+  // splittable (non-whole-alloca) loads and stores as unsplittable. If we fail
+  // to split these during pre-splitting, we want to force them to be
+  // rewritten into a partition.
   bool IsSorted = true;
-
-  uint64_t AllocaSize = DL.getTypeAllocSize(AI.getAllocatedType());
-  const uint64_t MaxBitVectorSize = 1024;
-  if (SROASplitNonWholeAllocaSlices && AllocaSize <= MaxBitVectorSize) {
-    // If a byte boundary is included in any load or store, a slice starting or
-    // ending at the boundary is not splittable.
-    SmallBitVector SplittableOffset(AllocaSize + 1, true);
-    for (Slice &S : AS)
-      for (unsigned O = S.beginOffset() + 1;
-           O < S.endOffset() && O < AllocaSize; O++)
-        SplittableOffset.reset(O);
-
-    for (Slice &S : AS) {
-      if (!S.isSplittable())
-        continue;
-
-      if ((S.beginOffset() > AllocaSize || SplittableOffset[S.beginOffset()]) &&
-          (S.endOffset() > AllocaSize || SplittableOffset[S.endOffset()]))
-        continue;
-
-      if (isa<LoadInst>(S.getUse()->getUser()) ||
-          isa<StoreInst>(S.getUse()->getUser())) {
-        S.makeUnsplittable();
-        IsSorted = false;
-      }
+  for (Slice &S : AS) {
+    if (!S.isSplittable())
+      continue;
+    // FIXME: We currently leave whole-alloca splittable loads and stores. This
+    // used to be the only splittable loads and stores and we need to be
+    // confident that the above handling of splittable loads and stores is
+    // completely sufficient before we forcibly disable the remaining handling.
+    if (S.beginOffset() == 0 &&
+        S.endOffset() >= DL.getTypeAllocSize(AI.getAllocatedType()))
+      continue;
+    if (isa<LoadInst>(S.getUse()->getUser()) ||
+        isa<StoreInst>(S.getUse()->getUser())) {
+      S.makeUnsplittable();
+      IsSorted = false;
     }
   }
-  else {
-    // We only allow whole-alloca splittable loads and stores
-    // for a large alloca to avoid creating too large BitVector.
-    for (Slice &S : AS) {
-      if (!S.isSplittable())
-        continue;
-
-      if (S.beginOffset() == 0 && S.endOffset() >= AllocaSize)
-        continue;
-
-      if (isa<LoadInst>(S.getUse()->getUser()) ||
-          isa<StoreInst>(S.getUse()->getUser())) {
-        S.makeUnsplittable();
-        IsSorted = false;
-      }
-    }
-  }
-
   if (!IsSorted)
     std::sort(AS.begin(), AS.end());
 
@@ -4139,11 +4044,9 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
 
   // Migrate debug information from the old alloca to the new alloca(s)
   // and the individual partitions.
-  TinyPtrVector<DbgInfoIntrinsic *> DbgDeclares = FindDbgAddrUses(&AI);
-  if (!DbgDeclares.empty()) {
-    auto *Var = DbgDeclares.front()->getVariable();
-    auto *Expr = DbgDeclares.front()->getExpression();
-    auto VarSize = Var->getSizeInBits();
+  if (DbgDeclareInst *DbgDecl = FindAllocaDbgDeclare(&AI)) {
+    auto *Var = DbgDecl->getVariable();
+    auto *Expr = DbgDecl->getExpression();
     DIBuilder DIB(*AI.getModule(), /*AllowUnresolved*/ false);
     uint64_t AllocaSize = DL.getTypeSizeInBits(AI.getAllocatedType());
     for (auto Fragment : Fragments) {
@@ -4159,43 +4062,21 @@ bool SROA::splitAlloca(AllocaInst &AI, AllocaSlices &AS) {
         uint64_t Size = Fragment.Size;
         if (ExprFragment) {
           uint64_t AbsEnd =
-              ExprFragment->OffsetInBits + ExprFragment->SizeInBits;
+	    ExprFragment->OffsetInBits + ExprFragment->SizeInBits;
           if (Start >= AbsEnd)
             // No need to describe a SROAed padding.
             continue;
           Size = std::min(Size, AbsEnd - Start);
         }
-        // The new, smaller fragment is stenciled out from the old fragment.
-        if (auto OrigFragment = FragmentExpr->getFragmentInfo()) {
-          assert(Start >= OrigFragment->OffsetInBits &&
-                 "new fragment is outside of original fragment");
-          Start -= OrigFragment->OffsetInBits;
-        }
-
-        // The alloca may be larger than the variable.
-        if (VarSize) {
-          if (Size > *VarSize)
-            Size = *VarSize;
-          if (Size == 0 || Start + Size > *VarSize)
-            continue;
-        }
-
-        // Avoid creating a fragment expression that covers the entire variable.
-        if (!VarSize || *VarSize != Size) {
-          if (auto E =
-                  DIExpression::createFragmentExpression(Expr, Start, Size))
-            FragmentExpr = *E;
-          else
-            continue;
-        }
+        FragmentExpr = DIB.createFragmentExpression(Start, Size);
       }
 
-      // Remove any existing intrinsics describing the same alloca.
-      for (DbgInfoIntrinsic *OldDII : FindDbgAddrUses(Fragment.Alloca))
-        OldDII->eraseFromParent();
+      // Remove any existing dbg.declare intrinsic describing the same alloca.
+      if (DbgDeclareInst *OldDDI = FindAllocaDbgDeclare(Fragment.Alloca))
+        OldDDI->eraseFromParent();
 
       DIB.insertDeclare(Fragment.Alloca, Var, FragmentExpr,
-                        DbgDeclares.front()->getDebugLoc(), &AI);
+                        DbgDecl->getDebugLoc(), &AI);
     }
   }
   return Changed;
@@ -4294,21 +4175,11 @@ bool SROA::runOnAlloca(AllocaInst &AI) {
 ///
 /// We also record the alloca instructions deleted here so that they aren't
 /// subsequently handed to mem2reg to promote.
-bool SROA::deleteDeadInstructions(
+void SROA::deleteDeadInstructions(
     SmallPtrSetImpl<AllocaInst *> &DeletedAllocas) {
-  bool Changed = false;
   while (!DeadInsts.empty()) {
     Instruction *I = DeadInsts.pop_back_val();
     DEBUG(dbgs() << "Deleting dead instruction: " << *I << "\n");
-
-    // If the instruction is an alloca, find the possible dbg.declare connected
-    // to it, and remove it too. We must do this before calling RAUW or we will
-    // not be able to find it.
-    if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
-      DeletedAllocas.insert(AI);
-      for (DbgInfoIntrinsic *OldDII : FindDbgAddrUses(AI))
-        OldDII->eraseFromParent();
-    }
 
     I->replaceAllUsesWith(UndefValue::get(I->getType()));
 
@@ -4320,11 +4191,15 @@ bool SROA::deleteDeadInstructions(
           DeadInsts.insert(U);
       }
 
+    if (AllocaInst *AI = dyn_cast<AllocaInst>(I)) {
+      DeletedAllocas.insert(AI);
+      if (DbgDeclareInst *DbgDecl = FindAllocaDbgDeclare(AI))
+        DbgDecl->eraseFromParent();
+    }
+
     ++NumDeleted;
     I->eraseFromParent();
-    Changed = true;
   }
-  return Changed;
 }
 
 /// \brief Promote the allocas, using the best available technique.
@@ -4366,7 +4241,7 @@ PreservedAnalyses SROA::runImpl(Function &F, DominatorTree &RunDT,
   do {
     while (!Worklist.empty()) {
       Changed |= runOnAlloca(*Worklist.pop_back_val());
-      Changed |= deleteDeadInstructions(DeletedAllocas);
+      deleteDeadInstructions(DeletedAllocas);
 
       // Remove the deleted allocas from various lists so that we don't try to
       // continue processing them.
@@ -4374,7 +4249,7 @@ PreservedAnalyses SROA::runImpl(Function &F, DominatorTree &RunDT,
         auto IsInSet = [&](AllocaInst *AI) { return DeletedAllocas.count(AI); };
         Worklist.remove_if(IsInSet);
         PostPromotionWorklist.remove_if(IsInSet);
-        PromotableAllocas.erase(llvm::remove_if(PromotableAllocas, IsInSet),
+        PromotableAllocas.erase(remove_if(PromotableAllocas, IsInSet),
                                 PromotableAllocas.end());
         DeletedAllocas.clear();
       }
@@ -4409,12 +4284,9 @@ class llvm::sroa::SROALegacyPass : public FunctionPass {
   SROA Impl;
 
 public:
-  static char ID;
-
   SROALegacyPass() : FunctionPass(ID) {
     initializeSROALegacyPassPass(*PassRegistry::getPassRegistry());
   }
-
   bool runOnFunction(Function &F) override {
     if (skipFunction(F))
       return false;
@@ -4424,7 +4296,6 @@ public:
         getAnalysis<AssumptionCacheTracker>().getAssumptionCache(F));
     return !PA.areAllPreserved();
   }
-
   void getAnalysisUsage(AnalysisUsage &AU) const override {
     AU.addRequired<AssumptionCacheTracker>();
     AU.addRequired<DominatorTreeWrapperPass>();
@@ -4433,6 +4304,7 @@ public:
   }
 
   StringRef getPassName() const override { return "SROA"; }
+  static char ID;
 };
 
 char SROALegacyPass::ID = 0;

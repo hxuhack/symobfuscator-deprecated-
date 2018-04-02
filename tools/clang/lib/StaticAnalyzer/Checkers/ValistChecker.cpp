@@ -64,7 +64,7 @@ private:
                                  CheckerContext &C) const;
   void reportLeakedVALists(const RegionVector &LeakedVALists, StringRef Msg1,
                            StringRef Msg2, CheckerContext &C, ExplodedNode *N,
-                           bool ReportUninit = false) const;
+                           bool ForceReport = false) const;
 
   void checkVAListStartCall(const CallEvent &Call, CheckerContext &C,
                             bool IsCopy) const;
@@ -267,19 +267,15 @@ void ValistChecker::reportUninitializedAccess(const MemRegion *VAList,
 void ValistChecker::reportLeakedVALists(const RegionVector &LeakedVALists,
                                         StringRef Msg1, StringRef Msg2,
                                         CheckerContext &C, ExplodedNode *N,
-                                        bool ReportUninit) const {
+                                        bool ForceReport) const {
   if (!(ChecksEnabled[CK_Unterminated] ||
-        (ChecksEnabled[CK_Uninitialized] && ReportUninit)))
+        (ChecksEnabled[CK_Uninitialized] && ForceReport)))
     return;
   for (auto Reg : LeakedVALists) {
     if (!BT_leakedvalist) {
-      // FIXME: maybe creating a new check name for this type of bug is a better
-      // solution.
-      BT_leakedvalist.reset(
-          new BugType(CheckNames[CK_Unterminated].getName().empty()
-                          ? CheckNames[CK_Uninitialized]
-                          : CheckNames[CK_Unterminated],
-                      "Leaked va_list", categories::MemoryError));
+      BT_leakedvalist.reset(new BugType(CheckNames[CK_Unterminated],
+                                        "Leaked va_list",
+                                        categories::MemoryError));
       BT_leakedvalist->setSuppressOnSink(true);
     }
 
@@ -379,7 +375,7 @@ void ValistChecker::checkVAListEndCall(const CallEvent &Call,
 
 std::shared_ptr<PathDiagnosticPiece> ValistChecker::ValistBugVisitor::VisitNode(
     const ExplodedNode *N, const ExplodedNode *PrevN, BugReporterContext &BRC,
-    BugReport &) {
+    BugReport &BR) {
   ProgramStateRef State = N->getState();
   ProgramStateRef StatePrev = PrevN->getState();
 

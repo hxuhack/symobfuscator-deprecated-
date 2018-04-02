@@ -36,14 +36,16 @@ entry:
 ; CHECK-DAG: declare void @weakalias
 declare void @weakalias(...) #1
 
-; External alias imported as available_externally copy of aliasee
-; CHECK-DAG: define available_externally void @analias
+; Cannot create an alias to available_externally
+; CHECK-DAG: declare void @analias
 declare void @analias(...) #1
 
-; External alias imported as available_externally copy of aliasee
-; (linkoncealias is an external alias to a linkonce_odr)
+; Aliases import the aliasee function
 declare void @linkoncealias(...) #1
-; CHECK-DAG: define available_externally void @linkoncealias()
+; INSTLIMDEF-DAG: Import linkoncealias
+; INSTLIMDEF-DAG: Import linkoncefunc
+; CHECK-DAG: define linkonce_odr void @linkoncefunc()
+; CHECK-DAG: @linkoncealias = alias void (...), bitcast (void ()* @linkoncefunc to void (...)*
 
 ; INSTLIMDEF-DAG: Import referencestatics
 ; INSTLIMDEF-DAG: define available_externally i32 @referencestatics(i32 %i) !thinlto_src_module !0 {

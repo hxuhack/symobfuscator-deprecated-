@@ -1258,7 +1258,6 @@ static CXIdxEntityKind getEntityKindFromSymbolKind(SymbolKind K, SymbolLanguage 
   case SymbolKind::Module:
   case SymbolKind::Macro:
   case SymbolKind::ClassProperty:
-  case SymbolKind::Using:
     return CXIdxEntity_Unexposed;
 
   case SymbolKind::Enum: return CXIdxEntity_Enum;
@@ -1304,11 +1303,11 @@ static CXIdxEntityKind getEntityKindFromSymbolKind(SymbolKind K, SymbolLanguage 
 
 static CXIdxEntityCXXTemplateKind
 getEntityKindFromSymbolProperties(SymbolPropertySet K) {
-  if (K & (SymbolPropertySet)SymbolProperty::TemplatePartialSpecialization)
+  if (K & (unsigned)SymbolProperty::TemplatePartialSpecialization)
     return CXIdxEntity_TemplatePartialSpecialization;
-  if (K & (SymbolPropertySet)SymbolProperty::TemplateSpecialization)
+  if (K & (unsigned)SymbolProperty::TemplateSpecialization)
     return CXIdxEntity_TemplateSpecialization;
-  if (K & (SymbolPropertySet)SymbolProperty::Generic)
+  if (K & (unsigned)SymbolProperty::Generic)
     return CXIdxEntity_Template;
   return CXIdxEntity_NonTemplate;
 }

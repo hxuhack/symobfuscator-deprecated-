@@ -28,7 +28,6 @@ namespace {
   class DeclPrinter : public DeclVisitor<DeclPrinter> {
     raw_ostream &Out;
     PrintingPolicy Policy;
-    const ASTContext &Context;
     unsigned Indentation;
     bool PrintInstantiation;
 
@@ -37,8 +36,6 @@ namespace {
     void ProcessDeclGroup(SmallVectorImpl<Decl*>& Decls);
 
     void Print(AccessSpecifier AS);
-    void PrintConstructorInitializers(CXXConstructorDecl *CDecl,
-                                      std::string &Proto);
 
     /// Print an Objective-C method type in parentheses.
     ///
@@ -51,10 +48,9 @@ namespace {
 
   public:
     DeclPrinter(raw_ostream &Out, const PrintingPolicy &Policy,
-                const ASTContext &Context, unsigned Indentation = 0,
-                bool PrintInstantiation = false)
-        : Out(Out), Policy(Policy), Context(Context), Indentation(Indentation),
-          PrintInstantiation(PrintInstantiation) {}
+                unsigned Indentation = 0, bool PrintInstantiation = false)
+      : Out(Out), Policy(Policy), Indentation(Indentation),
+        PrintInstantiation(PrintInstantiation) { }
 
     void VisitDeclContext(DeclContext *DC, bool Indent = true);
 
@@ -119,8 +115,7 @@ void Decl::print(raw_ostream &Out, unsigned Indentation,
 
 void Decl::print(raw_ostream &Out, const PrintingPolicy &Policy,
                  unsigned Indentation, bool PrintInstantiation) const {
-  DeclPrinter Printer(Out, Policy, getASTContext(), Indentation,
-                      PrintInstantiation);
+  DeclPrinter Printer(Out, Policy, Indentation, PrintInstantiation);
   Printer.Visit(const_cast<Decl*>(this));
 }
 
@@ -197,7 +192,7 @@ LLVM_DUMP_METHOD void DeclContext::dumpDeclContext() const {
     DC = DC->getParent();
   
   ASTContext &Ctx = cast<TranslationUnitDecl>(DC)->getASTContext();
-  DeclPrinter Printer(llvm::errs(), Ctx.getPrintingPolicy(), Ctx, 0);
+  DeclPrinter Printer(llvm::errs(), Ctx.getPrintingPolicy(), 0);
   Printer.VisitDeclContext(const_cast<DeclContext *>(this), /*Indent=*/false);
 }
 
@@ -273,71 +268,6 @@ void DeclPrinter::Print(AccessSpecifier AS) {
   case AS_public:    Out << "public"; break;
   case AS_protected: Out << "protected"; break;
   case AS_private:   Out << "private"; break;
-  }
-}
-
-void DeclPrinter::PrintConstructorInitializers(CXXConstructorDecl *CDecl,
-                                               std::string &Proto) {
-  bool HasInitializerList = false;
-  for (const auto *BMInitializer : CDecl->inits()) {
-    if (BMInitializer->isInClassMemberInitializer())
-      continue;
-
-    if (!HasInitializerList) {
-      Proto += " : ";
-      Out << Proto;
-      Proto.clear();
-      HasInitializerList = true;
-    } else
-      Out << ", ";
-
-    if (BMInitializer->isAnyMemberInitializer()) {
-      FieldDecl *FD = BMInitializer->getAnyMember();
-      Out << *FD;
-    } else {
-      Out << QualType(BMInitializer->getBaseClass(), 0).getAsString(Policy);
-    }
-
-    Out << "(";
-    if (!BMInitializer->getInit()) {
-      // Nothing to print
-    } else {
-      Expr *Init = BMInitializer->getInit();
-      if (ExprWithCleanups *Tmp = dyn_cast<ExprWithCleanups>(Init))
-        Init = Tmp->getSubExpr();
-
-      Init = Init->IgnoreParens();
-
-      Expr *SimpleInit = nullptr;
-      Expr **Args = nullptr;
-      unsigned NumArgs = 0;
-      if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
-        Args = ParenList->getExprs();
-        NumArgs = ParenList->getNumExprs();
-      } else if (CXXConstructExpr *Construct =
-                     dyn_cast<CXXConstructExpr>(Init)) {
-        Args = Construct->getArgs();
-        NumArgs = Construct->getNumArgs();
-      } else
-        SimpleInit = Init;
-
-      if (SimpleInit)
-        SimpleInit->printPretty(Out, nullptr, Policy, Indentation);
-      else {
-        for (unsigned I = 0; I != NumArgs; ++I) {
-          assert(Args[I] != nullptr && "Expected non-null Expr");
-          if (isa<CXXDefaultArgExpr>(Args[I]))
-            break;
-
-          if (I)
-            Out << ", ";
-          Args[I]->printPretty(Out, nullptr, Policy, Indentation);
-        }
-      }
-    }
-    Out << ")";
-    if (BMInitializer->isPackExpansion())
-      Out << "...";
   }
 }
 
@@ -537,7 +467,7 @@ void DeclPrinter::VisitEnumConstantDecl(EnumConstantDecl *D) {
   prettyPrintAttributes(D);
   if (Expr *Init = D->getInitExpr()) {
     Out << " = ";
-    Init->printPretty(Out, nullptr, Policy, Indentation, &Context);
+    Init->printPretty(Out, nullptr, Policy, Indentation);
   }
 }
 
@@ -580,24 +510,18 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
   PrintingPolicy SubPolicy(Policy);
   SubPolicy.SuppressSpecifiers = false;
   std::string Proto;
-
-  if (Policy.FullyQualifiedName) {
-    Proto += D->getQualifiedNameAsString();
-  } else {
-    if (!Policy.SuppressScope) {
-      if (const NestedNameSpecifier *NS = D->getQualifier()) {
-        llvm::raw_string_ostream OS(Proto);
-        NS->print(OS, Policy);
-      }
+  if (!Policy.SuppressScope) {
+    if (const NestedNameSpecifier *NS = D->getQualifier()) {
+      llvm::raw_string_ostream OS(Proto);
+      NS->print(OS, Policy);
     }
-    Proto += D->getNameInfo().getAsString();
   }
-
+  Proto += D->getNameInfo().getAsString();
   if (GuideDecl)
     Proto = GuideDecl->getDeducedTemplate()->getDeclName().getAsString();
   if (const TemplateArgumentList *TArgs = D->getTemplateSpecializationArgs()) {
     llvm::raw_string_ostream POut(Proto);
-    DeclPrinter TArgPrinter(POut, SubPolicy, Context, Indentation);
+    DeclPrinter TArgPrinter(POut, SubPolicy, Indentation);
     TArgPrinter.printTemplateArguments(*TArgs);
   }
 
@@ -615,7 +539,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
     Proto += "(";
     if (FT) {
       llvm::raw_string_ostream POut(Proto);
-      DeclPrinter ParamPrinter(POut, SubPolicy, Context, Indentation);
+      DeclPrinter ParamPrinter(POut, SubPolicy, Indentation);
       for (unsigned i = 0, e = D->getNumParams(); i != e; ++i) {
         if (i) POut << ", ";
         ParamPrinter.VisitParmVarDecl(D->getParamDecl(i));
@@ -681,8 +605,67 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
     }
 
     if (CDecl) {
-      if (!Policy.TerseOutput)
-        PrintConstructorInitializers(CDecl, Proto);
+      bool HasInitializerList = false;
+      for (const auto *BMInitializer : CDecl->inits()) {
+        if (BMInitializer->isInClassMemberInitializer())
+          continue;
+
+        if (!HasInitializerList) {
+          Proto += " : ";
+          Out << Proto;
+          Proto.clear();
+          HasInitializerList = true;
+        } else
+          Out << ", ";
+
+        if (BMInitializer->isAnyMemberInitializer()) {
+          FieldDecl *FD = BMInitializer->getAnyMember();
+          Out << *FD;
+        } else {
+          Out << QualType(BMInitializer->getBaseClass(), 0).getAsString(Policy);
+        }
+        
+        Out << "(";
+        if (!BMInitializer->getInit()) {
+          // Nothing to print
+        } else {
+          Expr *Init = BMInitializer->getInit();
+          if (ExprWithCleanups *Tmp = dyn_cast<ExprWithCleanups>(Init))
+            Init = Tmp->getSubExpr();
+          
+          Init = Init->IgnoreParens();
+
+          Expr *SimpleInit = nullptr;
+          Expr **Args = nullptr;
+          unsigned NumArgs = 0;
+          if (ParenListExpr *ParenList = dyn_cast<ParenListExpr>(Init)) {
+            Args = ParenList->getExprs();
+            NumArgs = ParenList->getNumExprs();
+          } else if (CXXConstructExpr *Construct
+                                        = dyn_cast<CXXConstructExpr>(Init)) {
+            Args = Construct->getArgs();
+            NumArgs = Construct->getNumArgs();
+          } else
+            SimpleInit = Init;
+          
+          if (SimpleInit)
+            SimpleInit->printPretty(Out, nullptr, Policy, Indentation);
+          else {
+            for (unsigned I = 0; I != NumArgs; ++I) {
+              assert(Args[I] != nullptr && "Expected non-null Expr");
+              if (isa<CXXDefaultArgExpr>(Args[I]))
+                break;
+              
+              if (I)
+                Out << ", ";
+              Args[I]->printPretty(Out, nullptr, Policy, Indentation);
+            }
+          }
+        }
+        Out << ")";
+        if (BMInitializer->isPackExpansion())
+          Out << "...";
+      }
     } else if (!ConversionDecl && !isa<CXXDestructorDecl>(D)) {
       if (FT && FT->hasTrailingReturn()) {
         if (!GuideDecl)
@@ -712,7 +695,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
         // This is a K&R function definition, so we need to print the
         // parameters.
         Out << '\n';
-        DeclPrinter ParamPrinter(Out, SubPolicy, Context, Indentation);
+        DeclPrinter ParamPrinter(Out, SubPolicy, Indentation);
         Indentation += Policy.Indentation;
         for (unsigned i = 0, e = D->getNumParams(); i != e; ++i) {
           Indent();
@@ -726,7 +709,7 @@ void DeclPrinter::VisitFunctionDecl(FunctionDecl *D) {
       if (D->getBody())
         D->getBody()->printPretty(Out, nullptr, SubPolicy, Indentation);
     } else {
-      if (!Policy.TerseOutput && isa<CXXConstructorDecl>(*D))
+      if (isa<CXXConstructorDecl>(*D))
         Out << " {}";
     }
   }
@@ -1558,19 +1541,7 @@ void DeclPrinter::VisitOMPDeclareReductionDecl(OMPDeclareReductionDecl *D) {
     Out << ")";
     if (auto *Init = D->getInitializer()) {
       Out << " initializer(";
-      switch (D->getInitializerKind()) {
-      case OMPDeclareReductionDecl::DirectInit:
-        Out << "omp_priv(";
-        break;
-      case OMPDeclareReductionDecl::CopyInit:
-        Out << "omp_priv = ";
-        break;
-      case OMPDeclareReductionDecl::CallInit:
-        break;
-      }
       Init->printPretty(Out, nullptr, Policy, 0);
-      if (D->getInitializerKind() == OMPDeclareReductionDecl::DirectInit)
-        Out << ")";
       Out << ")";
     }
   }

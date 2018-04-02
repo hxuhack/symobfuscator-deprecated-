@@ -19,7 +19,6 @@
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCFixup.h"
-#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
 #include <cassert>
@@ -429,10 +428,11 @@ unsigned AArch64ELFObjectWriter::getRelocType(MCContext &Ctx,
   llvm_unreachable("Unimplemented fixup -> relocation");
 }
 
-std::unique_ptr<MCObjectWriter>
-llvm::createAArch64ELFObjectWriter(raw_pwrite_stream &OS, uint8_t OSABI,
-                                   bool IsLittleEndian, bool IsILP32) {
-  auto MOTW =
-      llvm::make_unique<AArch64ELFObjectWriter>(OSABI, IsLittleEndian, IsILP32);
-  return createELFObjectWriter(std::move(MOTW), OS, IsLittleEndian);
+MCObjectWriter *llvm::createAArch64ELFObjectWriter(raw_pwrite_stream &OS,
+                                                   uint8_t OSABI,
+                                                   bool IsLittleEndian,
+                                                   bool IsILP32) {
+  MCELFObjectTargetWriter *MOTW =
+      new AArch64ELFObjectWriter(OSABI, IsLittleEndian, IsILP32);
+  return createELFObjectWriter(MOTW, OS, IsLittleEndian);
 }

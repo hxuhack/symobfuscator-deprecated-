@@ -45,9 +45,6 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineValueType.h"
-#include "llvm/CodeGen/TargetLowering.h"
-#include "llvm/CodeGen/TargetLoweringObjectFile.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/CodeGen/ValueTypes.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
@@ -78,7 +75,10 @@
 #include "llvm/Support/Path.h"
 #include "llvm/Support/TargetRegistry.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetLowering.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 #include "llvm/Transforms/Utils/UnrollLoop.h"
 #include <cassert>
 #include <cstdint>
@@ -400,7 +400,7 @@ void NVPTXAsmPrinter::printReturnValStr(const Function *F, raw_ostream &O) {
   O << " (";
 
   if (isABI) {
-    if (Ty->isFloatingPointTy() || (Ty->isIntegerTy() && !Ty->isIntegerTy(128))) {
+    if (Ty->isFloatingPointTy() || Ty->isIntegerTy()) {
       unsigned size = 0;
       if (auto *ITy = dyn_cast<IntegerType>(Ty)) {
         size = ITy->getBitWidth();
@@ -418,7 +418,7 @@ void NVPTXAsmPrinter::printReturnValStr(const Function *F, raw_ostream &O) {
     } else if (isa<PointerType>(Ty)) {
       O << ".param .b" << TLI->getPointerTy(DL).getSizeInBits()
         << " func_retval0";
-    } else if (Ty->isAggregateType() || Ty->isVectorTy() || Ty->isIntegerTy(128)) {
+    } else if (Ty->isAggregateType() || Ty->isVectorTy()) {
       unsigned totalsz = DL.getTypeAllocSize(Ty);
       unsigned retAlignment = 0;
       if (!getAlign(*F, 0, retAlignment))
@@ -457,8 +457,8 @@ void NVPTXAsmPrinter::printReturnValStr(const Function *F, raw_ostream &O) {
 
 void NVPTXAsmPrinter::printReturnValStr(const MachineFunction &MF,
                                         raw_ostream &O) {
-  const Function &F = MF.getFunction();
-  printReturnValStr(&F, O);
+  const Function *F = MF.getFunction();
+  printReturnValStr(F, O);
 }
 
 // Return true if MBB is the header of a loop marked with
@@ -502,13 +502,13 @@ void NVPTXAsmPrinter::EmitFunctionEntryLabel() {
   raw_svector_ostream O(Str);
 
   if (!GlobalsEmitted) {
-    emitGlobals(*MF->getFunction().getParent());
+    emitGlobals(*MF->getFunction()->getParent());
     GlobalsEmitted = true;
   }
   
   // Set up
   MRI = &MF->getRegInfo();
-  F = &MF->getFunction();
+  F = MF->getFunction();
   emitLinkageDirective(F, O);
   if (isKernelFunction(*F))
     O << ".entry ";
@@ -536,7 +536,7 @@ void NVPTXAsmPrinter::EmitFunctionBodyStart() {
 
   SmallString<128> Str;
   raw_svector_ostream O(Str);
-  emitDemotedVars(&MF->getFunction(), O);
+  emitDemotedVars(MF->getFunction(), O);
   OutStreamer->EmitRawText(O.str());
 }
 
@@ -1425,14 +1425,6 @@ void NVPTXAsmPrinter::emitPTXGlobalVariable(const GlobalVariable *GVar,
   else
     O << " .align " << GVar->getAlignment();
 
-  // Special case for i128
-  if (ETy->isIntegerTy(128)) {
-    O << " .b8 ";
-    getSymbol(GVar)->print(O, MAI);
-    O << "[16]";
-    return;
-  }
-
   if (ETy->isFloatingPointTy() || ETy->isIntegerTy() || ETy->isPointerTy()) {
     O << " .";
     O << getPTXFundamentalTypeStr(ETy);
@@ -1559,7 +1551,7 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
     }
 
     if (!PAL.hasParamAttribute(paramIndex, Attribute::ByVal)) {
-      if (Ty->isAggregateType() || Ty->isVectorTy() || Ty->isIntegerTy(128)) {
+      if (Ty->isAggregateType() || Ty->isVectorTy()) {
         // Just print .param .align <a> .b8 .param[size];
         // <a> = PAL.getparamalignment
         // size = typeallocsize of element type
@@ -1708,8 +1700,8 @@ void NVPTXAsmPrinter::emitFunctionParamList(const Function *F, raw_ostream &O) {
 
 void NVPTXAsmPrinter::emitFunctionParamList(const MachineFunction &MF,
                                             raw_ostream &O) {
-  const Function &F = MF.getFunction();
-  emitFunctionParamList(&F, O);
+  const Function *F = MF.getFunction();
+  emitFunctionParamList(F, O);
 }
 
 void NVPTXAsmPrinter::setAndEmitFunctionVirtualRegisters(
@@ -1797,7 +1789,11 @@ void NVPTXAsmPrinter::printFPConstant(const ConstantFP *Fp, raw_ostream &O) {
     llvm_unreachable("unsupported fp type");
 
   APInt API = APF.bitcastToAPInt();
-  O << lead << format_hex_no_prefix(API.getZExtValue(), numHex, /*Upper=*/true);
+  std::string hexstr(utohexstr(API.getZExtValue()));
+  O << lead;
+  if (hexstr.length() < numHex)
+    O << std::string(numHex - hexstr.length(), '0');
+  O << utohexstr(API.getZExtValue());
 }
 
 void NVPTXAsmPrinter::printScalarConstant(const Constant *CPV, raw_ostream &O) {
@@ -2152,7 +2148,7 @@ NVPTXAsmPrinter::lowerConstantForGV(const Constant *CV, bool ProcessingGeneric) 
       raw_string_ostream OS(S);
       OS << "Unsupported expression in static initializer: ";
       CE->printAsOperand(OS, /*PrintType=*/false,
-                     !MF ? nullptr : MF->getFunction().getParent());
+                     !MF ? nullptr : MF->getFunction()->getParent());
       report_fatal_error(OS.str());
     }
 
@@ -2166,7 +2162,7 @@ NVPTXAsmPrinter::lowerConstantForGV(const Constant *CV, bool ProcessingGeneric) 
     raw_string_ostream OS(S);
     OS << "Unsupported expression in static initializer: ";
     CE->printAsOperand(OS, /*PrintType=*/ false,
-                       !MF ? nullptr : MF->getFunction().getParent());
+                       !MF ? nullptr : MF->getFunction()->getParent());
     report_fatal_error(OS.str());
   }
 

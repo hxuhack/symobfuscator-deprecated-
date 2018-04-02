@@ -13,7 +13,6 @@
 
 #include "llvm/ADT/StringExtras.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/Support/raw_ostream.h"
 using namespace llvm;
 
 /// StrInStrNoCase - Portable version of strcasestr.  Locates the first
@@ -56,9 +55,4 @@ void llvm::SplitString(StringRef Source,
     OutFragments.push_back(S.first);
     S = getToken(S.second, Delimiters);
   }
-}
-
-void llvm::printLowerCase(StringRef String, raw_ostream &Out) {
-  for (const char C : String)
-    Out << toLower(C);
 }

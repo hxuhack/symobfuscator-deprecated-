@@ -85,7 +85,10 @@ namespace ISD {
 
   /// If N is a BUILD_VECTOR node whose elements are all the same constant or
   /// undefined, return true and return the constant value in \p SplatValue.
-  bool isConstantSplatVector(const SDNode *N, APInt &SplatValue);
+  /// This sets \p SplatValue to the smallest possible splat unless AllowShrink
+  /// is set to false.
+  bool isConstantSplatVector(const SDNode *N, APInt &SplatValue,
+                             bool AllowShrink = true);
 
   /// Return true if the specified node is a BUILD_VECTOR where all of the
   /// elements are ~0 or undef.
@@ -189,8 +192,8 @@ public:
   inline bool isUndef() const;
   inline unsigned getMachineOpcode() const;
   inline const DebugLoc &getDebugLoc() const;
-  inline void dump(const SelectionDAG *G = nullptr) const;
-  inline void dumpr(const SelectionDAG *G = nullptr) const;
+  inline void dump() const;
+  inline void dumpr() const;
 
   /// Return true if this operand (which must be a chain) reaches the
   /// specified operand without crossing any side-effecting instructions.
@@ -623,14 +626,13 @@ public:
   /// Test if this node is a strict floating point pseudo-op.
   bool isStrictFPOpcode() {
     switch (NodeType) {
-      default:
+      default: 
         return false;
       case ISD::STRICT_FADD:
       case ISD::STRICT_FSUB:
       case ISD::STRICT_FMUL:
       case ISD::STRICT_FDIV:
       case ISD::STRICT_FREM:
-      case ISD::STRICT_FMA:
       case ISD::STRICT_FSQRT:
       case ISD::STRICT_FPOW:
       case ISD::STRICT_FPOWI:
@@ -1089,12 +1091,12 @@ inline const DebugLoc &SDValue::getDebugLoc() const {
   return Node->getDebugLoc();
 }
 
-inline void SDValue::dump(const SelectionDAG *G) const {
-  return Node->dump(G);
+inline void SDValue::dump() const {
+  return Node->dump();
 }
 
-inline void SDValue::dumpr(const SelectionDAG *G) const {
-  return Node->dumpr(G);
+inline void SDValue::dumpr() const {
+  return Node->dumpr();
 }
 
 // Define inline functions from the SDUse class.
@@ -1434,9 +1436,6 @@ public:
   const APInt &getAPIntValue() const { return Value->getValue(); }
   uint64_t getZExtValue() const { return Value->getZExtValue(); }
   int64_t getSExtValue() const { return Value->getSExtValue(); }
-  uint64_t getLimitedValue(uint64_t Limit = UINT64_MAX) {
-    return Value->getLimitedValue(Limit);
-  }
 
   bool isOne() const { return Value->isOne(); }
   bool isNullValue() const { return Value->isZero(); }
@@ -1490,7 +1489,11 @@ public:
   /// convenient to write "2.0" and the like.  Without this function we'd
   /// have to duplicate its logic everywhere it's called.
   bool isExactlyValue(double V) const {
-    return Value->getValueAPF().isExactlyValue(V);
+    bool ignored;
+    APFloat Tmp(V);
+    Tmp.convert(Value->getValueAPF().getSemantics(),
+                APFloat::rmNearestTiesToEven, &ignored);
+    return isExactlyValue(Tmp);
   }
   bool isExactlyValue(const APFloat& V) const;
 
@@ -1847,20 +1850,19 @@ public:
   }
 };
 
-class LabelSDNode : public SDNode {
+class EHLabelSDNode : public SDNode {
   friend class SelectionDAG;
 
   MCSymbol *Label;
 
-  LabelSDNode(unsigned Order, const DebugLoc &dl, MCSymbol *L)
+  EHLabelSDNode(unsigned Order, const DebugLoc &dl, MCSymbol *L)
       : SDNode(ISD::EH_LABEL, Order, dl, getSDVTList(MVT::Other)), Label(L) {}
 
 public:
   MCSymbol *getLabel() const { return Label; }
 
   static bool classof(const SDNode *N) {
-    return N->getOpcode() == ISD::EH_LABEL ||
-           N->getOpcode() == ISD::ANNOTATION_LABEL;
+    return N->getOpcode() == ISD::EH_LABEL;
   }
 };
 
@@ -2015,9 +2017,6 @@ public:
   /// For integers this is the same as doing a TRUNCATE and storing the result.
   /// For floats, it is the same as doing an FP_ROUND and storing the result.
   bool isTruncatingStore() const { return StoreSDNodeBits.IsTruncating; }
-  void setTruncatingStore(bool Truncating) {
-    StoreSDNodeBits.IsTruncating = Truncating;
-  }
 
   const SDValue &getValue() const { return getOperand(1); }
   const SDValue &getBasePtr() const { return getOperand(2); }
@@ -2114,7 +2113,7 @@ class MaskedGatherScatterSDNode : public MemSDNode {
 public:
   friend class SelectionDAG;
 
-  MaskedGatherScatterSDNode(ISD::NodeType NodeTy, unsigned Order,
+  MaskedGatherScatterSDNode(unsigned NodeTy, unsigned Order,
                             const DebugLoc &dl, SDVTList VTs, EVT MemVT,
                             MachineMemOperand *MMO)
       : MemSDNode(NodeTy, Order, dl, VTs, MemVT, MMO) {}

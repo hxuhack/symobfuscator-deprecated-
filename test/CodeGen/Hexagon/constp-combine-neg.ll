@@ -1,6 +1,3 @@
-; XFAIL: *
-; Implement generic selection of a constant.
-
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST1
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST2
 ; RUN: llc -O2 -march=hexagon < %s | FileCheck %s --check-prefix=CHECK-TEST3

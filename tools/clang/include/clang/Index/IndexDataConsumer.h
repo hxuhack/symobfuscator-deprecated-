@@ -11,7 +11,6 @@
 #define LLVM_CLANG_INDEX_INDEXDATACONSUMER_H
 
 #include "clang/Index/IndexSymbol.h"
-#include "clang/Lex/Preprocessor.h"
 
 namespace clang {
   class ASTContext;
@@ -36,8 +35,6 @@ public:
   virtual ~IndexDataConsumer() {}
 
   virtual void initialize(ASTContext &Ctx) {}
-
-  virtual void setPreprocessor(std::shared_ptr<Preprocessor> PP) {}
 
   /// \returns true to continue indexing, or false to abort.
   virtual bool handleDeclOccurence(const Decl *D, SymbolRoleSet Roles,

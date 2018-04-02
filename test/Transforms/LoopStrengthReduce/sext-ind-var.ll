@@ -47,7 +47,8 @@ exit:
 ;
 define float @testsub(float* %input, i32 %offset, i32 %numIterations) {
 ; CHECK-LABEL: @testsub
-; CHECK: sext i32 %offset to i64
+; CHECK: sub i32 0, %offset
+; CHECK: sext i32
 ; CHECK: loop:
 ; CHECK-DAG: phi float*
 ; CHECK-DAG: phi i32

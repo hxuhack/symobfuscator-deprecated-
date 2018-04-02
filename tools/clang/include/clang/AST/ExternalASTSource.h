@@ -1,4 +1,4 @@
-//===- ExternalASTSource.h - Abstract External AST Interface ----*- C++ -*-===//
+//===--- ExternalASTSource.h - Abstract External AST Interface --*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,44 +11,24 @@
 //  construction of AST nodes from some external source.
 //
 //===----------------------------------------------------------------------===//
-
 #ifndef LLVM_CLANG_AST_EXTERNALASTSOURCE_H
 #define LLVM_CLANG_AST_EXTERNALASTSOURCE_H
 
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/DeclBase.h"
-#include "clang/Basic/LLVM.h"
 #include "clang/Basic/Module.h"
-#include "clang/Basic/SourceLocation.h"
-#include "llvm/ADT/ArrayRef.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/IntrusiveRefCntPtr.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/PointerUnion.h"
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/iterator.h"
-#include "llvm/Support/PointerLikeTypeTraits.h"
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <iterator>
-#include <string>
-#include <utility>
 
 namespace clang {
 
 class ASTConsumer;
-class ASTContext;
 class CXXBaseSpecifier;
 class CXXCtorInitializer;
-class CXXRecordDecl;
 class DeclarationName;
+class ExternalSemaSource; // layering violation required for downcasting
 class FieldDecl;
-class IdentifierInfo;
+class Module;
 class NamedDecl;
-class ObjCInterfaceDecl;
 class RecordDecl;
 class Selector;
 class Stmt;
@@ -62,31 +42,30 @@ class TagDecl;
 /// actual type and declaration nodes, and read parts of declaration
 /// contexts.
 class ExternalASTSource : public RefCountedBase<ExternalASTSource> {
-  friend class ExternalSemaSource;
-
   /// Generation number for this external AST source. Must be increased
   /// whenever we might have added new redeclarations for existing decls.
-  uint32_t CurrentGeneration = 0;
+  uint32_t CurrentGeneration;
 
   /// \brief Whether this AST source also provides information for
   /// semantic analysis.
-  bool SemaSource = false;
+  bool SemaSource;
+
+  friend class ExternalSemaSource;
 
 public:
-  ExternalASTSource() = default;
+  ExternalASTSource() : CurrentGeneration(0), SemaSource(false) { }
+
   virtual ~ExternalASTSource();
 
   /// \brief RAII class for safely pairing a StartedDeserializing call
   /// with FinishedDeserializing.
   class Deserializing {
     ExternalASTSource *Source;
-
   public:
     explicit Deserializing(ExternalASTSource *source) : Source(source) {
       assert(Source);
       Source->StartedDeserializing();
     }
-
     ~Deserializing() {
       Source->FinishedDeserializing();
     }
@@ -143,7 +122,7 @@ public:
   virtual CXXBaseSpecifier *GetExternalCXXBaseSpecifiers(uint64_t Offset);
 
   /// \brief Update an out-of-date identifier.
-  virtual void updateOutOfDateIdentifier(IdentifierInfo &II) {}
+  virtual void updateOutOfDateIdentifier(IdentifierInfo &II) { }
 
   /// \brief Find all declarations with the given name in the given context,
   /// and add them to the context by calling SetExternalVisibleDeclsForName
@@ -175,13 +154,12 @@ public:
     const Module *ClangModule = nullptr;
 
   public:
-    ASTSourceDescriptor() = default;
+    ASTSourceDescriptor(){};
     ASTSourceDescriptor(StringRef Name, StringRef Path, StringRef ASTFile,
                         ASTFileSignature Signature)
         : PCHModuleName(std::move(Name)), Path(std::move(Path)),
-          ASTFile(std::move(ASTFile)), Signature(Signature) {}
+          ASTFile(std::move(ASTFile)), Signature(Signature){};
     ASTSourceDescriptor(const Module &M);
-
     std::string getModuleName() const;
     StringRef getPath() const { return Path; }
     StringRef getASTFile() const { return ASTFile; }
@@ -268,6 +246,7 @@ public:
   /// The default implementation of this method is a no-op.
   virtual void PrintStats();
   
+  
   /// \brief Perform layout on the given record.
   ///
   /// This routine allows the external AST source to provide an specific 
@@ -310,7 +289,7 @@ public:
     size_t mmap_bytes;
     
     MemoryBufferSizes(size_t malloc_bytes, size_t mmap_bytes)
-        : malloc_bytes(malloc_bytes), mmap_bytes(mmap_bytes) {}
+    : malloc_bytes(malloc_bytes), mmap_bytes(mmap_bytes) {}
   };
   
   /// Return the amount of memory used by memory buffers, breaking down
@@ -350,12 +329,12 @@ struct LazyOffsetPtr {
   ///
   /// If the low bit is clear, a pointer to the AST node. If the low
   /// bit is set, the upper 63 bits are the offset.
-  mutable uint64_t Ptr = 0;
+  mutable uint64_t Ptr;
 
 public:
-  LazyOffsetPtr() = default;
-  explicit LazyOffsetPtr(T *Ptr) : Ptr(reinterpret_cast<uint64_t>(Ptr)) {}
+  LazyOffsetPtr() : Ptr(0) { }
 
+  explicit LazyOffsetPtr(T *Ptr) : Ptr(reinterpret_cast<uint64_t>(Ptr)) { }
   explicit LazyOffsetPtr(uint64_t Offset) : Ptr((Offset << 1) | 0x01) {
     assert((Offset << 1 >> 1) == Offset && "Offsets must require < 63 bits");
     if (Offset == 0)
@@ -413,16 +392,15 @@ struct LazyGenerationalUpdatePtr {
   /// A cache of the value of this pointer, in the most recent generation in
   /// which we queried it.
   struct LazyData {
-    ExternalASTSource *ExternalSource;
-    uint32_t LastGeneration = 0;
-    T LastValue;
-
     LazyData(ExternalASTSource *Source, T Value)
-        : ExternalSource(Source), LastValue(Value) {}
+        : ExternalSource(Source), LastGeneration(0), LastValue(Value) {}
+    ExternalASTSource *ExternalSource;
+    uint32_t LastGeneration;
+    T LastValue;
   };
 
   // Our value is represented as simply T if there is no external AST source.
-  using ValueType = llvm::PointerUnion<T, LazyData*>;
+  typedef llvm::PointerUnion<T, LazyData*> ValueType;
   ValueType Value;
 
   LazyGenerationalUpdatePtr(ValueType V) : Value(V) {}
@@ -481,31 +459,25 @@ public:
     return LazyGenerationalUpdatePtr(ValueType::getFromOpaqueValue(Ptr));
   }
 };
-
-} // namespace clang
+} // end namespace clang
 
 /// Specialize PointerLikeTypeTraits to allow LazyGenerationalUpdatePtr to be
 /// placed into a PointerUnion.
 namespace llvm {
-
 template<typename Owner, typename T,
          void (clang::ExternalASTSource::*Update)(Owner)>
 struct PointerLikeTypeTraits<
     clang::LazyGenerationalUpdatePtr<Owner, T, Update>> {
-  using Ptr = clang::LazyGenerationalUpdatePtr<Owner, T, Update>;
-
+  typedef clang::LazyGenerationalUpdatePtr<Owner, T, Update> Ptr;
   static void *getAsVoidPointer(Ptr P) { return P.getOpaqueValue(); }
   static Ptr getFromVoidPointer(void *P) { return Ptr::getFromOpaqueValue(P); }
-
   enum {
     NumLowBitsAvailable = PointerLikeTypeTraits<T>::NumLowBitsAvailable - 1
   };
 };
-
-} // namespace llvm
+}
 
 namespace clang {
-
 /// \brief Represents a lazily-loaded vector of data.
 ///
 /// The lazily-loaded vector of data contains data that is partially loaded
@@ -539,14 +511,13 @@ public:
   class iterator
       : public llvm::iterator_adaptor_base<
             iterator, int, std::random_access_iterator_tag, T, int, T *, T &> {
-    friend class LazyVector;
-
     LazyVector *Self;
 
     iterator(LazyVector *Self, int Position)
         : iterator::iterator_adaptor_base(Position), Self(Self) {}
 
     bool isLoaded() const { return this->I < 0; }
+    friend class LazyVector;
 
   public:
     iterator() : iterator(nullptr, 0) {}
@@ -591,23 +562,23 @@ public:
 };
 
 /// \brief A lazy pointer to a statement.
-using LazyDeclStmtPtr =
-    LazyOffsetPtr<Stmt, uint64_t, &ExternalASTSource::GetExternalDeclStmt>;
+typedef LazyOffsetPtr<Stmt, uint64_t, &ExternalASTSource::GetExternalDeclStmt>
+  LazyDeclStmtPtr;
 
 /// \brief A lazy pointer to a declaration.
-using LazyDeclPtr =
-    LazyOffsetPtr<Decl, uint32_t, &ExternalASTSource::GetExternalDecl>;
+typedef LazyOffsetPtr<Decl, uint32_t, &ExternalASTSource::GetExternalDecl>
+  LazyDeclPtr;
 
 /// \brief A lazy pointer to a set of CXXCtorInitializers.
-using LazyCXXCtorInitializersPtr =
-    LazyOffsetPtr<CXXCtorInitializer *, uint64_t,
-                  &ExternalASTSource::GetExternalCXXCtorInitializers>;
+typedef LazyOffsetPtr<CXXCtorInitializer *, uint64_t,
+                      &ExternalASTSource::GetExternalCXXCtorInitializers>
+  LazyCXXCtorInitializersPtr;
 
 /// \brief A lazy pointer to a set of CXXBaseSpecifiers.
-using LazyCXXBaseSpecifiersPtr =
-    LazyOffsetPtr<CXXBaseSpecifier, uint64_t,
-                  &ExternalASTSource::GetExternalCXXBaseSpecifiers>;
+typedef LazyOffsetPtr<CXXBaseSpecifier, uint64_t,
+                      &ExternalASTSource::GetExternalCXXBaseSpecifiers>
+  LazyCXXBaseSpecifiersPtr;
 
-} // namespace clang
+} // end namespace clang
 
-#endif // LLVM_CLANG_AST_EXTERNALASTSOURCE_H
+#endif

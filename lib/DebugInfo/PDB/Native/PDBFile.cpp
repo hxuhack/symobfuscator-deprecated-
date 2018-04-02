@@ -85,11 +85,6 @@ uint32_t PDBFile::getNumStreams() const {
   return ContainerLayout.StreamSizes.size();
 }
 
-uint32_t PDBFile::getMaxStreamSize() const {
-  return *std::max_element(ContainerLayout.StreamSizes.begin(),
-                           ContainerLayout.StreamSizes.end());
-}
-
 uint32_t PDBFile::getStreamByteSize(uint32_t StreamIndex) const {
   return ContainerLayout.StreamSizes[StreamIndex];
 }
@@ -155,7 +150,8 @@ Error PDBFile::parseFileHeaders() {
       MappedBlockStream::createFpmStream(ContainerLayout, *Buffer, Allocator);
   BinaryStreamReader FpmReader(*FpmStream);
   ArrayRef<uint8_t> FpmBytes;
-  if (auto EC = FpmReader.readBytes(FpmBytes, FpmReader.bytesRemaining()))
+  if (auto EC = FpmReader.readBytes(FpmBytes,
+                                    msf::getFullFpmByteSize(ContainerLayout)))
     return EC;
   uint32_t BlocksRemaining = getBlockCount();
   uint32_t BI = 0;
@@ -234,23 +230,12 @@ ArrayRef<support::ulittle32_t> PDBFile::getDirectoryBlockArray() const {
   return ContainerLayout.DirectoryBlocks;
 }
 
-std::unique_ptr<MappedBlockStream> PDBFile::createIndexedStream(uint16_t SN) {
-  if (SN == kInvalidStreamIndex)
-    return nullptr;
-  return MappedBlockStream::createIndexedStream(ContainerLayout, *Buffer, SN,
-                                                Allocator);
-}
-
 MSFStreamLayout PDBFile::getStreamLayout(uint32_t StreamIdx) const {
   MSFStreamLayout Result;
   auto Blocks = getStreamBlockList(StreamIdx);
   Result.Blocks.assign(Blocks.begin(), Blocks.end());
   Result.Length = getStreamByteSize(StreamIdx);
   return Result;
-}
-
-msf::MSFStreamLayout PDBFile::getFpmStreamLayout() const {
-  return msf::getFpmStreamLayout(ContainerLayout);
 }
 
 Expected<GlobalsStream &> PDBFile::getPDBGlobalsStream() {
@@ -312,9 +297,6 @@ Expected<TpiStream &> PDBFile::getPDBTpiStream() {
 
 Expected<TpiStream &> PDBFile::getPDBIpiStream() {
   if (!Ipi) {
-    if (!hasPDBIpiStream())
-      return make_error<RawError>(raw_error_code::no_stream);
-
     auto IpiS = safelyCreateIndexedStream(ContainerLayout, *Buffer, StreamIPI);
     if (!IpiS)
       return IpiS.takeError();
@@ -336,7 +318,8 @@ Expected<PublicsStream &> PDBFile::getPDBPublicsStream() {
         ContainerLayout, *Buffer, DbiS->getPublicSymbolStreamIndex());
     if (!PublicS)
       return PublicS.takeError();
-    auto TempPublics = llvm::make_unique<PublicsStream>(std::move(*PublicS));
+    auto TempPublics =
+        llvm::make_unique<PublicsStream>(*this, std::move(*PublicS));
     if (auto EC = TempPublics->reload())
       return std::move(EC);
     Publics = std::move(TempPublics);
@@ -410,18 +393,9 @@ bool PDBFile::hasPDBGlobalsStream() {
   return DbiS->getGlobalSymbolStreamIndex() < getNumStreams();
 }
 
-bool PDBFile::hasPDBInfoStream() const { return StreamPDB < getNumStreams(); }
+bool PDBFile::hasPDBInfoStream() { return StreamPDB < getNumStreams(); }
 
-bool PDBFile::hasPDBIpiStream() const {
-  if (!hasPDBInfoStream())
-    return false;
-
-  if (StreamIPI >= getNumStreams())
-    return false;
-
-  auto &InfoStream = cantFail(const_cast<PDBFile *>(this)->getPDBInfoStream());
-  return InfoStream.containsIdStream();
-}
+bool PDBFile::hasPDBIpiStream() const { return StreamIPI < getNumStreams(); }
 
 bool PDBFile::hasPDBPublicsStream() {
   auto DbiS = getPDBDbiStream();

@@ -1,4 +1,4 @@
-//===- LoopReroll.cpp - Loop rerolling pass -------------------------------===//
+//===-- LoopReroll.cpp - Loop rerolling pass ------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,42 +11,22 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/BitVector.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/DenseSet.h"
 #include "llvm/ADT/MapVector.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AliasSetTracker.h"
-#include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
 #include "llvm/Analysis/ScalarEvolution.h"
 #include "llvm/Analysis/ScalarEvolutionExpander.h"
 #include "llvm/Analysis/ScalarEvolutionExpressions.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Use.h"
-#include "llvm/IR/User.h"
-#include "llvm/IR/Value.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
@@ -54,13 +34,6 @@
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Local.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <cstdlib>
-#include <iterator>
-#include <map>
-#include <utility>
 
 using namespace llvm;
 
@@ -154,7 +127,6 @@ NumToleratedFailedMatches("reroll-num-tolerated-failed-matches", cl::init(400),
 // br %cmp, header, exit
 
 namespace {
-
   enum IterationLimits {
     /// The maximum number of iterations that we'll try and reroll.
     IL_MaxRerollIterations = 32,
@@ -167,7 +139,6 @@ namespace {
   class LoopReroll : public LoopPass {
   public:
     static char ID; // Pass ID, replacement for typeid
-
     LoopReroll() : LoopPass(ID) {
       initializeLoopRerollPass(*PassRegistry::getPassRegistry());
     }
@@ -187,12 +158,11 @@ namespace {
     DominatorTree *DT;
     bool PreserveLCSSA;
 
-    using SmallInstructionVector = SmallVector<Instruction *, 16>;
-    using SmallInstructionSet = SmallSet<Instruction *, 16>;
+    typedef SmallVector<Instruction *, 16> SmallInstructionVector;
+    typedef SmallSet<Instruction *, 16>   SmallInstructionSet;
 
     // Map between induction variable and its increment
     DenseMap<Instruction *, int64_t> IVToIncMap;
-
     // For loop with multiple induction variable, remember the one used only to
     // control the loop.
     Instruction *LoopControlIV;
@@ -201,7 +171,8 @@ namespace {
     // representing a reduction. Only the last value may be used outside the
     // loop.
     struct SimpleLoopReduction {
-      SimpleLoopReduction(Instruction *P, Loop *L) : Instructions(1, P) {
+      SimpleLoopReduction(Instruction *P, Loop *L)
+        : Valid(false), Instructions(1, P) {
         assert(isa<PHINode>(P) && "First reduction instruction must be a PHI");
         add(L);
       }
@@ -233,8 +204,8 @@ namespace {
         return Instructions.size()-1;
       }
 
-      using iterator = SmallInstructionVector::iterator;
-      using const_iterator = SmallInstructionVector::const_iterator;
+      typedef SmallInstructionVector::iterator iterator;
+      typedef SmallInstructionVector::const_iterator const_iterator;
 
       iterator begin() {
         assert(Valid && "Using invalid reduction");
@@ -250,7 +221,7 @@ namespace {
       const_iterator end() const { return Instructions.end(); }
 
     protected:
-      bool Valid = false;
+      bool Valid;
       SmallInstructionVector Instructions;
 
       void add(Loop *L);
@@ -259,7 +230,7 @@ namespace {
     // The set of all reductions, and state tracking of possible reductions
     // during loop instruction processing.
     struct ReductionTracker {
-      using SmallReductionVector = SmallVector<SimpleLoopReduction, 16>;
+      typedef SmallVector<SimpleLoopReduction, 16> SmallReductionVector;
 
       // Add a new possible reduction.
       void addSLR(SimpleLoopReduction &SLR) { PossibleReds.push_back(SLR); }
@@ -371,7 +342,6 @@ namespace {
     struct DAGRootSet {
       Instruction *BaseInst;
       SmallInstructionVector Roots;
-
       // The instructions between IV and BaseInst (but not including BaseInst).
       SmallInstructionSet SubsumedInsts;
     };
@@ -391,17 +361,15 @@ namespace {
 
       /// Stage 1: Find all the DAG roots for the induction variable.
       bool findRoots();
-
       /// Stage 2: Validate if the found roots are valid.
       bool validate(ReductionTracker &Reductions);
-
       /// Stage 3: Assuming validate() returned true, perform the
       /// replacement.
       /// @param IterCount The maximum iteration count of L.
       void replace(const SCEV *IterCount);
 
     protected:
-      using UsesTy = MapVector<Instruction *, BitVector>;
+      typedef MapVector<Instruction*, BitVector> UsesTy;
 
       void findRootsRecursive(Instruction *IVU,
                               SmallInstructionSet SubsumedInsts);
@@ -444,29 +412,22 @@ namespace {
 
       // The loop induction variable.
       Instruction *IV;
-
       // Loop step amount.
       int64_t Inc;
-
       // Loop reroll count; if Inc == 1, this records the scaling applied
       // to the indvar: a[i*2+0] = ...; a[i*2+1] = ... ;
       // If Inc is not 1, Scale = Inc.
       uint64_t Scale;
-
       // The roots themselves.
       SmallVector<DAGRootSet,16> RootSets;
-
       // All increment instructions for IV.
       SmallInstructionVector LoopIncs;
-
       // Map of all instructions in the loop (in order) to the iterations
       // they are used in (or specially, IL_All for instructions
       // used in the loop increment mechanism).
       UsesTy Uses;
-
       // Map between induction variable and its increment
       DenseMap<Instruction *, int64_t> &IVToIncMap;
-
       Instruction *LoopControlIV;
     };
 
@@ -485,11 +446,9 @@ namespace {
     bool reroll(Instruction *IV, Loop *L, BasicBlock *Header, const SCEV *IterCount,
                 ReductionTracker &Reductions);
   };
-
-} // end anonymous namespace
+}
 
 char LoopReroll::ID = 0;
-
 INITIALIZE_PASS_BEGIN(LoopReroll, "loop-reroll", "Reroll loops", false, false)
 INITIALIZE_PASS_DEPENDENCY(LoopPass)
 INITIALIZE_PASS_DEPENDENCY(TargetLibraryInfoWrapperPass)
@@ -1110,6 +1069,7 @@ bool LoopReroll::DAGRootTracker::collectUsedInstructions(SmallInstructionSet &Po
   }
 
   return true;
+
 }
 
 /// Get the next instruction in "In" that is a member of set Val.
@@ -1164,7 +1124,7 @@ static bool isIgnorableInst(const Instruction *I) {
   switch (II->getIntrinsicID()) {
     default:
       return false;
-    case Intrinsic::annotation:
+    case llvm::Intrinsic::annotation:
     case Intrinsic::ptr_annotation:
     case Intrinsic::var_annotation:
     // TODO: the following intrinsics may also be whitelisted:
@@ -1447,8 +1407,8 @@ bool LoopReroll::DAGRootTracker::validate(ReductionTracker &Reductions) {
       BaseIt = nextInstr(0, Uses, Visited);
       RootIt = nextInstr(Iter, Uses, Visited);
     }
-    assert(BaseIt == Uses.end() && RootIt == Uses.end() &&
-           "Mismatched set sizes!");
+    assert (BaseIt == Uses.end() && RootIt == Uses.end() &&
+            "Mismatched set sizes!");
   }
 
   DEBUG(dbgs() << "LRR: Matched all iteration increments for " <<

@@ -17,13 +17,13 @@ Lfunc_begin0:
 	.cv_file	1 "\\usr\\local\\google\\home\\majnemer\\llvm\\src\\<stdin>"
 	.cv_func_id 0
 	.cv_loc	0 1 3 0 is_stmt 0       # <stdin>:3:0
-# %bb.0:                                # %entry
+# BB#0:                                 # %entry
 	pushl	%ebp
 	movl	%esp, %ebp
 	subl	$8, %esp
 	leal	-4(%ebp), %eax
 Lvar_begin0:
-	#DEBUG_VALUE: g:x <- %eax
+	#DEBUG_VALUE: g:x <- %EAX
 	.cv_loc	0 1 4 7                 # <stdin>:4:7
 	movl	$0, -4(%ebp)
 	.cv_loc	0 1 5 3                 # <stdin>:5:3

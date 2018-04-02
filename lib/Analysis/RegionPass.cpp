@@ -14,6 +14,7 @@
 //
 //===----------------------------------------------------------------------===//
 #include "llvm/Analysis/RegionPass.h"
+#include "llvm/Analysis/RegionIterator.h"
 #include "llvm/IR/OptBisect.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Timer.h"

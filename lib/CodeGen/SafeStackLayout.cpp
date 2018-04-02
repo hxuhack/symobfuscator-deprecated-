@@ -1,4 +1,4 @@
-//===- SafeStackLayout.cpp - SafeStack frame layout -----------------------===//
+//===-- SafeStackLayout.cpp - SafeStack frame layout -----------*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,15 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "SafeStackLayout.h"
-#include "SafeStackColoring.h"
-#include "llvm/IR/Value.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Compiler.h"
+
+#include "llvm/IR/Instructions.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/MathExtras.h"
-#include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-#include <cassert>
 
 using namespace llvm;
 using namespace llvm::safestack;

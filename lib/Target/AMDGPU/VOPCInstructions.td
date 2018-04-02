@@ -607,7 +607,9 @@ defm V_CMPX_CLASS_F16 : VOPCX_CLASS_F16 <"v_cmpx_class_f16">;
 // V_ICMPIntrinsic Pattern.
 //===----------------------------------------------------------------------===//
 
-class ICMP_Pattern <PatLeaf cond, Instruction inst, ValueType vt> : GCNPat <
+let Predicates = [isGCN] in {
+
+class ICMP_Pattern <PatLeaf cond, Instruction inst, ValueType vt> : Pat <
   (AMDGPUsetcc vt:$src0, vt:$src1, cond),
   (inst $src0, $src1)
 >;
@@ -634,7 +636,7 @@ def : ICMP_Pattern <COND_SGE, V_CMP_GE_I64_e64, i64>;
 def : ICMP_Pattern <COND_SLT, V_CMP_LT_I64_e64, i64>;
 def : ICMP_Pattern <COND_SLE, V_CMP_LE_I64_e64, i64>;
 
-class FCMP_Pattern <PatLeaf cond, Instruction inst, ValueType vt> : GCNPat <
+class FCMP_Pattern <PatLeaf cond, Instruction inst, ValueType vt> : Pat <
   (i64 (AMDGPUsetcc (vt (VOP3Mods vt:$src0, i32:$src0_modifiers)),
                    (vt (VOP3Mods vt:$src1, i32:$src1_modifiers)), cond)),
   (inst $src0_modifiers, $src0, $src1_modifiers, $src1,
@@ -668,6 +670,8 @@ def : FCMP_Pattern <COND_UGT, V_CMP_NLE_F64_e64, f64>;
 def : FCMP_Pattern <COND_UGE, V_CMP_NLT_F64_e64, f64>;
 def : FCMP_Pattern <COND_ULT, V_CMP_NGE_F64_e64, f64>;
 def : FCMP_Pattern <COND_ULE, V_CMP_NGT_F64_e64, f64>;
+
+} // End Predicates = [isGCN]
 
 //===----------------------------------------------------------------------===//
 // Target

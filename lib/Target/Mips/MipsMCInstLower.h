@@ -1,4 +1,4 @@
-//===- MipsMCInstLower.h - Lower MachineInstr to MCInst --------*- C++ -*--===//
+//===-- MipsMCInstLower.h - Lower MachineInstr to MCInst -------*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -9,31 +9,26 @@
 
 #ifndef LLVM_LIB_TARGET_MIPS_MIPSMCINSTLOWER_H
 #define LLVM_LIB_TARGET_MIPS_MIPSMCINSTLOWER_H
-
 #include "MCTargetDesc/MipsMCExpr.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/Support/Compiler.h"
 
 namespace llvm {
-
-class MachineBasicBlock;
-class MachineInstr;
-class MCContext;
-class MCInst;
-class MCOperand;
-class MipsAsmPrinter;
+  class MCContext;
+  class MCInst;
+  class MCOperand;
+  class MachineInstr;
+  class MachineFunction;
+  class MipsAsmPrinter;
 
 /// MipsMCInstLower - This class is used to lower an MachineInstr into an
-///                   MCInst.
+//                    MCInst.
 class LLVM_LIBRARY_VISIBILITY MipsMCInstLower {
-  using MachineOperandType = MachineOperand::MachineOperandType;
-
+  typedef MachineOperand::MachineOperandType MachineOperandType;
   MCContext *Ctx;
   MipsAsmPrinter &AsmPrinter;
-
 public:
   MipsMCInstLower(MipsAsmPrinter &asmprinter);
-
   void Initialize(MCContext *C);
   void Lower(const MachineInstr *MI, MCInst &OutMI) const;
   MCOperand LowerOperand(const MachineOperand& MO, unsigned offset = 0) const;
@@ -48,7 +43,6 @@ private:
                             MipsMCExpr::MipsExprKind Kind) const;
   bool lowerLongBranch(const MachineInstr *MI, MCInst &OutMI) const;
 };
+}
 
-} // end namespace llvm
-
-#endif // LLVM_LIB_TARGET_MIPS_MIPSMCINSTLOWER_H
+#endif

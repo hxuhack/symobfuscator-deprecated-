@@ -34,16 +34,13 @@ LLVM_YAML_STRONG_TYPEDEF(int32_t, SignatureForm)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, ExportKind)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, Opcode)
 LLVM_YAML_STRONG_TYPEDEF(uint32_t, RelocType)
-LLVM_YAML_STRONG_TYPEDEF(uint32_t, SymbolFlags)
-LLVM_YAML_STRONG_TYPEDEF(uint32_t, SegmentFlags)
-LLVM_YAML_STRONG_TYPEDEF(uint32_t, LimitFlags)
 
 struct FileHeader {
   yaml::Hex32 Version;
 };
 
 struct Limits {
-  LimitFlags Flags;
+  yaml::Hex32 Flags;
   yaml::Hex32 Initial;
   yaml::Hex32 Maximum;
 };
@@ -112,13 +109,6 @@ struct NameEntry {
   StringRef Name;
 };
 
-struct SegmentInfo {
-  uint32_t Index;
-  StringRef Name;
-  uint32_t Alignment;
-  SegmentFlags Flags;
-};
-
 struct Signature {
   uint32_t Index;
   SignatureForm Form = wasm::WASM_TYPE_FUNC;
@@ -128,12 +118,7 @@ struct Signature {
 
 struct SymbolInfo {
   StringRef Name;
-  SymbolFlags Flags;
-};
-
-struct InitFunction {
-  uint32_t Priority;
-  uint32_t FunctionIndex;
+  uint32_t Flags;
 };
 
 struct Section {
@@ -175,10 +160,9 @@ struct LinkingSection : CustomSection {
     return C && C->Name == "linking";
   }
 
-  uint32_t DataSize;
   std::vector<SymbolInfo> SymbolInfos;
-  std::vector<SegmentInfo> SegmentInfos;
-  std::vector<InitFunction> InitFunctions;
+  uint32_t DataSize;
+  uint32_t DataAlignment;
 };
 
 struct TypeSection : Section {
@@ -313,9 +297,7 @@ LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::Function)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::LocalDecl)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::Relocation)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::NameEntry)
-LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::SegmentInfo)
 LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::SymbolInfo)
-LLVM_YAML_IS_SEQUENCE_VECTOR(llvm::WasmYAML::InitFunction)
 
 namespace llvm {
 namespace yaml {
@@ -342,18 +324,6 @@ template <> struct MappingTraits<WasmYAML::Export> {
 
 template <> struct MappingTraits<WasmYAML::Global> {
   static void mapping(IO &IO, WasmYAML::Global &Global);
-};
-
-template <> struct ScalarBitSetTraits<WasmYAML::LimitFlags> {
-  static void bitset(IO &IO, WasmYAML::LimitFlags &Value);
-};
-
-template <> struct ScalarBitSetTraits<WasmYAML::SymbolFlags> {
-  static void bitset(IO &IO, WasmYAML::SymbolFlags &Value);
-};
-
-template <> struct ScalarBitSetTraits<WasmYAML::SegmentFlags> {
-  static void bitset(IO &IO, WasmYAML::SegmentFlags &Value);
 };
 
 template <> struct ScalarEnumerationTraits<WasmYAML::SectionType> {
@@ -384,10 +354,6 @@ template <> struct MappingTraits<WasmYAML::NameEntry> {
   static void mapping(IO &IO, WasmYAML::NameEntry &NameEntry);
 };
 
-template <> struct MappingTraits<WasmYAML::SegmentInfo> {
-  static void mapping(IO &IO, WasmYAML::SegmentInfo &SegmentInfo);
-};
-
 template <> struct MappingTraits<WasmYAML::LocalDecl> {
   static void mapping(IO &IO, WasmYAML::LocalDecl &LocalDecl);
 };
@@ -406,10 +372,6 @@ template <> struct MappingTraits<WasmYAML::ElemSegment> {
 
 template <> struct MappingTraits<WasmYAML::SymbolInfo> {
   static void mapping(IO &IO, WasmYAML::SymbolInfo &Info);
-};
-
-template <> struct MappingTraits<WasmYAML::InitFunction> {
-  static void mapping(IO &IO, WasmYAML::InitFunction &Init);
 };
 
 template <> struct ScalarEnumerationTraits<WasmYAML::ValueType> {

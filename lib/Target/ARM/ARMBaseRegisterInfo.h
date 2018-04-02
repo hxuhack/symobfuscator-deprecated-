@@ -17,17 +17,15 @@
 #include "MCTargetDesc/ARMBaseInfo.h"
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineInstr.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/MC/MCRegisterInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 #include <cstdint>
 
 #define GET_REGINFO_HEADER
 #include "ARMGenRegisterInfo.inc"
 
 namespace llvm {
-
-class LiveIntervals;
 
 /// Register allocation hints.
 namespace ARMRI {
@@ -145,7 +143,7 @@ public:
   unsigned getRegPressureLimit(const TargetRegisterClass *RC,
                                MachineFunction &MF) const override;
 
-  bool getRegAllocationHints(unsigned VirtReg,
+  void getRegAllocationHints(unsigned VirtReg,
                              ArrayRef<MCPhysReg> Order,
                              SmallVectorImpl<MCPhysReg> &Hints,
                              const MachineFunction &MF,
@@ -206,8 +204,7 @@ public:
                       unsigned SubReg,
                       const TargetRegisterClass *DstRC,
                       unsigned DstSubReg,
-                      const TargetRegisterClass *NewRC,
-                      LiveIntervals &LIS) const override;
+                      const TargetRegisterClass *NewRC) const override;
 };
 
 } // end namespace llvm

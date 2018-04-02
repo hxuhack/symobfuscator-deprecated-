@@ -86,10 +86,6 @@ public:
     return CompileLayer.findSymbol(MangledNameStream.str(), true);
   }
 
-  JITTargetAddress getSymbolAddress(const std::string Name) {
-    return cantFail(findSymbol(Name).getAddress());
-  }
-
   void removeModule(ModuleHandle H) {
     cantFail(CompileLayer.removeModule(H));
   }

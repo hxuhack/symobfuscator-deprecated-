@@ -15,13 +15,3 @@ namespace N2 {
 namespace N3 {
   extern float z;
 }
-
-namespace AliasWithSameName = N3;
-
-namespace TestUnresolvedTypenameAndValueDecls {
-template <class T> class Base {
-public:
-  typedef T foo;
-  void bar();
-};
-}

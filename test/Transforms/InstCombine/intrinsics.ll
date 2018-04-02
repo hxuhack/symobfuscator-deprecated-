@@ -262,14 +262,17 @@ define void @powi(double %V, double *%P) {
   %A = tail call double @llvm.powi.f64(double %V, i32 -1) nounwind
   store volatile double %A, double* %P
 
-  %D = tail call double @llvm.powi.f64(double %V, i32 2) nounwind
-  store volatile double %D, double* %P
+  %B = tail call double @llvm.powi.f64(double %V, i32 0) nounwind
+  store volatile double %B, double* %P
+
+  %C = tail call double @llvm.powi.f64(double %V, i32 1) nounwind
+  store volatile double %C, double* %P
   ret void
 ; CHECK-LABEL: @powi(
 ; CHECK: %A = fdiv double 1.0{{.*}}, %V
 ; CHECK: store volatile double %A,
-; CHECK: %D = fmul double %V, %V
-; CHECK: store volatile double %D
+; CHECK: store volatile double 1.0
+; CHECK: store volatile double %V
 }
 
 define i32 @cttz(i32 %a) {
@@ -325,7 +328,7 @@ define <2 x i1> @cttz_knownbits_vec(<2 x i32> %arg) {
 define i1 @cttz_knownbits2(i32 %arg) {
 ; CHECK-LABEL: @cttz_knownbits2(
 ; CHECK-NEXT:    [[OR:%.*]] = or i32 [[ARG:%.*]], 4
-; CHECK-NEXT:    [[CNT:%.*]] = call i32 @llvm.cttz.i32(i32 [[OR]], i1 true) #2, !range ![[$CTTZ_RANGE:[0-9]+]]
+; CHECK-NEXT:    [[CNT:%.*]] = call i32 @llvm.cttz.i32(i32 [[OR]], i1 true) #2, !range ![[CTTZ_RANGE:[0-9]+]]
 ; CHECK-NEXT:    [[RES:%.*]] = icmp eq i32 [[CNT]], 2
 ; CHECK-NEXT:    ret i1 [[RES]]
 ;
@@ -425,7 +428,7 @@ define <2 x i1> @ctlz_knownbits_vec(<2 x i8> %arg) {
 define i1 @ctlz_knownbits2(i8 %arg) {
 ; CHECK-LABEL: @ctlz_knownbits2(
 ; CHECK-NEXT:    [[OR:%.*]] = or i8 [[ARG:%.*]], 32
-; CHECK-NEXT:    [[CNT:%.*]] = call i8 @llvm.ctlz.i8(i8 [[OR]], i1 true) #2, !range ![[$CTLZ_RANGE:[0-9]+]]
+; CHECK-NEXT:    [[CNT:%.*]] = call i8 @llvm.ctlz.i8(i8 [[OR]], i1 true) #2, !range ![[CTLZ_RANGE:[0-9]+]]
 ; CHECK-NEXT:    [[RES:%.*]] = icmp eq i8 [[CNT]], 2
 ; CHECK-NEXT:    ret i1 [[RES]]
 ;
@@ -742,5 +745,5 @@ define void @nearbyint(double *%P) {
   ret void
 }
 
-; CHECK: [[$CTTZ_RANGE]] = !{i32 0, i32 3}
-; CHECK: [[$CTLZ_RANGE]] = !{i8 0, i8 3}
+; CHECK: [[CTTZ_RANGE]] = !{i32 0, i32 3}
+; CHECK: [[CTLZ_RANGE]] = !{i8 0, i8 3}

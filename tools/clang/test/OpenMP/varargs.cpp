@@ -1,7 +1,4 @@
 // RUN: %clang_cc1 -verify -fopenmp %s
-
-// RUN: %clang_cc1 -verify -fopenmp-simd %s
-// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
 void f(int a, ...) {
 #pragma omp parallel for
   for (int i = 0; i < 100; ++i) {

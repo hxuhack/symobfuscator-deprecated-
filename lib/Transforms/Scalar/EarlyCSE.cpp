@@ -13,12 +13,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/EarlyCSE.h"
-#include "llvm/ADT/DenseMapInfo.h"
 #include "llvm/ADT/Hashing.h"
-#include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/ScopedHashTable.h"
 #include "llvm/ADT/SetVector.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/GlobalsModRef.h"
@@ -27,37 +24,18 @@
 #include "llvm/Analysis/MemorySSAUpdater.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/PassManager.h"
 #include "llvm/IR/PatternMatch.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Use.h"
-#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Allocator.h"
-#include "llvm/Support/AtomicOrdering.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/RecyclingAllocator.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/Local.h"
-#include <cassert>
 #include <deque>
-#include <memory>
-#include <utility>
-
 using namespace llvm;
 using namespace llvm::PatternMatch;
 
@@ -75,7 +53,6 @@ STATISTIC(NumDSE,      "Number of trivial dead stores removed");
 //===----------------------------------------------------------------------===//
 
 namespace {
-
 /// \brief Struct representing the available values in the scoped hash table.
 struct SimpleValue {
   Instruction *Inst;
@@ -100,25 +77,20 @@ struct SimpleValue {
            isa<ExtractValueInst>(Inst) || isa<InsertValueInst>(Inst);
   }
 };
-
-} // end anonymous namespace
+}
 
 namespace llvm {
-
 template <> struct DenseMapInfo<SimpleValue> {
   static inline SimpleValue getEmptyKey() {
     return DenseMapInfo<Instruction *>::getEmptyKey();
   }
-
   static inline SimpleValue getTombstoneKey() {
     return DenseMapInfo<Instruction *>::getTombstoneKey();
   }
-
   static unsigned getHashValue(SimpleValue Val);
   static bool isEqual(SimpleValue LHS, SimpleValue RHS);
 };
-
-} // end namespace llvm
+}
 
 unsigned DenseMapInfo<SimpleValue>::getHashValue(SimpleValue Val) {
   Instruction *Inst = Val.Inst;
@@ -141,21 +113,6 @@ unsigned DenseMapInfo<SimpleValue>::getHashValue(SimpleValue Val) {
       Pred = CI->getSwappedPredicate();
     }
     return hash_combine(Inst->getOpcode(), Pred, LHS, RHS);
-  }
-
-  // Hash min/max/abs (cmp + select) to allow for commuted operands.
-  // Min/max may also have non-canonical compare predicate (eg, the compare for
-  // smin may use 'sgt' rather than 'slt'), and non-canonical operands in the
-  // compare.
-  Value *A, *B;
-  SelectPatternFlavor SPF = matchSelectPattern(Inst, A, B).Flavor;
-  // TODO: We should also detect FP min/max.
-  if (SPF == SPF_SMIN || SPF == SPF_SMAX ||
-      SPF == SPF_UMIN || SPF == SPF_UMAX ||
-      SPF == SPF_ABS || SPF == SPF_NABS) {
-    if (A > B)
-      std::swap(A, B);
-    return hash_combine(Inst->getOpcode(), SPF, A, B);
   }
 
   if (CastInst *CI = dyn_cast<CastInst>(Inst))
@@ -216,20 +173,6 @@ bool DenseMapInfo<SimpleValue>::isEqual(SimpleValue LHS, SimpleValue RHS) {
            LHSCmp->getSwappedPredicate() == RHSCmp->getPredicate();
   }
 
-  // Min/max/abs can occur with commuted operands, non-canonical predicates,
-  // and/or non-canonical operands.
-  Value *LHSA, *LHSB;
-  SelectPatternFlavor LSPF = matchSelectPattern(LHSI, LHSA, LHSB).Flavor;
-  // TODO: We should also detect FP min/max.
-  if (LSPF == SPF_SMIN || LSPF == SPF_SMAX ||
-      LSPF == SPF_UMIN || LSPF == SPF_UMAX ||
-      LSPF == SPF_ABS || LSPF == SPF_NABS) {
-    Value *RHSA, *RHSB;
-    SelectPatternFlavor RSPF = matchSelectPattern(RHSI, RHSA, RHSB).Flavor;
-    return (LSPF == RSPF && ((LHSA == RHSA && LHSB == RHSB) ||
-                             (LHSA == RHSB && LHSB == RHSA)));
-  }
-
   return false;
 }
 
@@ -238,7 +181,6 @@ bool DenseMapInfo<SimpleValue>::isEqual(SimpleValue LHS, SimpleValue RHS) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-
 /// \brief Struct representing the available call values in the scoped hash
 /// table.
 struct CallValue {
@@ -264,25 +206,20 @@ struct CallValue {
     return true;
   }
 };
-
-} // end anonymous namespace
+}
 
 namespace llvm {
-
 template <> struct DenseMapInfo<CallValue> {
   static inline CallValue getEmptyKey() {
     return DenseMapInfo<Instruction *>::getEmptyKey();
   }
-
   static inline CallValue getTombstoneKey() {
     return DenseMapInfo<Instruction *>::getTombstoneKey();
   }
-
   static unsigned getHashValue(CallValue Val);
   static bool isEqual(CallValue LHS, CallValue RHS);
 };
-
-} // end namespace llvm
+}
 
 unsigned DenseMapInfo<CallValue>::getHashValue(CallValue Val) {
   Instruction *Inst = Val.Inst;
@@ -304,7 +241,6 @@ bool DenseMapInfo<CallValue>::isEqual(CallValue LHS, CallValue RHS) {
 //===----------------------------------------------------------------------===//
 
 namespace {
-
 /// \brief A simple and fast domtree-based CSE pass.
 ///
 /// This pass does a simple depth-first walk over the dominator tree,
@@ -321,13 +257,10 @@ public:
   const SimplifyQuery SQ;
   MemorySSA *MSSA;
   std::unique_ptr<MemorySSAUpdater> MSSAUpdater;
-
-  using AllocatorTy =
-      RecyclingAllocator<BumpPtrAllocator,
-                         ScopedHashTableVal<SimpleValue, Value *>>;
-  using ScopedHTType =
-      ScopedHashTable<SimpleValue, Value *, DenseMapInfo<SimpleValue>,
-                      AllocatorTy>;
+  typedef RecyclingAllocator<
+      BumpPtrAllocator, ScopedHashTableVal<SimpleValue, Value *>> AllocatorTy;
+  typedef ScopedHashTable<SimpleValue, Value *, DenseMapInfo<SimpleValue>,
+                          AllocatorTy> ScopedHTType;
 
   /// \brief A scoped hash table of the current values of all of our simple
   /// scalar expressions.
@@ -352,45 +285,44 @@ public:
   /// present the table; it is the responsibility of the consumer to inspect
   /// the atomicity/volatility if needed.
   struct LoadValue {
-    Instruction *DefInst = nullptr;
-    unsigned Generation = 0;
-    int MatchingId = -1;
-    bool IsAtomic = false;
-    bool IsInvariant = false;
-
-    LoadValue() = default;
+    Instruction *DefInst;
+    unsigned Generation;
+    int MatchingId;
+    bool IsAtomic;
+    bool IsInvariant;
+    LoadValue()
+        : DefInst(nullptr), Generation(0), MatchingId(-1), IsAtomic(false),
+          IsInvariant(false) {}
     LoadValue(Instruction *Inst, unsigned Generation, unsigned MatchingId,
               bool IsAtomic, bool IsInvariant)
         : DefInst(Inst), Generation(Generation), MatchingId(MatchingId),
           IsAtomic(IsAtomic), IsInvariant(IsInvariant) {}
   };
-
-  using LoadMapAllocator =
-      RecyclingAllocator<BumpPtrAllocator,
-                         ScopedHashTableVal<Value *, LoadValue>>;
-  using LoadHTType =
-      ScopedHashTable<Value *, LoadValue, DenseMapInfo<Value *>,
-                      LoadMapAllocator>;
-
+  typedef RecyclingAllocator<BumpPtrAllocator,
+                             ScopedHashTableVal<Value *, LoadValue>>
+      LoadMapAllocator;
+  typedef ScopedHashTable<Value *, LoadValue, DenseMapInfo<Value *>,
+                          LoadMapAllocator> LoadHTType;
   LoadHTType AvailableLoads;
 
   /// \brief A scoped hash table of the current values of read-only call
   /// values.
   ///
   /// It uses the same generation count as loads.
-  using CallHTType =
-      ScopedHashTable<CallValue, std::pair<Instruction *, unsigned>>;
+  typedef ScopedHashTable<CallValue, std::pair<Instruction *, unsigned>>
+      CallHTType;
   CallHTType AvailableCalls;
 
   /// \brief This is the current generation of the memory value.
-  unsigned CurrentGeneration = 0;
+  unsigned CurrentGeneration;
 
   /// \brief Set up the EarlyCSE runner for a particular function.
   EarlyCSE(const DataLayout &DL, const TargetLibraryInfo &TLI,
            const TargetTransformInfo &TTI, DominatorTree &DT,
            AssumptionCache &AC, MemorySSA *MSSA)
       : TLI(TLI), TTI(TTI), DT(DT), AC(AC), SQ(DL, &TLI, &DT, &AC), MSSA(MSSA),
-        MSSAUpdater(llvm::make_unique<MemorySSAUpdater>(MSSA)) {}
+        MSSAUpdater(make_unique<MemorySSAUpdater>(MSSA)), CurrentGeneration(0) {
+  }
 
   bool run();
 
@@ -404,10 +336,11 @@ private:
               CallHTType &AvailableCalls)
         : Scope(AvailableValues), LoadScope(AvailableLoads),
           CallScope(AvailableCalls) {}
-    NodeScope(const NodeScope &) = delete;
-    NodeScope &operator=(const NodeScope &) = delete;
 
   private:
+    NodeScope(const NodeScope &) = delete;
+    void operator=(const NodeScope &) = delete;
+
     ScopedHTType::ScopeTy Scope;
     LoadHTType::ScopeTy LoadScope;
     CallHTType::ScopeTy CallScope;
@@ -423,10 +356,8 @@ private:
               CallHTType &AvailableCalls, unsigned cg, DomTreeNode *n,
               DomTreeNode::iterator child, DomTreeNode::iterator end)
         : CurrentGeneration(cg), ChildGeneration(cg), Node(n), ChildIter(child),
-          EndIter(end), Scopes(AvailableValues, AvailableLoads, AvailableCalls)
-          {}
-    StackNode(const StackNode &) = delete;
-    StackNode &operator=(const StackNode &) = delete;
+          EndIter(end), Scopes(AvailableValues, AvailableLoads, AvailableCalls),
+          Processed(false) {}
 
     // Accessors.
     unsigned currentGeneration() { return CurrentGeneration; }
@@ -434,25 +365,27 @@ private:
     void childGeneration(unsigned generation) { ChildGeneration = generation; }
     DomTreeNode *node() { return Node; }
     DomTreeNode::iterator childIter() { return ChildIter; }
-
     DomTreeNode *nextChild() {
       DomTreeNode *child = *ChildIter;
       ++ChildIter;
       return child;
     }
-
     DomTreeNode::iterator end() { return EndIter; }
     bool isProcessed() { return Processed; }
     void process() { Processed = true; }
 
   private:
+    StackNode(const StackNode &) = delete;
+    void operator=(const StackNode &) = delete;
+
+    // Members.
     unsigned CurrentGeneration;
     unsigned ChildGeneration;
     DomTreeNode *Node;
     DomTreeNode::iterator ChildIter;
     DomTreeNode::iterator EndIter;
     NodeScope Scopes;
-    bool Processed = false;
+    bool Processed;
   };
 
   /// \brief Wrapper class to handle memory instructions, including loads,
@@ -460,28 +393,24 @@ private:
   class ParseMemoryInst {
   public:
     ParseMemoryInst(Instruction *Inst, const TargetTransformInfo &TTI)
-      : Inst(Inst) {
+      : IsTargetMemInst(false), Inst(Inst) {
       if (IntrinsicInst *II = dyn_cast<IntrinsicInst>(Inst))
         if (TTI.getTgtMemIntrinsic(II, Info))
           IsTargetMemInst = true;
     }
-
     bool isLoad() const {
       if (IsTargetMemInst) return Info.ReadMem;
       return isa<LoadInst>(Inst);
     }
-
     bool isStore() const {
       if (IsTargetMemInst) return Info.WriteMem;
       return isa<StoreInst>(Inst);
     }
-
     bool isAtomic() const {
       if (IsTargetMemInst)
         return Info.Ordering != AtomicOrdering::NotAtomic;
       return Inst->isAtomic();
     }
-
     bool isUnordered() const {
       if (IsTargetMemInst)
         return Info.isUnordered();
@@ -518,7 +447,6 @@ private:
       return (getPointerOperand() == Inst.getPointerOperand() &&
               getMatchingId() == Inst.getMatchingId());
     }
-
     bool isValid() const { return getPointerOperand() != nullptr; }
 
     // For regular (non-intrinsic) loads/stores, this is set to -1. For
@@ -529,7 +457,6 @@ private:
       if (IsTargetMemInst) return Info.MatchingId;
       return -1;
     }
-
     Value *getPointerOperand() const {
       if (IsTargetMemInst) return Info.PtrVal;
       if (LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
@@ -539,19 +466,17 @@ private:
       }
       return nullptr;
     }
-
     bool mayReadFromMemory() const {
       if (IsTargetMemInst) return Info.ReadMem;
       return Inst->mayReadFromMemory();
     }
-
     bool mayWriteToMemory() const {
       if (IsTargetMemInst) return Info.WriteMem;
       return Inst->mayWriteToMemory();
     }
 
   private:
-    bool IsTargetMemInst = false;
+    bool IsTargetMemInst;
     MemIntrinsicInfo Info;
     Instruction *Inst;
   };
@@ -599,8 +524,8 @@ private:
 
         for (MemoryPhi *MP : PhisToCheck) {
           MemoryAccess *FirstIn = MP->getIncomingValue(0);
-          if (llvm::all_of(MP->incoming_values(),
-                           [=](Use &In) { return In == FirstIn; }))
+          if (all_of(MP->incoming_values(),
+                     [=](Use &In) { return In == FirstIn; }))
             WorkQueue.push_back(MP);
         }
         PhisToCheck.clear();
@@ -608,8 +533,7 @@ private:
     }
   }
 };
-
-} // end anonymous namespace
+}
 
 /// Determine if the memory referenced by LaterInst is from the same heap
 /// version as EarlierInst.
@@ -736,12 +660,6 @@ bool EarlyCSE::processNode(DomTreeNode *Node) {
         AvailableValues.insert(CondI, ConstantInt::getTrue(BB->getContext()));
       } else
         DEBUG(dbgs() << "EarlyCSE skipping assumption: " << *Inst << '\n');
-      continue;
-    }
-
-    // Skip sideeffect intrinsics, for the same reason as assume intrinsics.
-    if (match(Inst, m_Intrinsic<Intrinsic::sideeffect>())) {
-      DEBUG(dbgs() << "EarlyCSE skipping sideeffect: " << *Inst << '\n');
       continue;
     }
 
@@ -1096,7 +1014,6 @@ PreservedAnalyses EarlyCSEPass::run(Function &F,
 }
 
 namespace {
-
 /// \brief A simple and fast domtree-based CSE pass.
 ///
 /// This pass does a simple depth-first walk over the dominator tree,
@@ -1145,8 +1062,7 @@ public:
     AU.setPreservesCFG();
   }
 };
-
-} // end anonymous namespace
+}
 
 using EarlyCSELegacyPass = EarlyCSELegacyCommonPass</*UseMemorySSA=*/false>;
 

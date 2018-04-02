@@ -13,6 +13,7 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include <algorithm>
 
 #include "X86.h"
 #include "X86InstrInfo.h"
@@ -20,11 +21,12 @@
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
+#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
 #include "llvm/IR/Function.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
 
 using namespace llvm;
 
@@ -96,10 +98,10 @@ FunctionPass *llvm::createX86PadShortFunctions() {
 /// runOnMachineFunction - Loop over all of the basic blocks, inserting
 /// NOOP instructions before early exits.
 bool PadShortFunc::runOnMachineFunction(MachineFunction &MF) {
-  if (skipFunction(MF.getFunction()))
+  if (skipFunction(*MF.getFunction()))
     return false;
 
-  if (MF.getFunction().optForSize()) {
+  if (MF.getFunction()->optForSize()) {
     return false;
   }
 

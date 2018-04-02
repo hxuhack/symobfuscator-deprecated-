@@ -123,7 +123,11 @@ static bool printSymbolizedStackTrace(StringRef Argv0,
     }
   }
 
-  Optional<StringRef> Redirects[] = {InputFile.str(), OutputFile.str(), llvm::None};
+  StringRef InputFileStr(InputFile);
+  StringRef OutputFileStr(OutputFile);
+  StringRef StderrFileStr;
+  const StringRef *Redirects[] = {&InputFileStr, &OutputFileStr,
+                                  &StderrFileStr};
   const char *Args[] = {"llvm-symbolizer", "--functions=linkage", "--inlining",
 #ifdef LLVM_ON_WIN32
                         // Pass --relative-address on Windows so that we don't

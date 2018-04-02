@@ -476,14 +476,6 @@ declare cc93 void @f.cc93()
 ; CHECK: declare amdgpu_hs void @f.cc93()
 declare amdgpu_hs void @f.amdgpu_hs()
 ; CHECK: declare amdgpu_hs void @f.amdgpu_hs()
-declare cc95 void @f.cc95()
-; CHECK: declare amdgpu_ls void @f.cc95()
-declare amdgpu_ls void @f.amdgpu_ls()
-; CHECK: declare amdgpu_ls void @f.amdgpu_ls()
-declare cc96 void @f.cc96()
-; CHECK: declare amdgpu_es void @f.cc96()
-declare amdgpu_es void @f.amdgpu_es()
-; CHECK: declare amdgpu_es void @f.amdgpu_es()
 declare cc1023 void @f.cc1023()
 ; CHECK: declare cc1023 void @f.cc1023()
 
@@ -616,7 +608,6 @@ declare void @f.inaccessiblememonly() inaccessiblememonly
 ; CHECK: declare void @f.inaccessiblememonly() #33
 declare void @f.inaccessiblemem_or_argmemonly() inaccessiblemem_or_argmemonly
 ; CHECK: declare void @f.inaccessiblemem_or_argmemonly() #34
-declare void @f.strictfp() #35
 
 ; Functions -- section
 declare void @f.section() section "80"
@@ -775,10 +766,6 @@ define void @fastmathflags(float %op1, float %op2) {
   ; CHECK: %f.arcp = fadd arcp float %op1, %op2
   %f.contract = fadd contract float %op1, %op2
   ; CHECK: %f.contract = fadd contract float %op1, %op2
-  %f.afn = fadd afn float %op1, %op2
-  ; CHECK: %f.afn = fadd afn float %op1, %op2
-  %f.reassoc = fadd reassoc float %op1, %op2
-  ; CHECK: %f.reassoc = fadd reassoc float %op1, %op2
   %f.fast = fadd fast float %op1, %op2
   ; CHECK: %f.fast = fadd fast float %op1, %op2
   ret void
@@ -1265,9 +1252,6 @@ exit:
   call void @f.nobuiltin() builtin
   ; CHECK: call void @f.nobuiltin() #42
 
-  call void @f.strictfp() strictfp
-  ; CHECK: call void @f.strictfp() #43
-
   call fastcc noalias i32* @f.noalias() noinline
   ; CHECK: call fastcc noalias i32* @f.noalias() #12
   tail call ghccc nonnull i32* @f.nonnull() minsize
@@ -1686,7 +1670,6 @@ define i8** @constexpr() {
 ; CHECK: attributes #40 = { writeonly }
 ; CHECK: attributes #41 = { speculatable }
 ; CHECK: attributes #42 = { builtin }
-; CHECK: attributes #43 = { strictfp }
 
 ;; Metadata
 

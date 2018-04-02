@@ -1,4 +1,4 @@
-//===- HexagonBlockRanges.cpp ---------------------------------------------===//
+//===--- HexagonBlockRanges.cpp -------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,6 +6,8 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+
+#define DEBUG_TYPE "hbr"
 
 #include "HexagonBlockRanges.h"
 #include "HexagonInstrInfo.h"
@@ -15,22 +17,17 @@
 #include "llvm/CodeGen/MachineBasicBlock.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
-#include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <iterator>
 #include <map>
-#include <utility>
 
 using namespace llvm;
-
-#define DEBUG_TYPE "hbr"
 
 bool HexagonBlockRanges::IndexRange::overlaps(const IndexRange &A) const {
   // If A contains start(), or "this" contains A.start(), then overlap.
@@ -368,7 +365,7 @@ void HexagonBlockRanges::computeInitialLiveRanges(InstrIndexMap &IndexMap,
       }
     }
     // Defs and clobbers can overlap, e.g.
-    // dead %d0 = COPY %5, implicit-def %r0, implicit-def %r1
+    // %D0<def,dead> = COPY %vreg5, %R0<imp-def>, %R1<imp-def>
     for (RegisterRef R : Defs)
       Clobbers.erase(R);
 
@@ -531,7 +528,7 @@ raw_ostream &llvm::operator<<(raw_ostream &OS,
                               const HexagonBlockRanges::PrintRangeMap &P) {
   for (auto &I : P.Map) {
     const HexagonBlockRanges::RangeList &RL = I.second;
-    OS << printReg(I.first.Reg, &P.TRI, I.first.Sub) << " -> " << RL << "\n";
+    OS << PrintReg(I.first.Reg, &P.TRI, I.first.Sub) << " -> " << RL << "\n";
   }
   return OS;
 }

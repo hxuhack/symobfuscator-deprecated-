@@ -11,7 +11,7 @@
 #define LLVM_LIB_TARGET_SYSTEMZ_SYSTEMZFRAMELOWERING_H
 
 #include "llvm/ADT/IndexedMap.h"
-#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/Target/TargetFrameLowering.h"
 
 namespace llvm {
 class SystemZTargetMachine;
@@ -35,7 +35,7 @@ public:
                                  const TargetRegisterInfo *TRI) const override;
   bool restoreCalleeSavedRegisters(MachineBasicBlock &MBB,
                                    MachineBasicBlock::iterator MBBII,
-                                   std::vector<CalleeSavedInfo> &CSI,
+                                   const std::vector<CalleeSavedInfo> &CSI,
                                    const TargetRegisterInfo *TRI) const
     override;
   void processFunctionBeforeFrameFinalized(MachineFunction &MF,

@@ -15,7 +15,8 @@
 #ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONREGISTERINFO_H
 #define LLVM_LIB_TARGET_HEXAGON_HEXAGONREGISTERINFO_H
 
-#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/MC/MachineLocation.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "HexagonGenRegisterInfo.inc"
@@ -29,7 +30,7 @@ namespace Hexagon {
 
 class HexagonRegisterInfo : public HexagonGenRegisterInfo {
 public:
-  HexagonRegisterInfo(unsigned HwMode);
+  HexagonRegisterInfo();
 
   /// Code Generation virtual methods...
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF)
@@ -67,7 +68,7 @@ public:
   unsigned getFrameRegister() const;
   unsigned getStackRegister() const;
 
-  unsigned getHexagonSubRegIndex(const TargetRegisterClass &RC,
+  unsigned getHexagonSubRegIndex(const TargetRegisterClass *RC,
         unsigned GenIdx) const;
 
   const MCPhysReg *getCallerSavedRegs(const MachineFunction *MF,

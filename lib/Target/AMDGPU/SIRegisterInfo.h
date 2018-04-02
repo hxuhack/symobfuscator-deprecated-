@@ -22,7 +22,6 @@
 
 namespace llvm {
 
-class LiveIntervals;
 class MachineRegisterInfo;
 class SISubtarget;
 class SIMachineFunctionInfo;
@@ -64,7 +63,6 @@ public:
   BitVector getReservedRegs(const MachineFunction &MF) const override;
 
   const MCPhysReg *getCalleeSavedRegs(const MachineFunction *MF) const override;
-  const MCPhysReg *getCalleeSavedRegsViaCopy(const MachineFunction *MF) const;
   const uint32_t *getCallPreservedMask(const MachineFunction &MF,
                                        CallingConv::ID) const override;
 
@@ -187,6 +185,31 @@ public:
            OpType <= AMDGPU::OPERAND_SRC_LAST;
   }
 
+  enum PreloadedValue {
+    // SGPRS:
+    PRIVATE_SEGMENT_BUFFER = 0,
+    DISPATCH_PTR        =  1,
+    QUEUE_PTR           =  2,
+    KERNARG_SEGMENT_PTR =  3,
+    DISPATCH_ID         =  4,
+    FLAT_SCRATCH_INIT   =  5,
+    WORKGROUP_ID_X      = 10,
+    WORKGROUP_ID_Y      = 11,
+    WORKGROUP_ID_Z      = 12,
+    PRIVATE_SEGMENT_WAVE_BYTE_OFFSET = 14,
+    IMPLICIT_BUFFER_PTR = 15,
+
+    // VGPRS:
+    FIRST_VGPR_VALUE    = 16,
+    WORKITEM_ID_X       = FIRST_VGPR_VALUE,
+    WORKITEM_ID_Y       = 17,
+    WORKITEM_ID_Z       = 18
+  };
+
+  /// \brief Returns the physical register that \p Value is stored in.
+  unsigned getPreloadedValue(const MachineFunction &MF,
+                             enum PreloadedValue Value) const;
+
   unsigned findUnusedRegister(const MachineRegisterInfo &MRI,
                               const TargetRegisterClass *RC,
                               const MachineFunction &MF) const;
@@ -213,8 +236,7 @@ public:
                       unsigned SubReg,
                       const TargetRegisterClass *DstRC,
                       unsigned DstSubReg,
-                      const TargetRegisterClass *NewRC,
-                      LiveIntervals &LIS) const override;
+                      const TargetRegisterClass *NewRC) const override;
 
   unsigned getRegPressureLimit(const TargetRegisterClass *RC,
                                MachineFunction &MF) const override;

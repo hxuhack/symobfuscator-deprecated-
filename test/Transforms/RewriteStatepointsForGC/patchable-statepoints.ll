@@ -1,5 +1,4 @@
 ; RUN: opt -S -rewrite-statepoints-for-gc < %s | FileCheck %s
-; RUN: opt -S -passes=rewrite-statepoints-for-gc < %s | FileCheck %s
 
 declare void @f()
 declare i32 @personality_function()

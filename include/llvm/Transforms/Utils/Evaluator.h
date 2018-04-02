@@ -1,4 +1,4 @@
-//===- Evaluator.h - LLVM IR evaluator --------------------------*- C++ -*-===//
+//===-- Evaluator.h - LLVM IR evaluator -------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -18,10 +18,9 @@
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/IR/BasicBlock.h"
+#include "llvm/IR/Constant.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/Value.h"
-#include "llvm/Support/Casting.h"
-#include <cassert>
+
 #include <deque>
 #include <memory>
 
@@ -115,6 +114,6 @@ private:
   const TargetLibraryInfo *TLI;
 };
 
-} // end namespace llvm
+}
 
-#endif // LLVM_TRANSFORMS_UTILS_EVALUATOR_H
+#endif

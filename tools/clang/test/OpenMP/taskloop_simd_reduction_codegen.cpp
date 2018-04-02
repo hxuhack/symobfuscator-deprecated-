@@ -1,7 +1,4 @@
-// RUN: %clang_cc1 -fopenmp -x c++ %s -verify -debug-info-kind=limited -emit-llvm -o - -triple powerpc64le-unknown-linux-gnu -std=c++98 | FileCheck %s
-
-// RUN: %clang_cc1 -fopenmp-simd -x c++ %s -verify -debug-info-kind=limited -emit-llvm -o - -triple powerpc64le-unknown-linux-gnu -std=c++98 | FileCheck --check-prefix SIMD-ONLY0 %s
-// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
+// RUN: %clang_cc1 -fopenmp -x c++ %s -verify -debug-info-kind=limited -emit-llvm -o - -triple powerpc64le-unknown-linux-gnu | FileCheck %s
 // expected-no-diagnostics
 
 struct S {
@@ -54,7 +51,6 @@ sum = 0.0;
 // CHECK:    [[AGG_CAPTURED:%.*]] = alloca [[STRUCT_ANON:%.*]],
 // CHECK:    [[TMP0:%.*]] = call i32 @__kmpc_global_thread_num(%ident_t*
 // CHECK:    [[DOTRD_INPUT_:%.*]] = alloca [4 x %struct.kmp_task_red_input_t],
-// CHECK:    alloca i32,
 // CHECK:    [[DOTCAPTURE_EXPR_:%.*]] = alloca i32,
 // CHECK:    [[DOTCAPTURE_EXPR_9:%.*]] = alloca i32,
 // CHECK:    store i32 0, i32* [[RETVAL]],

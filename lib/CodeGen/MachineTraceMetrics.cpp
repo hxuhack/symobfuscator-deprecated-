@@ -22,15 +22,15 @@
 #include "llvm/CodeGen/MachineLoopInfo.h"
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSchedule.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/MC/MCRegisterInfo.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <iterator>
@@ -42,7 +42,6 @@ using namespace llvm;
 #define DEBUG_TYPE "machine-trace-metrics"
 
 char MachineTraceMetrics::ID = 0;
-
 char &llvm::MachineTraceMetricsID = MachineTraceMetrics::ID;
 
 INITIALIZE_PASS_BEGIN(MachineTraceMetrics, DEBUG_TYPE,
@@ -396,8 +395,7 @@ MachineTraceMetrics::getEnsemble(MachineTraceMetrics::Strategy strategy) {
 }
 
 void MachineTraceMetrics::invalidate(const MachineBasicBlock *MBB) {
-  DEBUG(dbgs() << "Invalidate traces through " << printMBBReference(*MBB)
-               << '\n');
+  DEBUG(dbgs() << "Invalidate traces through BB#" << MBB->getNumber() << '\n');
   BlockInfo[MBB->getNumber()].invalidate();
   for (unsigned i = 0; i != TS_NumStrategies; ++i)
     if (Ensembles[i])
@@ -477,8 +475,8 @@ public:
 
 /// Compute the trace through MBB.
 void MachineTraceMetrics::Ensemble::computeTrace(const MachineBasicBlock *MBB) {
-  DEBUG(dbgs() << "Computing " << getName() << " trace through "
-               << printMBBReference(*MBB) << '\n');
+  DEBUG(dbgs() << "Computing " << getName() << " trace through BB#"
+               << MBB->getNumber() << '\n');
   // Set up loop bounds for the backwards post-order traversal.
   LoopBounds Bounds(BlockInfo, MTM.Loops);
 
@@ -486,13 +484,13 @@ void MachineTraceMetrics::Ensemble::computeTrace(const MachineBasicBlock *MBB) {
   Bounds.Downward = false;
   Bounds.Visited.clear();
   for (auto I : inverse_post_order_ext(MBB, Bounds)) {
-    DEBUG(dbgs() << "  pred for " << printMBBReference(*I) << ": ");
+    DEBUG(dbgs() << "  pred for BB#" << I->getNumber() << ": ");
     TraceBlockInfo &TBI = BlockInfo[I->getNumber()];
     // All the predecessors have been visited, pick the preferred one.
     TBI.Pred = pickTracePred(I);
     DEBUG({
       if (TBI.Pred)
-        dbgs() << printMBBReference(*TBI.Pred) << '\n';
+        dbgs() << "BB#" << TBI.Pred->getNumber() << '\n';
       else
         dbgs() << "null\n";
     });
@@ -504,13 +502,13 @@ void MachineTraceMetrics::Ensemble::computeTrace(const MachineBasicBlock *MBB) {
   Bounds.Downward = true;
   Bounds.Visited.clear();
   for (auto I : post_order_ext(MBB, Bounds)) {
-    DEBUG(dbgs() << "  succ for " << printMBBReference(*I) << ": ");
+    DEBUG(dbgs() << "  succ for BB#" << I->getNumber() << ": ");
     TraceBlockInfo &TBI = BlockInfo[I->getNumber()];
     // All the successors have been visited, pick the preferred one.
     TBI.Succ = pickTraceSucc(I);
     DEBUG({
       if (TBI.Succ)
-        dbgs() << printMBBReference(*TBI.Succ) << '\n';
+        dbgs() << "BB#" << TBI.Succ->getNumber() << '\n';
       else
         dbgs() << "null\n";
     });
@@ -531,8 +529,8 @@ MachineTraceMetrics::Ensemble::invalidate(const MachineBasicBlock *BadMBB) {
     WorkList.push_back(BadMBB);
     do {
       const MachineBasicBlock *MBB = WorkList.pop_back_val();
-      DEBUG(dbgs() << "Invalidate " << printMBBReference(*MBB) << ' '
-                   << getName() << " height.\n");
+      DEBUG(dbgs() << "Invalidate BB#" << MBB->getNumber() << ' ' << getName()
+            << " height.\n");
       // Find any MBB predecessors that have MBB as their preferred successor.
       // They are the only ones that need to be invalidated.
       for (const MachineBasicBlock *Pred : MBB->predecessors()) {
@@ -556,8 +554,8 @@ MachineTraceMetrics::Ensemble::invalidate(const MachineBasicBlock *BadMBB) {
     WorkList.push_back(BadMBB);
     do {
       const MachineBasicBlock *MBB = WorkList.pop_back_val();
-      DEBUG(dbgs() << "Invalidate " << printMBBReference(*MBB) << ' '
-                   << getName() << " depth.\n");
+      DEBUG(dbgs() << "Invalidate BB#" << MBB->getNumber() << ' ' << getName()
+            << " depth.\n");
       // Find any MBB successors that have MBB as their preferred predecessor.
       // They are the only ones that need to be invalidated.
       for (const MachineBasicBlock *Succ : MBB->successors()) {
@@ -696,6 +694,25 @@ static void getPHIDeps(const MachineInstr &UseMI,
   }
 }
 
+// Keep track of physreg data dependencies by recording each live register unit.
+// Associate each regunit with an instruction operand. Depending on the
+// direction instructions are scanned, it could be the operand that defined the
+// regunit, or the highest operand to read the regunit.
+namespace {
+
+struct LiveRegUnit {
+  unsigned RegUnit;
+  unsigned Cycle = 0;
+  const MachineInstr *MI = nullptr;
+  unsigned Op = 0;
+
+  unsigned getSparseSetIndex() const { return RegUnit; }
+
+  LiveRegUnit(unsigned RU) : RegUnit(RU) {}
+};
+
+} // end anonymous namespace
+
 // Identify physreg dependencies for UseMI, and update the live regunit
 // tracking set when scanning instructions downwards.
 static void updatePhysDepsDownwards(const MachineInstr *UseMI,
@@ -780,59 +797,6 @@ computeCrossBlockCriticalPath(const TraceBlockInfo &TBI) {
   return MaxLen;
 }
 
-void MachineTraceMetrics::Ensemble::
-updateDepth(MachineTraceMetrics::TraceBlockInfo &TBI, const MachineInstr &UseMI,
-            SparseSet<LiveRegUnit> &RegUnits) {
-  SmallVector<DataDep, 8> Deps;
-  // Collect all data dependencies.
-  if (UseMI.isPHI())
-    getPHIDeps(UseMI, Deps, TBI.Pred, MTM.MRI);
-  else if (getDataDeps(UseMI, Deps, MTM.MRI))
-    updatePhysDepsDownwards(&UseMI, Deps, RegUnits, MTM.TRI);
-
-  // Filter and process dependencies, computing the earliest issue cycle.
-  unsigned Cycle = 0;
-  for (const DataDep &Dep : Deps) {
-    const TraceBlockInfo&DepTBI =
-      BlockInfo[Dep.DefMI->getParent()->getNumber()];
-    // Ignore dependencies from outside the current trace.
-    if (!DepTBI.isUsefulDominator(TBI))
-      continue;
-    assert(DepTBI.HasValidInstrDepths && "Inconsistent dependency");
-    unsigned DepCycle = Cycles.lookup(Dep.DefMI).Depth;
-    // Add latency if DefMI is a real instruction. Transients get latency 0.
-    if (!Dep.DefMI->isTransient())
-      DepCycle += MTM.SchedModel
-        .computeOperandLatency(Dep.DefMI, Dep.DefOp, &UseMI, Dep.UseOp);
-    Cycle = std::max(Cycle, DepCycle);
-  }
-  // Remember the instruction depth.
-  InstrCycles &MICycles = Cycles[&UseMI];
-  MICycles.Depth = Cycle;
-
-  if (TBI.HasValidInstrHeights) {
-    // Update critical path length.
-    TBI.CriticalPath = std::max(TBI.CriticalPath, Cycle + MICycles.Height);
-    DEBUG(dbgs() << TBI.CriticalPath << '\t' << Cycle << '\t' << UseMI);
-  } else {
-    DEBUG(dbgs() << Cycle << '\t' << UseMI);
-  }
-}
-
-void MachineTraceMetrics::Ensemble::
-updateDepth(const MachineBasicBlock *MBB, const MachineInstr &UseMI,
-            SparseSet<LiveRegUnit> &RegUnits) {
-  updateDepth(BlockInfo[MBB->getNumber()], UseMI, RegUnits);
-}
-
-void MachineTraceMetrics::Ensemble::
-updateDepths(MachineBasicBlock::iterator Start,
-             MachineBasicBlock::iterator End,
-             SparseSet<LiveRegUnit> &RegUnits) {
-    for (; Start != End; Start++)
-      updateDepth(Start->getParent(), *Start, RegUnits);
-}
-
 /// Compute instruction depths for all instructions above or in MBB in its
 /// trace. This assumes that the trace through MBB has already been computed.
 void MachineTraceMetrics::Ensemble::
@@ -858,9 +822,10 @@ computeInstrDepths(const MachineBasicBlock *MBB) {
   RegUnits.setUniverse(MTM.TRI->getNumRegUnits());
 
   // Go through trace blocks in top-down order, stopping after the center block.
+  SmallVector<DataDep, 8> Deps;
   while (!Stack.empty()) {
     MBB = Stack.pop_back_val();
-    DEBUG(dbgs() << "\nDepths for " << printMBBReference(*MBB) << ":\n");
+    DEBUG(dbgs() << "\nDepths for BB#" << MBB->getNumber() << ":\n");
     TraceBlockInfo &TBI = BlockInfo[MBB->getNumber()];
     TBI.HasValidInstrDepths = true;
     TBI.CriticalPath = 0;
@@ -883,7 +848,40 @@ computeInstrDepths(const MachineBasicBlock *MBB) {
       TBI.CriticalPath = computeCrossBlockCriticalPath(TBI);
 
     for (const auto &UseMI : *MBB) {
-      updateDepth(TBI, UseMI, RegUnits);
+      // Collect all data dependencies.
+      Deps.clear();
+      if (UseMI.isPHI())
+        getPHIDeps(UseMI, Deps, TBI.Pred, MTM.MRI);
+      else if (getDataDeps(UseMI, Deps, MTM.MRI))
+        updatePhysDepsDownwards(&UseMI, Deps, RegUnits, MTM.TRI);
+
+      // Filter and process dependencies, computing the earliest issue cycle.
+      unsigned Cycle = 0;
+      for (const DataDep &Dep : Deps) {
+        const TraceBlockInfo&DepTBI =
+          BlockInfo[Dep.DefMI->getParent()->getNumber()];
+        // Ignore dependencies from outside the current trace.
+        if (!DepTBI.isUsefulDominator(TBI))
+          continue;
+        assert(DepTBI.HasValidInstrDepths && "Inconsistent dependency");
+        unsigned DepCycle = Cycles.lookup(Dep.DefMI).Depth;
+        // Add latency if DefMI is a real instruction. Transients get latency 0.
+        if (!Dep.DefMI->isTransient())
+          DepCycle += MTM.SchedModel
+            .computeOperandLatency(Dep.DefMI, Dep.DefOp, &UseMI, Dep.UseOp);
+        Cycle = std::max(Cycle, DepCycle);
+      }
+      // Remember the instruction depth.
+      InstrCycles &MICycles = Cycles[&UseMI];
+      MICycles.Depth = Cycle;
+
+      if (!TBI.HasValidInstrHeights) {
+        DEBUG(dbgs() << Cycle << '\t' << UseMI);
+        continue;
+      }
+      // Update critical path length.
+      TBI.CriticalPath = std::max(TBI.CriticalPath, Cycle + MICycles.Height);
+      DEBUG(dbgs() << TBI.CriticalPath << '\t' << Cycle << '\t' << UseMI);
     }
   }
 }
@@ -947,7 +945,7 @@ static unsigned updatePhysDepsUpwards(const MachineInstr &MI, unsigned Height,
   return Height;
 }
 
-using MIHeightMap = DenseMap<const MachineInstr *, unsigned>;
+typedef DenseMap<const MachineInstr *, unsigned> MIHeightMap;
 
 // Push the height of DefMI upwards if required to match UseMI.
 // Return true if this is the first time DefMI was seen.
@@ -1045,7 +1043,7 @@ computeInstrHeights(const MachineBasicBlock *MBB) {
   SmallVector<DataDep, 8> Deps;
   for (;!Stack.empty(); Stack.pop_back()) {
     MBB = Stack.back();
-    DEBUG(dbgs() << "Heights for " << printMBBReference(*MBB) << ":\n");
+    DEBUG(dbgs() << "Heights for BB#" << MBB->getNumber() << ":\n");
     TraceBlockInfo &TBI = BlockInfo[MBB->getNumber()];
     TBI.HasValidInstrHeights = true;
     TBI.CriticalPath = 0;
@@ -1132,18 +1130,18 @@ computeInstrHeights(const MachineBasicBlock *MBB) {
 
     // Update virtual live-in heights. They were added by addLiveIns() with a 0
     // height because the final height isn't known until now.
-    DEBUG(dbgs() << printMBBReference(*MBB) << " Live-ins:");
+    DEBUG(dbgs() << "BB#" << MBB->getNumber() <<  " Live-ins:");
     for (LiveInReg &LIR : TBI.LiveIns) {
       const MachineInstr *DefMI = MTM.MRI->getVRegDef(LIR.Reg);
       LIR.Height = Heights.lookup(DefMI);
-      DEBUG(dbgs() << ' ' << printReg(LIR.Reg) << '@' << LIR.Height);
+      DEBUG(dbgs() << ' ' << PrintReg(LIR.Reg) << '@' << LIR.Height);
     }
 
     // Transfer the live regunits to the live-in list.
     for (SparseSet<LiveRegUnit>::const_iterator
          RI = RegUnits.begin(), RE = RegUnits.end(); RI != RE; ++RI) {
       TBI.LiveIns.push_back(LiveInReg(RI->RegUnit, RI->Cycle));
-      DEBUG(dbgs() << ' ' << printRegUnit(RI->RegUnit, MTM.TRI)
+      DEBUG(dbgs() << ' ' << PrintRegUnit(RI->RegUnit, MTM.TRI)
                    << '@' << RI->Cycle);
     }
     DEBUG(dbgs() << '\n');
@@ -1290,7 +1288,7 @@ bool MachineTraceMetrics::Trace::isDepInTrace(const MachineInstr &DefMI,
 void MachineTraceMetrics::Ensemble::print(raw_ostream &OS) const {
   OS << getName() << " ensemble:\n";
   for (unsigned i = 0, e = BlockInfo.size(); i != e; ++i) {
-    OS << "  %bb." << i << '\t';
+    OS << "  BB#" << i << '\t';
     BlockInfo[i].print(OS);
     OS << '\n';
   }
@@ -1300,10 +1298,10 @@ void MachineTraceMetrics::TraceBlockInfo::print(raw_ostream &OS) const {
   if (hasValidDepth()) {
     OS << "depth=" << InstrDepth;
     if (Pred)
-      OS << " pred=" << printMBBReference(*Pred);
+      OS << " pred=BB#" << Pred->getNumber();
     else
       OS << " pred=null";
-    OS << " head=%bb." << Head;
+    OS << " head=BB#" << Head;
     if (HasValidInstrDepths)
       OS << " +instrs";
   } else
@@ -1312,10 +1310,10 @@ void MachineTraceMetrics::TraceBlockInfo::print(raw_ostream &OS) const {
   if (hasValidHeight()) {
     OS << "height=" << InstrHeight;
     if (Succ)
-      OS << " succ=" << printMBBReference(*Succ);
+      OS << " succ=BB#" << Succ->getNumber();
     else
       OS << " succ=null";
-    OS << " tail=%bb." << Tail;
+    OS << " tail=BB#" << Tail;
     if (HasValidInstrHeights)
       OS << " +instrs";
   } else
@@ -1327,18 +1325,18 @@ void MachineTraceMetrics::TraceBlockInfo::print(raw_ostream &OS) const {
 void MachineTraceMetrics::Trace::print(raw_ostream &OS) const {
   unsigned MBBNum = &TBI - &TE.BlockInfo[0];
 
-  OS << TE.getName() << " trace %bb." << TBI.Head << " --> %bb." << MBBNum
-     << " --> %bb." << TBI.Tail << ':';
+  OS << TE.getName() << " trace BB#" << TBI.Head << " --> BB#" << MBBNum
+     << " --> BB#" << TBI.Tail << ':';
   if (TBI.hasValidHeight() && TBI.hasValidDepth())
     OS << ' ' << getInstrCount() << " instrs.";
   if (TBI.HasValidInstrDepths && TBI.HasValidInstrHeights)
     OS << ' ' << TBI.CriticalPath << " cycles.";
 
   const MachineTraceMetrics::TraceBlockInfo *Block = &TBI;
-  OS << "\n%bb." << MBBNum;
+  OS << "\nBB#" << MBBNum;
   while (Block->hasValidDepth() && Block->Pred) {
     unsigned Num = Block->Pred->getNumber();
-    OS << " <- " << printMBBReference(*Block->Pred);
+    OS << " <- BB#" << Num;
     Block = &TE.BlockInfo[Num];
   }
 
@@ -1346,7 +1344,7 @@ void MachineTraceMetrics::Trace::print(raw_ostream &OS) const {
   OS << "\n    ";
   while (Block->hasValidHeight() && Block->Succ) {
     unsigned Num = Block->Succ->getNumber();
-    OS << " -> " << printMBBReference(*Block->Succ);
+    OS << " -> BB#" << Num;
     Block = &TE.BlockInfo[Num];
   }
   OS << '\n';

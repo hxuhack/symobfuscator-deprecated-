@@ -4,8 +4,9 @@
 declare void @f()
 define <4 x i1> @test_4i1(<4 x i32> %a, <4 x i32> %b) {
 ; CHECK-LABEL: test_4i1:
-; CHECK:       ## %bb.0:
+; CHECK:       ## BB#0:
 ; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  Lcfi0:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vpcmpnleud %xmm1, %xmm0, %k0
 ; CHECK-NEXT:    vpcmpgtd %xmm1, %xmm0, %k1
@@ -26,8 +27,9 @@ define <4 x i1> @test_4i1(<4 x i32> %a, <4 x i32> %b) {
 
 define <8 x i1> @test_8i1(<8 x i32> %a, <8 x i32> %b) {
 ; CHECK-LABEL: test_8i1:
-; CHECK:       ## %bb.0:
+; CHECK:       ## BB#0:
 ; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  Lcfi1:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vpcmpnleud %ymm1, %ymm0, %k0
 ; CHECK-NEXT:    vpcmpgtd %ymm1, %ymm0, %k1
@@ -49,8 +51,9 @@ define <8 x i1> @test_8i1(<8 x i32> %a, <8 x i32> %b) {
 
 define <16 x i1> @test_16i1(<16 x i32> %a, <16 x i32> %b) {
 ; CHECK-LABEL: test_16i1:
-; CHECK:       ## %bb.0:
+; CHECK:       ## BB#0:
 ; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  Lcfi2:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vpcmpnleud %zmm1, %zmm0, %k0
 ; CHECK-NEXT:    vpcmpgtd %zmm1, %zmm0, %k1
@@ -71,8 +74,9 @@ define <16 x i1> @test_16i1(<16 x i32> %a, <16 x i32> %b) {
 
 define <32 x i1> @test_32i1(<32 x i16> %a, <32 x i16> %b) {
 ; CHECK-LABEL: test_32i1:
-; CHECK:       ## %bb.0:
+; CHECK:       ## BB#0:
 ; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  Lcfi3:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vpcmpnleuw %zmm1, %zmm0, %k0
 ; CHECK-NEXT:    vpcmpgtw %zmm1, %zmm0, %k1
@@ -93,8 +97,9 @@ define <32 x i1> @test_32i1(<32 x i16> %a, <32 x i16> %b) {
 
 define <64 x i1> @test_64i1(<64 x i8> %a, <64 x i8> %b) {
 ; CHECK-LABEL: test_64i1:
-; CHECK:       ## %bb.0:
+; CHECK:       ## BB#0:
 ; CHECK-NEXT:    pushq %rax
+; CHECK-NEXT:  Lcfi4:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 16
 ; CHECK-NEXT:    vpcmpnleub %zmm1, %zmm0, %k0
 ; CHECK-NEXT:    vpcmpgtb %zmm1, %zmm0, %k1

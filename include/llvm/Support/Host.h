@@ -15,6 +15,7 @@
 #define LLVM_SUPPORT_HOST_H
 
 #include "llvm/ADT/StringMap.h"
+#include "llvm/Support/MemoryBuffer.h"
 
 #if defined(__linux__) || defined(__GNU__) || defined(__HAIKU__)
 #include <endian.h>
@@ -91,7 +92,6 @@ constexpr bool IsBigEndianHost = false;
   StringRef getHostCPUNameForPowerPC(const StringRef &ProcCpuinfoContent);
   StringRef getHostCPUNameForARM(const StringRef &ProcCpuinfoContent);
   StringRef getHostCPUNameForS390x(const StringRef &ProcCpuinfoContent);
-  StringRef getHostCPUNameForBPF();
   }
 }
 }

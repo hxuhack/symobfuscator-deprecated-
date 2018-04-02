@@ -206,26 +206,23 @@ extern int cc1_main(ArrayRef<const char *> Argv, const char *Argv0,
 extern int cc1as_main(ArrayRef<const char *> Argv, const char *Argv0,
                       void *MainAddr);
 
-static void insertTargetAndModeArgs(const ParsedClangName &NameParts,
+static void insertTargetAndModeArgs(StringRef Target, StringRef Mode,
                                     SmallVectorImpl<const char *> &ArgVector,
                                     std::set<std::string> &SavedStrings) {
-  // Put target and mode arguments at the start of argument list so that
-  // arguments specified in command line could override them. Avoid putting
-  // them at index 0, as an option like '-cc1' must remain the first.
-  auto InsertionPoint = ArgVector.begin();
-  if (InsertionPoint != ArgVector.end())
-    ++InsertionPoint;
-
-  if (NameParts.DriverMode) {
+  if (!Mode.empty()) {
     // Add the mode flag to the arguments.
-    ArgVector.insert(InsertionPoint,
-                     GetStableCStr(SavedStrings, NameParts.DriverMode));
+    auto it = ArgVector.begin();
+    if (it != ArgVector.end())
+      ++it;
+    ArgVector.insert(it, GetStableCStr(SavedStrings, Mode));
   }
 
-  if (NameParts.TargetIsValid) {
-    const char *arr[] = {"-target", GetStableCStr(SavedStrings,
-                                                  NameParts.TargetPrefix)};
-    ArgVector.insert(InsertionPoint, std::begin(arr), std::end(arr));
+  if (!Target.empty()) {
+    auto it = ArgVector.begin();
+    if (it != ArgVector.end())
+      ++it;
+    const char *arr[] = {"-target", GetStableCStr(SavedStrings, Target)};
+    ArgVector.insert(it, std::begin(arr), std::end(arr));
   }
 }
 
@@ -333,7 +330,9 @@ int main(int argc_, const char **argv_) {
   }
 
   llvm::InitializeAllTargets();
-  auto TargetAndMode = ToolChain::getTargetAndModeFromProgramName(argv[0]);
+  std::string ProgName = argv[0];
+  std::pair<std::string, std::string> TargetAndMode =
+      ToolChain::getTargetAndModeFromProgramName(ProgName);
 
   llvm::BumpPtrAllocator A;
   llvm::StringSaver Saver(A);
@@ -346,7 +345,7 @@ int main(int argc_, const char **argv_) {
   // Finally, our -cc1 tools don't care which tokenization mode we use because
   // response files written by clang will tokenize the same way in either mode.
   bool ClangCLMode = false;
-  if (StringRef(TargetAndMode.DriverMode).equals("--driver-mode=cl") ||
+  if (TargetAndMode.second == "--driver-mode=cl" ||
       std::find_if(argv.begin(), argv.end(), [](const char *F) {
         return F && strcmp(F, "--driver-mode=cl") == 0;
       }) != argv.end()) {
@@ -455,9 +454,9 @@ int main(int argc_, const char **argv_) {
 
   Driver TheDriver(Path, llvm::sys::getDefaultTargetTriple(), Diags);
   SetInstallDir(argv, TheDriver, CanonicalPrefixes);
-  TheDriver.setTargetAndMode(TargetAndMode);
 
-  insertTargetAndModeArgs(TargetAndMode, argv, SavedStrings);
+  insertTargetAndModeArgs(TargetAndMode.first, TargetAndMode.second, argv,
+                          SavedStrings);
 
   SetBackdoorDriverOutputsFromEnvVars(TheDriver);
 

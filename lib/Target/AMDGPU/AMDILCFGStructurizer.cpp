@@ -1,10 +1,11 @@
-//===- AMDILCFGStructurizer.cpp - CFG Structurizer ------------------------===//
+//===-- AMDILCFGStructurizer.cpp - CFG Structurizer -----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
 //
+/// \file
 //==-----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
@@ -66,7 +67,7 @@ STATISTIC(numClonedInstr,           "CFGStructurizer cloned instructions");
 
 namespace llvm {
 
-void initializeAMDGPUCFGStructurizerPass(PassRegistry &);
+  void initializeAMDGPUCFGStructurizerPass(PassRegistry&);
 
 } // end namespace llvm
 
@@ -120,9 +121,9 @@ public:
 
 class AMDGPUCFGStructurizer : public MachineFunctionPass {
 public:
-  using MBBVector = SmallVector<MachineBasicBlock *, 32>;
-  using MBBInfoMap = std::map<MachineBasicBlock *, BlockInformation *>;
-  using LoopLandInfoMap = std::map<MachineLoop *, MachineBasicBlock *>;
+  typedef SmallVector<MachineBasicBlock *, 32> MBBVector;
+  typedef std::map<MachineBasicBlock *, BlockInformation *> MBBInfoMap;
+  typedef std::map<MachineLoop *, MachineBasicBlock *> LoopLandInfoMap;
 
   enum PathToKind {
     Not_SinglePath = 0,
@@ -233,7 +234,6 @@ protected:
   void insertCondBranchBefore(MachineBasicBlock *MBB,
                               MachineBasicBlock::iterator I, int NewOpcode,
                               int RegNum, const DebugLoc &DL);
-
   static int getBranchNzeroOpcode(int OldOpcode);
   static int getBranchZeroOpcode(int OldOpcode);
   static int getContinueNzeroOpcode(int OldOpcode);
@@ -246,25 +246,21 @@ protected:
   static bool isUncondBranch(MachineInstr *MI);
   static DebugLoc getLastDebugLocInBB(MachineBasicBlock *MBB);
   static MachineInstr *getNormalBlockBranchInstr(MachineBasicBlock *MBB);
-
   /// The correct naming for this is getPossibleLoopendBlockBranchInstr.
   ///
   /// BB with backward-edge could have move instructions after the branch
   /// instruction.  Such move instruction "belong to" the loop backward-edge.
   MachineInstr *getLoopendBlockBranchInstr(MachineBasicBlock *MBB);
-
   static MachineInstr *getReturnInstr(MachineBasicBlock *MBB);
   static bool isReturnBlock(MachineBasicBlock *MBB);
   static void cloneSuccessorList(MachineBasicBlock *DstMBB,
-      MachineBasicBlock *SrcMBB);
+      MachineBasicBlock *SrcMBB) ;
   static MachineBasicBlock *clone(MachineBasicBlock *MBB);
-
   /// MachineBasicBlock::ReplaceUsesOfBlockWith doesn't serve the purpose
   /// because the AMDGPU instruction is not recognized as terminator fix this
   /// and retire this routine
   void replaceInstrUseOfBlockWith(MachineBasicBlock *SrcMBB,
       MachineBasicBlock *OldMBB, MachineBasicBlock *NewBlk);
-
   static void wrapup(MachineBasicBlock *MBB);
 
   int patternMatch(MachineBasicBlock *MBB);
@@ -303,7 +299,6 @@ protected:
       MachineBasicBlock *LandMBB);
   void settleLoopcontBlock(MachineBasicBlock *ContingMBB,
       MachineBasicBlock *ContMBB);
-
   /// normalizeInfiniteLoopExit change
   ///   B1:
   ///        uncond_br LoopHeader
@@ -314,7 +309,6 @@ protected:
   /// and return the newly added dummy exit block
   MachineBasicBlock *normalizeInfiniteLoopExit(MachineLoop *LoopRep);
   void removeUnconditionalBranch(MachineBasicBlock *MBB);
-
   /// Remove duplicate branches instructions in a block.
   /// For instance
   /// B0:
@@ -324,7 +318,6 @@ protected:
   /// B0:
   ///    cond_br X B1 B2
   void removeRedundantConditionalBranch(MachineBasicBlock *MBB);
-
   void addDummyExitBlock(SmallVectorImpl<MachineBasicBlock *> &RetMBB);
   void removeSuccessor(MachineBasicBlock *MBB);
   MachineBasicBlock *cloneBlockForPredecessor(MachineBasicBlock *MBB,
@@ -342,9 +335,9 @@ private:
   SmallVector<MachineBasicBlock *, DEFAULT_VEC_SLOTS> OrderedBlks;
 };
 
-} // end anonymous namespace
-
 char AMDGPUCFGStructurizer::ID = 0;
+
+} // end anonymous namespace
 
 int AMDGPUCFGStructurizer::getSCCNum(MachineBasicBlock *MBB) const {
   MBBInfoMap::const_iterator It = BlockInfoMap.find(MBB);
@@ -542,7 +535,7 @@ int AMDGPUCFGStructurizer::getContinueNzeroOpcode(int OldOpcode) {
   case AMDGPU::JUMP_COND:
   case AMDGPU::JUMP: return AMDGPU::CONTINUE_LOGICALNZ_i32;
   default: llvm_unreachable("internal error");
-  }
+  };
   return -1;
 }
 
@@ -1175,7 +1168,6 @@ int AMDGPUCFGStructurizer::handleJumpintoIfImp(MachineBasicBlock *HeadMBB,
   return Num;
 }
 
-#ifndef NDEBUG
 void AMDGPUCFGStructurizer::showImproveSimpleJumpintoIf(
     MachineBasicBlock *HeadMBB, MachineBasicBlock *TrueMBB,
     MachineBasicBlock *FalseMBB, MachineBasicBlock *LandMBB, bool Detail) {
@@ -1217,7 +1209,6 @@ void AMDGPUCFGStructurizer::showImproveSimpleJumpintoIf(
 
   dbgs() << "\n";
 }
-#endif
 
 int AMDGPUCFGStructurizer::improveSimpleJumpintoIf(MachineBasicBlock *HeadMBB,
     MachineBasicBlock *TrueMBB, MachineBasicBlock *FalseMBB,
@@ -1604,7 +1595,7 @@ void AMDGPUCFGStructurizer::migrateInstruction(MachineBasicBlock *SrcMBB,
   MachineInstr *BranchMI = getNormalBlockBranchInstr(SrcMBB);
   if (!BranchMI) {
     DEBUG(
-      dbgs() << "migrateInstruction don't see branch instr\n";
+      dbgs() << "migrateInstruction don't see branch instr\n" ;
     );
     SpliceEnd = SrcMBB->end();
   } else {
@@ -1641,7 +1632,7 @@ AMDGPUCFGStructurizer::normalizeInfiniteLoopExit(MachineLoop* LoopRep) {
   FuncRep->push_back(DummyExitBlk);  //insert to function
   SHOWNEWBLK(DummyExitBlk, "DummyExitBlock to normalize infiniteLoop: ");
   DEBUG(dbgs() << "Old branch instr: " << *BranchMI << "\n";);
-  LLVMContext &Ctx = LoopHeader->getParent()->getFunction().getContext();
+  LLVMContext &Ctx = LoopHeader->getParent()->getFunction()->getContext();
   Ctx.emitError("Extra register needed to handle CFG");
   return nullptr;
 }

@@ -23,8 +23,9 @@ class MCInst;
 
 class MCELFStreamer : public MCObjectStreamer {
 public:
-  MCELFStreamer(MCContext &Context, std::unique_ptr<MCAsmBackend> TAB,
-                raw_pwrite_stream &OS, std::unique_ptr<MCCodeEmitter> Emitter);
+  MCELFStreamer(MCContext &Context, MCAsmBackend &TAB, raw_pwrite_stream &OS,
+                MCCodeEmitter *Emitter)
+      : MCObjectStreamer(Context, TAB, OS, Emitter) {}
 
   ~MCELFStreamer() override = default;
 
@@ -89,11 +90,10 @@ private:
   SmallVector<MCDataFragment *, 4> BundleGroups;
 };
 
-MCELFStreamer *createARMELFStreamer(MCContext &Context,
-                                    std::unique_ptr<MCAsmBackend> TAB,
+MCELFStreamer *createARMELFStreamer(MCContext &Context, MCAsmBackend &TAB,
                                     raw_pwrite_stream &OS,
-                                    std::unique_ptr<MCCodeEmitter> Emitter,
-                                    bool RelaxAll, bool IsThumb);
+                                    MCCodeEmitter *Emitter, bool RelaxAll,
+                                    bool IsThumb);
 
 } // end namespace llvm
 

@@ -11,13 +11,11 @@
 ; preservation of the extend/truncate operations mentioned above (2 extend and
 ; 3 truncate instructions).
 ;
-; NOTE: This operation could be collapsed in to a single truncate. Once that is done
-; this test will have to be adjusted.
+; NOTE: This operation is collapsed to a single truncate, so this test no longer covers
+; what it originally intended to.
 
-; CHECK:      PUNPCKLBWrr
-; CHECK:      PUNPCKLWDrr
-; CHECK:      PANDrm
-; CHECK:      PACKUSWBrr
+; CHECK:      MOVLHPSrr
+; CHECK:      PSHUFHWri
 ; CHECK:      PACKUSWBrr
 ; CHECK:      PACKUSWBrr
 ; CHECK:      MOVPDI2DIrr

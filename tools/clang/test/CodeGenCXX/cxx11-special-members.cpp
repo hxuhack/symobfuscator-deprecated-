@@ -39,9 +39,7 @@ void f3() {
   C<0> a;
   D b;
 }
-// Trivial default ctor, might or might not be defined, but we must not expect
-// someone else ot define it.
-// CHECK-NOT: declare {{.*}} @_ZN1CILi0EEC1Ev
+// CHECK: define {{.*}} @_ZN1CILi0EEC1Ev
 // CHECK: define {{.*}} @_ZN1DC1Ev
 
 // CHECK: define {{.*}} @_ZN1BC2EOS_(

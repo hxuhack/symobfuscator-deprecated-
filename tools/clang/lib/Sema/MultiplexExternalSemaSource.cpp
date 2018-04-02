@@ -19,6 +19,8 @@ using namespace clang;
 ///\brief Constructs a new multiplexing external sema source and appends the
 /// given element to it.
 ///
+///\param[in] source - An ExternalSemaSource.
+///
 MultiplexExternalSemaSource::MultiplexExternalSemaSource(ExternalSemaSource &s1,
                                                         ExternalSemaSource &s2){
   Sources.push_back(&s1);

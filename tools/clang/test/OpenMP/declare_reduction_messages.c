@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
-
 int temp; // expected-note 6 {{'temp' declared here}}
 
 #pragma omp declare reduction                                              // expected-error {{expected '(' after 'declare reduction'}}

@@ -549,7 +549,8 @@ int main(int argc, const char *argv[]) {
   if (opts::InputFilenames.size() == 0)
     opts::InputFilenames.push_back("-");
 
-  llvm::for_each(opts::InputFilenames, dumpInput);
+  std::for_each(opts::InputFilenames.begin(), opts::InputFilenames.end(),
+                dumpInput);
 
   return EXIT_SUCCESS;
 }

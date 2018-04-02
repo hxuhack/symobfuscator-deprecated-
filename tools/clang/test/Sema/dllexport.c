@@ -5,17 +5,17 @@
 
 // Invalid usage.
 __declspec(dllexport) typedef int typedef1;
-// expected-warning@-1{{'dllexport' attribute only applies to functions, variables, classes, and Objective-C interfaces}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 typedef __declspec(dllexport) int typedef2;
-// expected-warning@-1{{'dllexport' attribute only applies to}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 typedef int __declspec(dllexport) typedef3;
-// expected-warning@-1{{'dllexport' attribute only applies to}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 typedef __declspec(dllexport) void (*FunTy)();
-// expected-warning@-1{{'dllexport' attribute only applies to}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 enum __declspec(dllexport) Enum { EnumVal };
-// expected-warning@-1{{'dllexport' attribute only applies to}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 struct __declspec(dllexport) Record {};
-// expected-warning@-1{{'dllexport' attribute only applies to}}
+// expected-warning@-1{{'dllexport' attribute only applies to variables and functions}}
 
 
 

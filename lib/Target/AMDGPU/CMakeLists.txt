@@ -12,52 +12,57 @@ tablegen(LLVM AMDGPUGenAsmWriter.inc -gen-asm-writer)
 tablegen(LLVM AMDGPUGenAsmMatcher.inc -gen-asm-matcher)
 tablegen(LLVM AMDGPUGenDisassemblerTables.inc -gen-disassembler)
 tablegen(LLVM AMDGPUGenMCPseudoLowering.inc -gen-pseudo-lowering)
-tablegen(LLVM AMDGPUGenRegisterBank.inc -gen-register-bank)
+if(LLVM_BUILD_GLOBAL_ISEL)
+  tablegen(LLVM AMDGPUGenRegisterBank.inc -gen-register-bank)
+endif()
 add_public_tablegen_target(AMDGPUCommonTableGen)
 
+# List of all GlobalISel files.
+set(GLOBAL_ISEL_FILES
+  AMDGPUCallLowering.cpp
+  AMDGPUInstructionSelector.cpp
+  AMDGPULegalizerInfo.cpp
+  AMDGPURegisterBankInfo.cpp
+  )
+
+# Add GlobalISel files to the dependencies if the user wants to build it.
+if(LLVM_BUILD_GLOBAL_ISEL)
+  set(GLOBAL_ISEL_BUILD_FILES ${GLOBAL_ISEL_FILES})
+else()
+  set(GLOBAL_ISEL_BUILD_FILES"")
+  set(LLVM_OPTIONAL_SOURCES LLVMGlobalISel ${GLOBAL_ISEL_FILES})
+endif()
+
+
 add_llvm_target(AMDGPUCodeGen
+  AMDILCFGStructurizer.cpp
   AMDGPUAliasAnalysis.cpp
   AMDGPUAlwaysInlinePass.cpp
   AMDGPUAnnotateKernelFeatures.cpp
   AMDGPUAnnotateUniformValues.cpp
-  AMDGPUArgumentUsageInfo.cpp
   AMDGPUAsmPrinter.cpp
-  AMDGPUCallLowering.cpp
   AMDGPUCodeGenPrepare.cpp
   AMDGPUFrameLowering.cpp
-  AMDGPUInstrInfo.cpp
-  AMDGPUInstructionSelector.cpp
+  AMDGPUTargetObjectFile.cpp
   AMDGPUIntrinsicInfo.cpp
   AMDGPUISelDAGToDAG.cpp
-  AMDGPUISelLowering.cpp
-  AMDGPULegalizerInfo.cpp
-  AMDGPULibCalls.cpp
-  AMDGPULibFunc.cpp
   AMDGPULowerIntrinsics.cpp
-  AMDGPUMachineCFGStructurizer.cpp
-  AMDGPUMachineFunction.cpp
-  AMDGPUMachineModuleInfo.cpp
   AMDGPUMacroFusion.cpp
   AMDGPUMCInstLower.cpp
-  AMDGPUOpenCLEnqueuedBlockLowering.cpp
+  AMDGPUMachineCFGStructurizer.cpp
+  AMDGPUMachineFunction.cpp
+  AMDGPUUnifyMetadata.cpp
   AMDGPUOpenCLImageTypeLoweringPass.cpp
-  AMDGPUPromoteAlloca.cpp
-  AMDGPURegAsmNames.inc.cpp
-  AMDGPURegisterBankInfo.cpp
-  AMDGPURegisterInfo.cpp
-  AMDGPURewriteOutArguments.cpp
   AMDGPUSubtarget.cpp
   AMDGPUTargetMachine.cpp
-  AMDGPUTargetObjectFile.cpp
   AMDGPUTargetTransformInfo.cpp
+  AMDGPUISelLowering.cpp
+  AMDGPUInstrInfo.cpp
+  AMDGPUPromoteAlloca.cpp
+  AMDGPURegAsmNames.inc.cpp
+  AMDGPURegisterInfo.cpp
   AMDGPUUnifyDivergentExitNodes.cpp
-  AMDGPUUnifyMetadata.cpp
-  AMDGPUInline.cpp
-  AMDILCFGStructurizer.cpp
   GCNHazardRecognizer.cpp
-  GCNIterativeScheduler.cpp
-  GCNMinRegStrategy.cpp
-  GCNRegPressure.cpp
   GCNSchedStrategy.cpp
   R600ClauseMergePass.cpp
   R600ControlFlowFinalizer.cpp
@@ -73,14 +78,14 @@ add_llvm_target(AMDGPUCodeGen
   R600RegisterInfo.cpp
   SIAnnotateControlFlow.cpp
   SIDebuggerInsertNops.cpp
+  SIFixControlFlowLiveIntervals.cpp
   SIFixSGPRCopies.cpp
   SIFixVGPRCopies.cpp
-  SIFixWWMLiveness.cpp
   SIFoldOperands.cpp
   SIFrameLowering.cpp
   SIInsertSkips.cpp
-  SIInsertWaitcnts.cpp
   SIInsertWaits.cpp
+  SIInsertWaitcnts.cpp
   SIInstrInfo.cpp
   SIISelLowering.cpp
   SILoadStoreOptimizer.cpp
@@ -88,14 +93,15 @@ add_llvm_target(AMDGPUCodeGen
   SILowerI1Copies.cpp
   SIMachineFunctionInfo.cpp
   SIMachineScheduler.cpp
-  SIMemoryLegalizer.cpp
   SIOptimizeExecMasking.cpp
-  SIOptimizeExecMaskingPreRA.cpp
   SIPeepholeSDWA.cpp
   SIRegisterInfo.cpp
   SIShrinkInstructions.cpp
   SIWholeQuadMode.cpp
-  GCNILPSched.cpp
+  GCNIterativeScheduler.cpp
+  GCNMinRegStrategy.cpp
+  GCNRegPressure.cpp
+  ${GLOBAL_ISEL_BUILD_FILES}
   )
 
 add_subdirectory(AsmParser)

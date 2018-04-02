@@ -6,7 +6,9 @@ set(LLVM_LINK_COMPONENTS
 
 set(DebugInfoPDBSources
   HashTableTest.cpp
+  MappedBlockStreamTest.cpp
   StringTableBuilderTest.cpp
+  MSFBuilderTest.cpp
   PDBApiTest.cpp
   )
 
@@ -14,4 +16,4 @@ add_llvm_unittest(DebugInfoPDBTests
   ${DebugInfoPDBSources}
   )
 
-target_link_libraries(DebugInfoPDBTests PRIVATE LLVMTestingSupport)
+target_link_libraries(DebugInfoPDBTests LLVMTestingSupport)

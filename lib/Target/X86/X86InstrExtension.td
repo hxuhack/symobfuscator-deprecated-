@@ -12,29 +12,31 @@
 //===----------------------------------------------------------------------===//
 
 let hasSideEffects = 0 in {
-  let Defs = [AX], Uses = [AL] in // AX = signext(AL)
+  let Defs = [AX], Uses = [AL] in
   def CBW : I<0x98, RawFrm, (outs), (ins),
-              "{cbtw|cbw}", [], IIC_CBW>, OpSize16, Sched<[WriteALU]>;
-  let Defs = [EAX], Uses = [AX] in // EAX = signext(AX)
+              "{cbtw|cbw}", [], IIC_CBW>, OpSize16;  // AX = signext(AL)
+  let Defs = [EAX], Uses = [AX] in
   def CWDE : I<0x98, RawFrm, (outs), (ins),
-              "{cwtl|cwde}", [], IIC_CBW>, OpSize32, Sched<[WriteALU]>;
+              "{cwtl|cwde}", [], IIC_CBW>, OpSize32; // EAX = signext(AX)
 
-  let Defs = [AX,DX], Uses = [AX] in // DX:AX = signext(AX)
+  let Defs = [AX,DX], Uses = [AX] in
   def CWD : I<0x99, RawFrm, (outs), (ins),
-              "{cwtd|cwd}", [], IIC_CBW>, OpSize16, Sched<[WriteALU]>;
-  let Defs = [EAX,EDX], Uses = [EAX] in // EDX:EAX = signext(EAX)
+              "{cwtd|cwd}", [], IIC_CBW>, OpSize16; // DX:AX = signext(AX)
+  let Defs = [EAX,EDX], Uses = [EAX] in
   def CDQ : I<0x99, RawFrm, (outs), (ins),
-              "{cltd|cdq}", [], IIC_CBW>, OpSize32, Sched<[WriteALU]>;
+              "{cltd|cdq}", [], IIC_CBW>, OpSize32; // EDX:EAX = signext(EAX)
 
 
-  let Defs = [RAX], Uses = [EAX] in // RAX = signext(EAX)
+  let Defs = [RAX], Uses = [EAX] in
   def CDQE : RI<0x98, RawFrm, (outs), (ins),
-               "{cltq|cdqe}", [], IIC_CBW>, Sched<[WriteALU]>;
+               "{cltq|cdqe}", [], IIC_CBW>;     // RAX = signext(EAX)
 
-  let Defs = [RAX,RDX], Uses = [RAX] in // RDX:RAX = signext(RAX)
+  let Defs = [RAX,RDX], Uses = [RAX] in
   def CQO  : RI<0x99, RawFrm, (outs), (ins),
-                "{cqto|cqo}", [], IIC_CBW>, Sched<[WriteALU]>;
+                "{cqto|cqo}", [], IIC_CBW>; // RDX:RAX = signext(RAX)
 }
+
+
 
 // Sign/Zero extenders
 let hasSideEffects = 0 in {

@@ -116,16 +116,14 @@ public:
   void ResolvedExceptionSpec(const FunctionDecl *FD) override;
   void DeducedReturnType(const FunctionDecl *FD, QualType ReturnType) override;
   void ResolvedOperatorDelete(const CXXDestructorDecl *DD,
-                              const FunctionDecl *Delete,
-                              Expr *ThisArg) override;
+                              const FunctionDecl *Delete) override;
   void CompletedImplicitDefinition(const FunctionDecl *D) override;
-  void InstantiationRequested(const ValueDecl *D) override;
-  void VariableDefinitionInstantiated(const VarDecl *D) override;
-  void FunctionDefinitionInstantiated(const FunctionDecl *D) override;
+  void StaticDataMemberInstantiated(const VarDecl *D) override;
   void DefaultArgumentInstantiated(const ParmVarDecl *D) override;
   void DefaultMemberInitializerInstantiated(const FieldDecl *D) override;
   void AddedObjCCategoryToInterface(const ObjCCategoryDecl *CatD,
                                     const ObjCInterfaceDecl *IFD) override;
+  void FunctionDefinitionInstantiated(const FunctionDecl *D) override;
   void DeclarationMarkedUsed(const Decl *D) override;
   void DeclarationMarkedOpenMPThreadPrivate(const Decl *D) override;
   void DeclarationMarkedOpenMPDeclareTarget(const Decl *D,
@@ -185,28 +183,19 @@ void MultiplexASTMutationListener::DeducedReturnType(const FunctionDecl *FD,
     Listeners[i]->DeducedReturnType(FD, ReturnType);
 }
 void MultiplexASTMutationListener::ResolvedOperatorDelete(
-    const CXXDestructorDecl *DD, const FunctionDecl *Delete, Expr *ThisArg) {
+    const CXXDestructorDecl *DD, const FunctionDecl *Delete) {
   for (auto *L : Listeners)
-    L->ResolvedOperatorDelete(DD, Delete, ThisArg);
+    L->ResolvedOperatorDelete(DD, Delete);
 }
 void MultiplexASTMutationListener::CompletedImplicitDefinition(
                                                         const FunctionDecl *D) {
   for (size_t i = 0, e = Listeners.size(); i != e; ++i)
     Listeners[i]->CompletedImplicitDefinition(D);
 }
-void MultiplexASTMutationListener::InstantiationRequested(const ValueDecl *D) {
+void MultiplexASTMutationListener::StaticDataMemberInstantiated(
+                                                             const VarDecl *D) {
   for (size_t i = 0, e = Listeners.size(); i != e; ++i)
-    Listeners[i]->InstantiationRequested(D);
-}
-void MultiplexASTMutationListener::VariableDefinitionInstantiated(
-    const VarDecl *D) {
-  for (size_t i = 0, e = Listeners.size(); i != e; ++i)
-    Listeners[i]->VariableDefinitionInstantiated(D);
-}
-void MultiplexASTMutationListener::FunctionDefinitionInstantiated(
-    const FunctionDecl *D) {
-  for (auto &Listener : Listeners)
-    Listener->FunctionDefinitionInstantiated(D);
+    Listeners[i]->StaticDataMemberInstantiated(D);
 }
 void MultiplexASTMutationListener::DefaultArgumentInstantiated(
                                                          const ParmVarDecl *D) {
@@ -223,6 +212,11 @@ void MultiplexASTMutationListener::AddedObjCCategoryToInterface(
                                                  const ObjCInterfaceDecl *IFD) {
   for (size_t i = 0, e = Listeners.size(); i != e; ++i)
     Listeners[i]->AddedObjCCategoryToInterface(CatD, IFD);
+}
+void MultiplexASTMutationListener::FunctionDefinitionInstantiated(
+    const FunctionDecl *D) {
+  for (auto &Listener : Listeners)
+    Listener->FunctionDefinitionInstantiated(D);
 }
 void MultiplexASTMutationListener::DeclarationMarkedUsed(const Decl *D) {
   for (size_t i = 0, e = Listeners.size(); i != e; ++i)

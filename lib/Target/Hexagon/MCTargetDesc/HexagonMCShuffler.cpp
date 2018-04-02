@@ -17,14 +17,10 @@
 #include "MCTargetDesc/HexagonMCShuffler.h"
 #include "Hexagon.h"
 #include "MCTargetDesc/HexagonMCInstrInfo.h"
-#include "MCTargetDesc/HexagonShuffler.h"
-#include "llvm/MC/MCInst.h"
-#include "llvm/MC/MCInstrDesc.h"
-#include "llvm/MC/MCInstrInfo.h"
+#include "MCTargetDesc/HexagonMCTargetDesc.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
-#include <cassert>
 
 using namespace llvm;
 
@@ -113,10 +109,9 @@ bool llvm::HexagonMCShuffle(MCContext &Context, bool Fatal,
 
   if (!HexagonMCInstrInfo::bundleSize(MCB)) {
     // There once was a bundle:
-    //    BUNDLE implicit-def %d2, implicit-def %r4, implicit-def %r5,
-    //    implicit-def %d7, ...
-    //      * %d2 = IMPLICIT_DEF; flags:
-    //      * %d7 = IMPLICIT_DEF; flags:
+    //    BUNDLE %D2<imp-def>, %R4<imp-def>, %R5<imp-def>, %D7<imp-def>, ...
+    //      * %D2<def> = IMPLICIT_DEF; flags:
+    //      * %D7<def> = IMPLICIT_DEF; flags:
     // After the IMPLICIT_DEFs were removed by the asm printer, the bundle
     // became empty.
     DEBUG(dbgs() << "Skipping empty bundle");
@@ -133,15 +128,15 @@ bool
 llvm::HexagonMCShuffle(MCContext &Context, MCInstrInfo const &MCII,
                        MCSubtargetInfo const &STI, MCInst &MCB,
                        SmallVector<DuplexCandidate, 8> possibleDuplexes) {
+
   if (DisableShuffle)
     return false;
 
   if (!HexagonMCInstrInfo::bundleSize(MCB)) {
     // There once was a bundle:
-    //    BUNDLE implicit-def %d2, implicit-def %r4, implicit-def %r5,
-    //    implicit-def %d7, ...
-    //      * %d2 = IMPLICIT_DEF; flags:
-    //      * %d7 = IMPLICIT_DEF; flags:
+    //    BUNDLE %D2<imp-def>, %R4<imp-def>, %R5<imp-def>, %D7<imp-def>, ...
+    //      * %D2<def> = IMPLICIT_DEF; flags:
+    //      * %D7<def> = IMPLICIT_DEF; flags:
     // After the IMPLICIT_DEFs were removed by the asm printer, the bundle
     // became empty.
     DEBUG(dbgs() << "Skipping empty bundle");
@@ -170,7 +165,7 @@ llvm::HexagonMCShuffle(MCContext &Context, MCInstrInfo const &MCII,
       break;
   }
 
-  if (!doneShuffling) {
+  if (doneShuffling == false) {
     HexagonMCShuffler MCS(Context, false, MCII, STI, MCB);
     doneShuffling = MCS.reshuffleTo(MCB); // shuffle
   }

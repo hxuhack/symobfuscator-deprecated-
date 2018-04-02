@@ -283,10 +283,10 @@ void dbgsInsnClass(const std::vector<unsigned> &InsnClass) {
     if (i > 0) {
       DEBUG(dbgs() << ", ");
     }
-    DEBUG(dbgs() << "0x" << Twine::utohexstr(InsnClass[i]));
+    DEBUG(dbgs() << "0x" << utohexstr(InsnClass[i]));
   }
   DFAInput InsnInput = getDFAInsnInput(InsnClass);
-  DEBUG(dbgs() << " (input: 0x" << Twine::utohexstr(InsnInput) << ")");
+  DEBUG(dbgs() << " (input: 0x" << utohexstr(InsnInput) << ")");
 }
 
 //
@@ -301,7 +301,7 @@ void dbgsStateInfo(const std::set<unsigned> &stateInfo) {
     if (i > 0) {
       DEBUG(dbgs() << ", ");
     }
-    DEBUG(dbgs() << "0x" << Twine::utohexstr(thisState));
+    DEBUG(dbgs() << "0x" << utohexstr(thisState));
   }
 }
 
@@ -361,7 +361,7 @@ void State::AddInsnClass(std::vector<unsigned> &InsnClass,
 
     DenseSet<unsigned> VisitedResourceStates;
 
-    DEBUG(dbgs() << "  thisState: 0x" << Twine::utohexstr(thisState) << "\n");
+    DEBUG(dbgs() << "  thisState: 0x" << utohexstr(thisState) << "\n");
     AddInsnClassStages(InsnClass, ComboBitToBitsMap,
                                 numstages - 1, numstages,
                                 thisState, thisState,
@@ -381,7 +381,7 @@ void State::AddInsnClassStages(std::vector<unsigned> &InsnClass,
   DEBUG({
     dbgsIndent((1 + numstages - chkstage) << 1);
     dbgs() << "AddInsnClassStages " << chkstage << " (0x"
-           << Twine::utohexstr(thisStage) << ") from ";
+           << utohexstr(thisStage) << ") from ";
     dbgsInsnClass(InsnClass);
     dbgs() << "\n";
   });
@@ -395,10 +395,9 @@ void State::AddInsnClassStages(std::vector<unsigned> &InsnClass,
     if (resourceMask & thisStage) {
       unsigned combo = ComboBitToBitsMap[resourceMask];
       if (combo && ((~prevState & combo) != combo)) {
-        DEBUG(dbgs() << "\tSkipped Add 0x" << Twine::utohexstr(prevState)
-                     << " - combo op 0x" << Twine::utohexstr(resourceMask)
-                     << " (0x" << Twine::utohexstr(combo)
-                     << ") cannot be scheduled\n");
+        DEBUG(dbgs() << "\tSkipped Add 0x" << utohexstr(prevState)
+                     << " - combo op 0x" << utohexstr(resourceMask)
+                     << " (0x" << utohexstr(combo) <<") cannot be scheduled\n");
         continue;
       }
       //
@@ -408,11 +407,11 @@ void State::AddInsnClassStages(std::vector<unsigned> &InsnClass,
       unsigned ResultingResourceState = prevState | resourceMask | combo;
       DEBUG({
         dbgsIndent((2 + numstages - chkstage) << 1);
-        dbgs() << "0x" << Twine::utohexstr(prevState) << " | 0x"
-               << Twine::utohexstr(resourceMask);
+        dbgs() << "0x" << utohexstr(prevState)
+               << " | 0x" << utohexstr(resourceMask);
         if (combo)
-          dbgs() << " | 0x" << Twine::utohexstr(combo);
-        dbgs() << " = 0x" << Twine::utohexstr(ResultingResourceState) << " ";
+          dbgs() << " | 0x" << utohexstr(combo);
+        dbgs() << " = 0x" << utohexstr(ResultingResourceState) << " ";
       });
 
       //
@@ -434,7 +433,7 @@ void State::AddInsnClassStages(std::vector<unsigned> &InsnClass,
             VisitedResourceStates.insert(ResultingResourceState);
             PossibleStates.insert(ResultingResourceState);
             DEBUG(dbgs() << "\tResultingResourceState: 0x"
-                         << Twine::utohexstr(ResultingResourceState) << "\n");
+                         << utohexstr(ResultingResourceState) << "\n");
           } else {
             DEBUG(dbgs() << "\tSkipped Add - state already seen\n");
           }
@@ -494,10 +493,9 @@ bool State::canMaybeAddInsnClass(std::vector<unsigned> &InsnClass,
       //       These cases are caught later in AddInsnClass.
       unsigned combo = ComboBitToBitsMap[InsnClass[i]];
       if (combo && ((~resources & combo) != combo)) {
-        DEBUG(dbgs() << "\tSkipped canMaybeAdd 0x"
-                     << Twine::utohexstr(resources) << " - combo op 0x"
-                     << Twine::utohexstr(InsnClass[i]) << " (0x"
-                     << Twine::utohexstr(combo) << ") cannot be scheduled\n");
+        DEBUG(dbgs() << "\tSkipped canMaybeAdd 0x" << utohexstr(resources)
+                     << " - combo op 0x" << utohexstr(InsnClass[i])
+                     << " (0x" << utohexstr(combo) <<") cannot be scheduled\n");
         available = false;
         break;
       }
@@ -575,8 +573,9 @@ void DFA::writeTableAndAPI(raw_ostream &OS, const std::string &TargetName,
     for (State::TransitionMap::iterator
         II = SI->Transitions.begin(), IE = SI->Transitions.end();
         II != IE; ++II) {
-      OS << "{0x" << Twine::utohexstr(getDFAInsnInput(II->first)) << ", "
-         << II->second->stateNum << "},\t";
+      OS << "{0x" << utohexstr(getDFAInsnInput(II->first)) << ", "
+         << II->second->stateNum
+         << "},\t";
     }
     ValidTransitions += SI->Transitions.size();
 
@@ -669,8 +668,8 @@ int DFAPacketizerEmitter::collectAllFuncUnits(
                       "Exceeded maximum number of representable resources");
       unsigned FuncResources = (unsigned) (1U << j);
       FUNameToBitsMap[FUs[j]->getName()] = FuncResources;
-      DEBUG(dbgs() << " " << FUs[j]->getName() << ":0x"
-                   << Twine::utohexstr(FuncResources));
+      DEBUG(dbgs() << " " << FUs[j]->getName()
+                   << ":0x" << utohexstr(FuncResources));
     }
     if (((int) numFUs) > maxFUs) {
       maxFUs = numFUs;
@@ -714,20 +713,20 @@ int DFAPacketizerEmitter::collectAllComboFuncs(
       const std::string &ComboFuncName = ComboFunc->getName();
       unsigned ComboBit = FUNameToBitsMap[ComboFuncName];
       unsigned ComboResources = ComboBit;
-      DEBUG(dbgs() << "      combo: " << ComboFuncName << ":0x"
-                   << Twine::utohexstr(ComboResources) << "\n");
+      DEBUG(dbgs() << "      combo: " << ComboFuncName
+                   << ":0x" << utohexstr(ComboResources) << "\n");
       for (unsigned k = 0, M = FuncList.size(); k < M; ++k) {
         std::string FuncName = FuncList[k]->getName();
         unsigned FuncResources = FUNameToBitsMap[FuncName];
-        DEBUG(dbgs() << "        " << FuncName << ":0x"
-                     << Twine::utohexstr(FuncResources) << "\n");
+        DEBUG(dbgs() << "        " << FuncName
+                     << ":0x" << utohexstr(FuncResources) << "\n");
         ComboResources |= FuncResources;
       }
       ComboBitToBitsMap[ComboBit] = ComboResources;
       numCombos++;
       DEBUG(dbgs() << "          => combo bits: " << ComboFuncName << ":0x"
-                   << Twine::utohexstr(ComboBit) << " = 0x"
-                   << Twine::utohexstr(ComboResources) << "\n");
+                   << utohexstr(ComboBit) << " = 0x"
+                   << utohexstr(ComboResources) << "\n");
     }
   }
   return numCombos;
@@ -782,7 +781,7 @@ int DFAPacketizerEmitter::collectOneInsnClass(const std::string &ProcName,
         dbglen += 8;
         DEBUG(dbgs() << "\t");
     }
-    DEBUG(dbgs() << " (bits: 0x" << Twine::utohexstr(UnitBitValue) << ")\n");
+    DEBUG(dbgs() << " (bits: 0x" << utohexstr(UnitBitValue) << ")\n");
   }
 
   if (!UnitBits.empty())

@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/DwarfFile.cpp - Dwarf Debug Framework -----------------===//
+//===-- llvm/CodeGen/DwarfFile.cpp - Dwarf Debug Framework ----------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,16 +11,13 @@
 #include "DwarfCompileUnit.h"
 #include "DwarfDebug.h"
 #include "DwarfUnit.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/DIE.h"
-#include "llvm/IR/DebugInfoMetadata.h"
+#include "llvm/ADT/STLExtras.h"
+#include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCStreamer.h"
-#include <algorithm>
-#include <cstdint>
+#include "llvm/Support/LEB128.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 
-using namespace llvm;
-
+namespace llvm {
 DwarfFile::DwarfFile(AsmPrinter *AP, StringRef Pref, BumpPtrAllocator &DA)
     : Asm(AP), Abbrevs(AbbrevAllocator), StrPool(DA, *Asm, Pref) {}
 
@@ -115,4 +112,5 @@ bool DwarfFile::addScopeVariable(LexicalScope *LS, DbgVariable *Var) {
 
   Vars.push_back(Var);
   return true;
+}
 }

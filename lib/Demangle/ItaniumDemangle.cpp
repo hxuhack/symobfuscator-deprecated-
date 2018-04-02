@@ -8,7 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Demangle/Demangle.h"
-#include "llvm/Support/Compiler.h"
 
 // This file exports a single function: llvm::itanium_demangle.
 // It also has no dependencies on the rest of llvm. It is implemented this way
@@ -1948,7 +1947,7 @@ static const char *parse_type(const char *first, const char *last, C &db) {
               break;
             }
           }
-          LLVM_FALLTHROUGH;
+        // falls through
         default:
           // must check for builtin-types before class-enum-types to avoid
           // ambiguities with operator-names

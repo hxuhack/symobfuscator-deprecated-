@@ -568,7 +568,7 @@ bool COFFAsmParser::ParseDirectiveLinkOnce(StringRef, SMLoc Loc) {
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveStartProc(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveStartProc(StringRef, SMLoc) {
   StringRef SymbolID;
   if (getParser().parseIdentifier(SymbolID))
     return true;
@@ -579,29 +579,29 @@ bool COFFAsmParser::ParseSEHDirectiveStartProc(StringRef, SMLoc Loc) {
   MCSymbol *Symbol = getContext().getOrCreateSymbol(SymbolID);
 
   Lex();
-  getStreamer().EmitWinCFIStartProc(Symbol, Loc);
+  getStreamer().EmitWinCFIStartProc(Symbol);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveEndProc(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveEndProc(StringRef, SMLoc) {
   Lex();
-  getStreamer().EmitWinCFIEndProc(Loc);
+  getStreamer().EmitWinCFIEndProc();
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveStartChained(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveStartChained(StringRef, SMLoc) {
   Lex();
-  getStreamer().EmitWinCFIStartChained(Loc);
+  getStreamer().EmitWinCFIStartChained();
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveEndChained(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveEndChained(StringRef, SMLoc) {
   Lex();
-  getStreamer().EmitWinCFIEndChained(Loc);
+  getStreamer().EmitWinCFIEndChained();
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveHandler(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveHandler(StringRef, SMLoc) {
   StringRef SymbolID;
   if (getParser().parseIdentifier(SymbolID))
     return true;
@@ -623,17 +623,17 @@ bool COFFAsmParser::ParseSEHDirectiveHandler(StringRef, SMLoc Loc) {
   MCSymbol *handler = getContext().getOrCreateSymbol(SymbolID);
 
   Lex();
-  getStreamer().EmitWinEHHandler(handler, unwind, except, Loc);
+  getStreamer().EmitWinEHHandler(handler, unwind, except);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveHandlerData(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveHandlerData(StringRef, SMLoc) {
   Lex();
   getStreamer().EmitWinEHHandlerData();
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectivePushReg(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectivePushReg(StringRef, SMLoc L) {
   unsigned Reg = 0;
   if (ParseSEHRegisterNumber(Reg))
     return true;
@@ -642,11 +642,11 @@ bool COFFAsmParser::ParseSEHDirectivePushReg(StringRef, SMLoc Loc) {
     return TokError("unexpected token in directive");
 
   Lex();
-  getStreamer().EmitWinCFIPushReg(Reg, Loc);
+  getStreamer().EmitWinCFIPushReg(Reg);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveSetFrame(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveSetFrame(StringRef, SMLoc L) {
   unsigned Reg = 0;
   int64_t Off;
   if (ParseSEHRegisterNumber(Reg))
@@ -655,31 +655,39 @@ bool COFFAsmParser::ParseSEHDirectiveSetFrame(StringRef, SMLoc Loc) {
     return TokError("you must specify a stack pointer offset");
 
   Lex();
+  SMLoc startLoc = getLexer().getLoc();
   if (getParser().parseAbsoluteExpression(Off))
     return true;
 
+  if (Off & 0x0F)
+    return Error(startLoc, "offset is not a multiple of 16");
+
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in directive");
 
   Lex();
-  getStreamer().EmitWinCFISetFrame(Reg, Off, Loc);
+  getStreamer().EmitWinCFISetFrame(Reg, Off);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveAllocStack(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveAllocStack(StringRef, SMLoc) {
   int64_t Size;
+  SMLoc startLoc = getLexer().getLoc();
   if (getParser().parseAbsoluteExpression(Size))
     return true;
 
+  if (Size & 7)
+    return Error(startLoc, "size is not a multiple of 8");
+
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in directive");
 
   Lex();
-  getStreamer().EmitWinCFIAllocStack(Size, Loc);
+  getStreamer().EmitWinCFIAllocStack(Size);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveSaveReg(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveSaveReg(StringRef, SMLoc L) {
   unsigned Reg = 0;
   int64_t Off;
   if (ParseSEHRegisterNumber(Reg))
@@ -688,21 +696,25 @@ bool COFFAsmParser::ParseSEHDirectiveSaveReg(StringRef, SMLoc Loc) {
     return TokError("you must specify an offset on the stack");
 
   Lex();
+  SMLoc startLoc = getLexer().getLoc();
   if (getParser().parseAbsoluteExpression(Off))
     return true;
+
+  if (Off & 7)
+    return Error(startLoc, "size is not a multiple of 8");
 
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in directive");
 
   Lex();
   // FIXME: Err on %xmm* registers
-  getStreamer().EmitWinCFISaveReg(Reg, Off, Loc);
+  getStreamer().EmitWinCFISaveReg(Reg, Off);
   return false;
 }
 
 // FIXME: This method is inherently x86-specific. It should really be in the
 // x86 backend.
-bool COFFAsmParser::ParseSEHDirectiveSaveXMM(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveSaveXMM(StringRef, SMLoc L) {
   unsigned Reg = 0;
   int64_t Off;
   if (ParseSEHRegisterNumber(Reg))
@@ -711,19 +723,23 @@ bool COFFAsmParser::ParseSEHDirectiveSaveXMM(StringRef, SMLoc Loc) {
     return TokError("you must specify an offset on the stack");
 
   Lex();
+  SMLoc startLoc = getLexer().getLoc();
   if (getParser().parseAbsoluteExpression(Off))
     return true;
 
   if (getLexer().isNot(AsmToken::EndOfStatement))
     return TokError("unexpected token in directive");
 
+  if (Off & 0x0F)
+    return Error(startLoc, "offset is not a multiple of 16");
+
   Lex();
   // FIXME: Err on non-%xmm* registers
-  getStreamer().EmitWinCFISaveXMM(Reg, Off, Loc);
+  getStreamer().EmitWinCFISaveXMM(Reg, Off);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectivePushFrame(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectivePushFrame(StringRef, SMLoc) {
   bool Code = false;
   StringRef CodeID;
   if (getLexer().is(AsmToken::At)) {
@@ -740,13 +756,13 @@ bool COFFAsmParser::ParseSEHDirectivePushFrame(StringRef, SMLoc Loc) {
     return TokError("unexpected token in directive");
 
   Lex();
-  getStreamer().EmitWinCFIPushFrame(Code, Loc);
+  getStreamer().EmitWinCFIPushFrame(Code);
   return false;
 }
 
-bool COFFAsmParser::ParseSEHDirectiveEndProlog(StringRef, SMLoc Loc) {
+bool COFFAsmParser::ParseSEHDirectiveEndProlog(StringRef, SMLoc) {
   Lex();
-  getStreamer().EmitWinCFIEndProlog(Loc);
+  getStreamer().EmitWinCFIEndProlog();
   return false;
 }
 

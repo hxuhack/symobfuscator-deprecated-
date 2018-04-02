@@ -85,8 +85,7 @@ void filterDeadComdatFunctions(
     Module &M, SmallVectorImpl<Function *> &DeadComdatFunctions);
 
 /// \brief Produce a unique identifier for this module by taking the MD5 sum of
-/// the names of the module's strong external symbols that are not comdat
-/// members.
+/// the names of the module's strong external symbols.
 ///
 /// This identifier is normally guaranteed to be unique, or the program would
 /// fail to link due to multiply defined symbols.

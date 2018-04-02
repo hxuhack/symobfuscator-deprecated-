@@ -258,7 +258,7 @@ static Loop *separateNestedLoop(Loop *L, BasicBlock *Preheader,
   placeSplitBlockCarefully(NewBB, OuterLoopPreds, L);
 
   // Create the new outer loop.
-  Loop *NewOuter = LI->AllocateLoop();
+  Loop *NewOuter = new Loop();
 
   // Change the parent loop to use the outer loop as its child now.
   if (Loop *Parent = L->getParentLoop())

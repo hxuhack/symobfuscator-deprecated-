@@ -15,6 +15,7 @@
 #include "llvm/DebugInfo/CodeView/TypeCollection.h"
 #include "llvm/DebugInfo/CodeView/TypeIndex.h"
 #include "llvm/DebugInfo/CodeView/TypeRecord.h"
+#include "llvm/Support/BinaryByteStream.h"
 #include "llvm/Support/FormatVariadic.h"
 #include "llvm/Support/ScopedPrinter.h"
 

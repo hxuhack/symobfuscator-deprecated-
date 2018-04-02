@@ -14,7 +14,7 @@
 #ifndef LLVM_LIB_TARGET_NVPTX_NVPTXFRAMELOWERING_H
 #define LLVM_LIB_TARGET_NVPTX_NVPTXFRAMELOWERING_H
 
-#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/Target/TargetFrameLowering.h"
 
 namespace llvm {
 class NVPTXSubtarget;

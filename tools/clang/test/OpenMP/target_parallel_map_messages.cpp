@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
-
 void foo() {
 }
 
@@ -16,8 +14,8 @@ class S2 {
 public:
   S2():a(0) { }
   S2(S2 &s2):a(s2.a) { }
-  static float S2s;
-  static const float S2sc;
+  static float S2s; // expected-note 4 {{mappable type cannot contain static members}}
+  static const float S2sc; // expected-note 4 {{mappable type cannot contain static members}}
 };
 const float S2::S2sc = 0;
 const S2 b;
@@ -118,9 +116,9 @@ T tmain(T argc) {
   foo();
 #pragma omp target parallel map(S1) // expected-error {{'S1' does not refer to a value}}
   foo();
-#pragma omp target parallel map(a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}}
+#pragma omp target parallel map(a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}} expected-error 2 {{type 'S2' is not mappable to target}}
   foo();
-#pragma omp target parallel map(ba)
+#pragma omp target parallel map(ba) // expected-error 2 {{type 'S2' is not mappable to target}}
   foo();
 #pragma omp target parallel map(ca)
   foo();
@@ -223,11 +221,11 @@ int main(int argc, char **argv) {
   foo();
 #pragma omp target parallel map(S1) // expected-error {{'S1' does not refer to a value}}
   foo();
-#pragma omp target parallel map(a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}}
+#pragma omp target parallel map(a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}} expected-error 2 {{type 'S2' is not mappable to target}}
   foo();
 #pragma omp target parallel map(argv[1])
   foo();
-#pragma omp target parallel map(ba)
+#pragma omp target parallel map(ba) // expected-error 2 {{type 'S2' is not mappable to target}}
   foo();
 #pragma omp target parallel map(ca)
   foo();

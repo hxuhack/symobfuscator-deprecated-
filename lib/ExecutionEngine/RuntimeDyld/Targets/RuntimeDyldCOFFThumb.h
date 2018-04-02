@@ -186,7 +186,10 @@ public:
               ? Value
               : Sections[RE.Sections.SectionA].getLoadAddressWithOffset(RE.Addend);
       Result |= ISASelectionBit;
-      assert(Result <= UINT32_MAX && "relocation overflow");
+      assert(static_cast<int32_t>(Result) <= INT32_MAX &&
+             "relocation overflow");
+      assert(static_cast<int32_t>(Result) >= INT32_MIN &&
+             "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_ADDR32"
                    << " TargetSection: " << RE.Sections.SectionA
@@ -199,7 +202,10 @@ public:
       // NOTE: use Section[0].getLoadAddress() as an approximation of ImageBase
       uint64_t Result = Sections[RE.Sections.SectionA].getLoadAddress() -
                         Sections[0].getLoadAddress() + RE.Addend;
-      assert(Result <= UINT32_MAX && "relocation overflow");
+      assert(static_cast<int32_t>(Result) <= INT32_MAX &&
+             "relocation overflow");
+      assert(static_cast<int32_t>(Result) >= INT32_MIN &&
+             "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_ADDR32NB"
                    << " TargetSection: " << RE.Sections.SectionA
@@ -210,8 +216,10 @@ public:
     }
     case COFF::IMAGE_REL_ARM_SECTION:
       // 16-bit section index of the section that contains the target.
-      assert(static_cast<uint32_t>(RE.SectionID) <= UINT16_MAX &&
+      assert(static_cast<int32_t>(RE.SectionID) <= INT16_MAX &&
              "relocation overflow");
+      assert(static_cast<int32_t>(RE.SectionID) >= INT16_MIN &&
+             "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_SECTION Value: " << RE.SectionID
                    << '\n');
@@ -219,8 +227,10 @@ public:
       break;
     case COFF::IMAGE_REL_ARM_SECREL:
       // 32-bit offset of the target from the beginning of its section.
-      assert(static_cast<uint64_t>(RE.Addend) <= UINT32_MAX &&
+      assert(static_cast<int32_t>(RE.Addend) <= INT32_MAX &&
              "relocation overflow");
+      assert(static_cast<int32_t>(RE.Addend) >= INT32_MIN &&
+             "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_SECREL Value: " << RE.Addend
                    << '\n');
@@ -230,7 +240,10 @@ public:
       // 32-bit VA of the target applied to a contiguous MOVW+MOVT pair.
       uint64_t Result =
           Sections[RE.Sections.SectionA].getLoadAddressWithOffset(RE.Addend);
-      assert(Result <= UINT32_MAX && "relocation overflow");
+      assert(static_cast<int32_t>(Result) <= INT32_MAX &&
+             "relocation overflow");
+      assert(static_cast<int32_t>(Result) >= INT32_MIN &&
+             "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_MOV32T"
                    << " TargetSection: " << RE.Sections.SectionA
@@ -258,9 +271,9 @@ public:
       // The most significant 20-bits of the signed 21-bit relative displacement
       uint64_t Value =
           RE.Addend - (Sections[RE.SectionID].getLoadAddress() + RE.Offset) - 4;
-      assert(static_cast<int64_t>(RE.Addend) <= INT32_MAX &&
+      assert(static_cast<int32_t>(RE.Addend) <= INT32_MAX &&
              "relocation overflow");
-      assert(static_cast<int64_t>(RE.Addend) >= INT32_MIN &&
+      assert(static_cast<int32_t>(RE.Addend) >= INT32_MIN &&
              "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_BRANCH20T"
@@ -273,9 +286,9 @@ public:
       // The most significant 24-bits of the signed 25-bit relative displacement
       uint64_t Value =
           RE.Addend - (Sections[RE.SectionID].getLoadAddress() + RE.Offset) - 4;
-      assert(static_cast<int64_t>(RE.Addend) <= INT32_MAX &&
+      assert(static_cast<int32_t>(RE.Addend) <= INT32_MAX &&
              "relocation overflow");
-      assert(static_cast<int64_t>(RE.Addend) >= INT32_MIN &&
+      assert(static_cast<int32_t>(RE.Addend) >= INT32_MIN &&
              "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_BRANCH24T"
@@ -288,9 +301,9 @@ public:
       // The most significant 24-bits of the signed 25-bit relative displacement
       uint64_t Value =
           RE.Addend - (Sections[RE.SectionID].getLoadAddress() + RE.Offset) - 4;
-      assert(static_cast<int64_t>(RE.Addend) <= INT32_MAX &&
+      assert(static_cast<int32_t>(RE.Addend) <= INT32_MAX &&
              "relocation overflow");
-      assert(static_cast<int64_t>(RE.Addend) >= INT32_MIN &&
+      assert(static_cast<int32_t>(RE.Addend) >= INT32_MIN &&
              "relocation underflow");
       DEBUG(dbgs() << "\t\tOffset: " << RE.Offset
                    << " RelType: IMAGE_REL_ARM_BLX23T"
@@ -308,3 +321,4 @@ public:
 }
 
 #endif
+

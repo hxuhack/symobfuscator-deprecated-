@@ -17,8 +17,7 @@ define { i8, i1 } @test_cmpxchg_8(i8* %addr, i8 %desired, i8 %new) nounwind {
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
-; CHECK:     uxtb [[DESIRED_ZEXT:r[0-9]+]], [[DESIRED]]
-; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED_ZEXT]]
+; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED]]
 ; CHECK:     {{moveq|movweq}} {{r[0-9]+}}, #1
 ; CHECK:     dmb ish
   %res = cmpxchg i8* %addr, i8 %desired, i8 %new seq_cst monotonic
@@ -37,8 +36,7 @@ define { i16, i1 } @test_cmpxchg_16(i16* %addr, i16 %desired, i16 %new) nounwind
 ; CHECK:     cmp{{(\.w)?}} [[STATUS]], #0
 ; CHECK:     bne [[RETRY]]
 ; CHECK: [[DONE]]:
-; CHECK:     uxth [[DESIRED_ZEXT:r[0-9]+]], [[DESIRED]]
-; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED_ZEXT]]
+; CHECK:     cmp{{(\.w)?}} [[OLD]], [[DESIRED]]
 ; CHECK:     {{moveq|movweq}} {{r[0-9]+}}, #1
 ; CHECK:     dmb ish
   %res = cmpxchg i16* %addr, i16 %desired, i16 %new seq_cst monotonic

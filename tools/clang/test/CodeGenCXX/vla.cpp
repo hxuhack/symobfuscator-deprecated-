@@ -1,5 +1,4 @@
-// RUN: %clang_cc1 -std=c++11 -triple x86_64-apple-darwin %s -emit-llvm -o - | FileCheck -check-prefixes=X64,CHECK %s
-// RUN: %clang_cc1 -std=c++11 -triple amdgcn---amdgiz %s -emit-llvm -o - | FileCheck -check-prefixes=AMD,CHECK %s
+// RUN: %clang_cc1 -std=c++11 -triple x86_64-apple-darwin %s -emit-llvm -o - | FileCheck %s
 
 template<typename T>
 struct S {
@@ -10,7 +9,7 @@ template<typename T> int S<T>::n = 5;
 int f() {
   // Make sure that the reference here is enough to trigger the instantiation of
   // the static data member.
-  // CHECK: @_ZN1SIiE1nE = linkonce_odr{{.*}} global i32 5
+  // CHECK: @_ZN1SIiE1nE = linkonce_odr global i32 5
   int a[S<int>::n];
   return sizeof a;
 }
@@ -18,18 +17,10 @@ int f() {
 // rdar://problem/9506377
 void test0(void *array, int n) {
   // CHECK-LABEL: define void @_Z5test0Pvi(
-  // X64:        [[ARRAY:%.*]] = alloca i8*, align 8
-  // AMD:        [[ARRAY0:%.*]] = alloca i8*, align 8, addrspace(5)
-  // AMD-NEXT:   [[ARRAY:%.*]] = addrspacecast i8* addrspace(5)* [[ARRAY0]] to i8**
-  // X64-NEXT:   [[N:%.*]] = alloca i32, align 4
-  // AMD:        [[N0:%.*]] = alloca i32, align 4, addrspace(5)
-  // AMD-NEXT:   [[N:%.*]] = addrspacecast i32 addrspace(5)* [[N0]] to i32*
-  // X64-NEXT:   [[REF:%.*]] = alloca i16*, align 8
-  // AMD:        [[REF0:%.*]] = alloca i16*, align 8, addrspace(5)
-  // AMD-NEXT:   [[REF:%.*]] = addrspacecast i16* addrspace(5)* [[REF0]] to i16**
-  // X64-NEXT:   [[S:%.*]] = alloca i16, align 2
-  // AMD:        [[S0:%.*]] = alloca i16, align 2, addrspace(5)
-  // AMD-NEXT:   [[S:%.*]] = addrspacecast i16 addrspace(5)* [[S0]] to i16*
+  // CHECK:      [[ARRAY:%.*]] = alloca i8*, align 8
+  // CHECK-NEXT: [[N:%.*]] = alloca i32, align 4
+  // CHECK-NEXT: [[REF:%.*]] = alloca i16*, align 8
+  // CHECK-NEXT: [[S:%.*]] = alloca i16, align 2
   // CHECK-NEXT: store i8* 
   // CHECK-NEXT: store i32
 
@@ -68,8 +59,6 @@ void test0(void *array, int n) {
 void test2(int b) {
   // CHECK-LABEL: define void {{.*}}test2{{.*}}(i32 %b)
   int varr[b];
-  // AMD: %__end = alloca i32*, align 8, addrspace(5)
-  // AMD: [[END:%.*]] = addrspacecast i32* addrspace(5)* %__end to i32**
   // get the address of %b by checking the first store that stores it 
   //CHECK: store i32 %b, i32* [[PTR_B:%.*]]
 
@@ -86,16 +75,13 @@ void test2(int b) {
   //CHECK: [[VLA_SIZEOF:%.*]] = mul nuw i64 4, [[VLA_NUM_ELEMENTS_PRE]]
   //CHECK-NEXT: [[VLA_NUM_ELEMENTS_POST:%.*]] = udiv i64 [[VLA_SIZEOF]], 4
   //CHECK-NEXT: [[VLA_END_PTR:%.*]] = getelementptr inbounds i32, i32* {{%.*}}, i64 [[VLA_NUM_ELEMENTS_POST]]
-  //X64-NEXT: store i32* [[VLA_END_PTR]], i32** %__end
-  //AMD-NEXT: store i32* [[VLA_END_PTR]], i32** [[END]]
+  //CHECK-NEXT: store i32* [[VLA_END_PTR]], i32** %__end
   for (int d : varr) 0;
 }
 
 void test3(int b, int c) {
   // CHECK-LABEL: define void {{.*}}test3{{.*}}(i32 %b, i32 %c)
   int varr[b][c];
-  // AMD: %__end = alloca i32*, align 8, addrspace(5)
-  // AMD: [[END:%.*]] = addrspacecast i32* addrspace(5)* %__end to i32**
   // get the address of %b by checking the first store that stores it 
   //CHECK: store i32 %b, i32* [[PTR_B:%.*]]
   //CHECK-NEXT: store i32 %c, i32* [[PTR_C:%.*]]
@@ -119,8 +105,7 @@ void test3(int b, int c) {
   //CHECK-NEXT: [[VLA_NUM_ELEMENTS:%.*]] = udiv i64 [[VLA_SIZEOF]], [[VLA_SIZEOF_DIM2]]
   //CHECK-NEXT: [[VLA_END_INDEX:%.*]] = mul nsw i64 [[VLA_NUM_ELEMENTS]], [[VLA_DIM2_PRE]]
   //CHECK-NEXT: [[VLA_END_PTR:%.*]] = getelementptr inbounds i32, i32* {{%.*}}, i64 [[VLA_END_INDEX]]
-  //X64-NEXT: store i32* [[VLA_END_PTR]], i32** %__end
-  //AMD-NEXT: store i32* [[VLA_END_PTR]], i32** [[END]]
+  //CHECK-NEXT: store i32* [[VLA_END_PTR]], i32** %__end
  
   for (auto &d : varr) 0;
 }

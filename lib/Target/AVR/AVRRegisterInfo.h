@@ -14,7 +14,7 @@
 #ifndef LLVM_AVR_REGISTER_INFO_H
 #define LLVM_AVR_REGISTER_INFO_H
 
-#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "AVRGenRegisterInfo.inc"

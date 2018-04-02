@@ -18,7 +18,6 @@
 #include "WebAssemblyMachineFunctionInfo.h"
 #include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/StringExtras.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -26,6 +25,7 @@
 #include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/FormattedStream.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "asm-printer"

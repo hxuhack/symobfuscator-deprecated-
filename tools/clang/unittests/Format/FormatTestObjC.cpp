@@ -79,17 +79,6 @@ TEST(FormatTestObjCStyle, DetectsObjCInHeaders) {
   ASSERT_TRUE((bool)Style);
   EXPECT_EQ(FormatStyle::LK_ObjC, Style->Language);
 
-  Style = getStyle("LLVM", "a.h", "none", "@interface\n"
-                                          "@end\n"
-                                          "//comment");
-  ASSERT_TRUE((bool)Style);
-  EXPECT_EQ(FormatStyle::LK_ObjC, Style->Language);
-
-  Style = getStyle("LLVM", "a.h", "none", "@interface\n"
-                                          "@end //comment");
-  ASSERT_TRUE((bool)Style);
-  EXPECT_EQ(FormatStyle::LK_ObjC, Style->Language);
-
   // No recognizable ObjC.
   Style = getStyle("LLVM", "a.h", "none", "void f() {}");
   ASSERT_TRUE((bool)Style);

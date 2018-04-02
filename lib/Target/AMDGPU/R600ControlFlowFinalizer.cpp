@@ -1,4 +1,4 @@
-//===- R600ControlFlowFinalizer.cpp - Finalize Control Flow Inst ----------===//
+//===-- R600ControlFlowFinalizer.cpp - Finalize Control Flow Inst----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -9,8 +9,7 @@
 //
 /// \file
 /// This pass compute turns all control flow pseudo instructions into native one
-/// computing their address on the fly; it also sets STACK_SIZE info.
-//
+/// computing their address on the fly ; it also sets STACK_SIZE info.
 //===----------------------------------------------------------------------===//
 
 #include "AMDGPU.h"
@@ -30,15 +29,13 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/IR/CallingConv.h"
 #include "llvm/IR/DebugLoc.h"
-#include "llvm/IR/Function.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
+#include <new>
 #include <set>
 #include <utility>
 #include <vector>
@@ -50,6 +47,7 @@ using namespace llvm;
 namespace {
 
 struct CFStack {
+
   enum StackItem {
     ENTRY = 0,
     SUB_ENTRY = 1,
@@ -216,7 +214,7 @@ void CFStack::popLoop() {
 
 class R600ControlFlowFinalizer : public MachineFunctionPass {
 private:
-  using ClauseFile = std::pair<MachineInstr *, std::vector<MachineInstr *>>;
+  typedef std::pair<MachineInstr *, std::vector<MachineInstr *>> ClauseFile;
 
   enum ControlFlowInstruction {
     CF_TC,
@@ -232,6 +230,7 @@ private:
     CF_END
   };
 
+  static char ID;
   const R600InstrInfo *TII = nullptr;
   const R600RegisterInfo *TRI = nullptr;
   unsigned MaxFetchInst;
@@ -500,8 +499,6 @@ private:
   }
 
 public:
-  static char ID;
-
   R600ControlFlowFinalizer() : MachineFunctionPass(ID) {}
 
   bool runOnMachineFunction(MachineFunction &MF) override {
@@ -512,14 +509,14 @@ public:
 
     R600MachineFunctionInfo *MFI = MF.getInfo<R600MachineFunctionInfo>();
 
-    CFStack CFStack(ST, MF.getFunction().getCallingConv());
+    CFStack CFStack(ST, MF.getFunction()->getCallingConv());
     for (MachineFunction::iterator MB = MF.begin(), ME = MF.end(); MB != ME;
         ++MB) {
       MachineBasicBlock &MBB = *MB;
       unsigned CfCount = 0;
       std::vector<std::pair<unsigned, std::set<MachineInstr *>>> LoopStack;
       std::vector<MachineInstr * > IfThenElseStack;
-      if (MF.getFunction().getCallingConv() == CallingConv::AMDGPU_VS) {
+      if (MF.getFunction()->getCallingConv() == CallingConv::AMDGPU_VS) {
         BuildMI(MBB, MBB.begin(), MBB.findDebugLoc(MBB.begin()),
             getHWInstrDesc(CF_CALL_FS));
         CfCount++;
@@ -705,16 +702,9 @@ public:
   }
 };
 
-} // end anonymous namespace
-
-INITIALIZE_PASS_BEGIN(R600ControlFlowFinalizer, DEBUG_TYPE,
-                     "R600 Control Flow Finalizer", false, false)
-INITIALIZE_PASS_END(R600ControlFlowFinalizer, DEBUG_TYPE,
-                    "R600 Control Flow Finalizer", false, false)
-
 char R600ControlFlowFinalizer::ID = 0;
 
-char &llvm::R600ControlFlowFinalizerID = R600ControlFlowFinalizer::ID;
+} // end anonymous namespace
 
 FunctionPass *llvm::createR600ControlFlowFinalizer() {
   return new R600ControlFlowFinalizer();

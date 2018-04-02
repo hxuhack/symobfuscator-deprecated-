@@ -222,10 +222,7 @@ std::error_code SampleProfileWriterBinary::writeBody(const FunctionSamples &S) {
   }
 
   // Recursively emit all the callsite samples.
-  uint64_t NumCallsites = 0;
-  for (const auto &J : S.getCallsiteSamples())
-    NumCallsites += J.second.size();
-  encodeULEB128(NumCallsites, OS);
+  encodeULEB128(S.getCallsiteSamples().size(), OS);
   for (const auto &J : S.getCallsiteSamples())
     for (const auto &FS : J.second) {
       LineLocation Loc = J.first;
@@ -251,6 +248,8 @@ std::error_code SampleProfileWriterBinary::write(const FunctionSamples &S) {
 ///
 /// \param Filename The file to create.
 ///
+/// \param Writer The writer to instantiate according to the specified format.
+///
 /// \param Format Encoding format for the profile file.
 ///
 /// \returns an error code indicating the status of the created writer.
@@ -271,6 +270,8 @@ SampleProfileWriter::create(StringRef Filename, SampleProfileFormat Format) {
 /// \brief Create a sample profile stream writer based on the specified format.
 ///
 /// \param OS The output stream to store the profile data to.
+///
+/// \param Writer The writer to instantiate according to the specified format.
 ///
 /// \param Format Encoding format for the profile file.
 ///

@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd %s
-
 void foo() {
 }
 
@@ -86,7 +84,7 @@ int main(int argc, char **argv) {
   #pragma omp teams shared (S1) // expected-error {{'S1' does not refer to a value}}
   foo();
   #pragma omp target
-  #pragma omp teams shared (a, b, c, d, f) // expected-error {{incomplete type 'S1' where a complete type is required}}
+  #pragma omp teams shared (a, b, c, d, f)
   foo();
   #pragma omp target
   #pragma omp teams shared (argv[1]) // expected-error {{expected variable name}}

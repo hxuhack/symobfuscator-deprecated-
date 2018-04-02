@@ -971,9 +971,9 @@ def : InstRW<[A57WriteVABAL, A57ReadVABAL], (instregex "VABAL(s|u)")>;
 def : InstRW<[A57Write_3cyc_1V], (instregex "VABDL(s|u)")>;
 
 // ASIMD arith, basic
-def : InstRW<[A57Write_3cyc_1V], (instregex "VADDv", "VADDL", "VADDW",
+def : InstRW<[A57Write_3cyc_1V], (instregex "VADD", "VADDL", "VADDW",
   "VNEG(s8d|s16d|s32d|s8q|s16q|s32q|d|q)",
-  "VPADDi", "VPADDL", "VSUBv", "VSUBL", "VSUBW")>;
+  "VPADDi", "VPADDL", "VSUB", "VSUBL", "VSUBW")>;
 
 // ASIMD arith, complex
 def : InstRW<[A57Write_3cyc_1V], (instregex "VABS", "VADDHN", "VHADD", "VHSUB",

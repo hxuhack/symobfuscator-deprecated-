@@ -26,7 +26,7 @@ static bool VerifyMachineDomInfo = true;
 static bool VerifyMachineDomInfo = false;
 #endif
 static cl::opt<bool, true> VerifyMachineDomInfoX(
-    "verify-machine-dom-info", cl::location(VerifyMachineDomInfo), cl::Hidden,
+    "verify-machine-dom-info", cl::location(VerifyMachineDomInfo),
     cl::desc("Verify machine dominator info (time consuming)"));
 
 namespace llvm {
@@ -148,8 +148,7 @@ void MachineDominatorTree::verifyDomTree() const {
   OtherDT.recalculate(F);
   if (getRootNode()->getBlock() != OtherDT.getRootNode()->getBlock() ||
       DT->compare(OtherDT)) {
-    errs() << "MachineDominatorTree for function " << F.getName()
-           << " is not up to date!\nComputed:\n";
+    errs() << "MachineDominatorTree is not up to date!\nComputed:\n";
     DT->print(errs());
     errs() << "\nActual:\n";
     OtherDT.print(errs());

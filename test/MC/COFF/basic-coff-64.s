@@ -11,7 +11,7 @@
 	.globl	_main
 	.align	16, 0x90
 _main:                                  # @main
-# %bb.0:                                # %entry
+# BB#0:                                 # %entry
 	subl	$4, %esp
 	movl	$.L_.str, (%esp)
 	call	_printf

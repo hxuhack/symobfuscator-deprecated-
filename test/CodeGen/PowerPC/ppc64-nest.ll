@@ -7,7 +7,7 @@ target triple = "powerpc64-unknown-linux-gnu"
 
 define i8* @nest_receiver(i8* nest %arg) nounwind {
 ; CHECK-LABEL: nest_receiver:
-; CHECK: # %bb.0:
+; CHECK: # BB#0:
 ; CHECK-NEXT: mr 3, 11
 ; CHECK-NEXT: blr
 

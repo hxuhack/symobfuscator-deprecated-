@@ -1,4 +1,4 @@
-//===- VTTBuilder.h - C++ VTT layout builder --------------------*- C++ -*-===//
+//===--- VTTBuilder.h - C++ VTT layout builder --------------------*- C++ -*-=//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -16,31 +16,25 @@
 #define LLVM_CLANG_AST_VTTBUILDER_H
 
 #include "clang/AST/BaseSubobject.h"
-#include "clang/AST/CharUnits.h"
-#include "clang/Basic/LLVM.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/PointerIntPair.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include <cstdint>
+#include "clang/AST/CXXInheritance.h"
+#include "clang/AST/GlobalDecl.h"
+#include "clang/AST/RecordLayout.h"
+#include "clang/Basic/ABI.h"
+#include <utility>
 
 namespace clang {
-
-class ASTContext;
-class ASTRecordLayout;
-class CXXRecordDecl;
 
 class VTTVTable {
   llvm::PointerIntPair<const CXXRecordDecl *, 1, bool> BaseAndIsVirtual;
   CharUnits BaseOffset;
 
 public:
-  VTTVTable() = default;
+  VTTVTable() {}
   VTTVTable(const CXXRecordDecl *Base, CharUnits BaseOffset, bool BaseIsVirtual)
-      : BaseAndIsVirtual(Base, BaseIsVirtual), BaseOffset(BaseOffset) {}
+    : BaseAndIsVirtual(Base, BaseIsVirtual), BaseOffset(BaseOffset) {}
   VTTVTable(BaseSubobject Base, bool BaseIsVirtual)
-      : BaseAndIsVirtual(Base.getBase(), BaseIsVirtual),
-        BaseOffset(Base.getBaseOffset()) {}
+    : BaseAndIsVirtual(Base.getBase(), BaseIsVirtual),
+      BaseOffset(Base.getBaseOffset()) {}
 
   const CXXRecordDecl *getBase() const {
     return BaseAndIsVirtual.getPointer();
@@ -63,24 +57,25 @@ struct VTTComponent {
   uint64_t VTableIndex;
   BaseSubobject VTableBase;
 
-  VTTComponent() = default;
+  VTTComponent() {}
   VTTComponent(uint64_t VTableIndex, BaseSubobject VTableBase)
-     : VTableIndex(VTableIndex), VTableBase(VTableBase) {}
+    : VTableIndex(VTableIndex), VTableBase(VTableBase) {}
 };
 
 /// \brief Class for building VTT layout information.
 class VTTBuilder {
+  
   ASTContext &Ctx;
 
   /// \brief The most derived class for which we're building this vtable.
   const CXXRecordDecl *MostDerivedClass;
 
-  using VTTVTablesVectorTy = SmallVector<VTTVTable, 64>;
+  typedef SmallVector<VTTVTable, 64> VTTVTablesVectorTy;
   
   /// \brief The VTT vtables.
   VTTVTablesVectorTy VTTVTables;
   
-  using VTTComponentsVectorTy = SmallVector<VTTComponent, 64>;
+  typedef SmallVector<VTTComponent, 64> VTTComponentsVectorTy;
   
   /// \brief The VTT components.
   VTTComponentsVectorTy VTTComponents;
@@ -88,9 +83,9 @@ class VTTBuilder {
   /// \brief The AST record layout of the most derived class.
   const ASTRecordLayout &MostDerivedClassLayout;
 
-  using VisitedVirtualBasesSetTy = llvm::SmallPtrSet<const CXXRecordDecl *, 4>;
+  typedef llvm::SmallPtrSet<const CXXRecordDecl *, 4> VisitedVirtualBasesSetTy;
 
-  using AddressPointsMapTy = llvm::DenseMap<BaseSubobject, uint64_t>;
+  typedef llvm::DenseMap<BaseSubobject, uint64_t> AddressPointsMapTy;
 
   /// \brief The sub-VTT indices for the bases of the most derived class.
   llvm::DenseMap<BaseSubobject, uint64_t> SubVTTIndicies;
@@ -158,8 +153,9 @@ public:
   getSecondaryVirtualPointerIndices() const {
     return SecondaryVirtualPointerIndices;
   }
+
 };
 
-} // namespace clang
+}
 
-#endif // LLVM_CLANG_AST_VTTBUILDER_H
+#endif

@@ -373,17 +373,19 @@ llvm::SplitFunctionsOutOfModule(Module *M, const std::vector<Function *> &F,
 std::unique_ptr<Module>
 BugDriver::extractMappedBlocksFromModule(const std::vector<BasicBlock *> &BBs,
                                          Module *M) {
-  auto Temp = sys::fs::TempFile::create(OutputPrefix + "-extractblocks%%%%%%%");
-  if (!Temp) {
+  SmallString<128> Filename;
+  int FD;
+  std::error_code EC = sys::fs::createUniqueFile(
+      OutputPrefix + "-extractblocks%%%%%%%", FD, Filename);
+  if (EC) {
     outs() << "*** Basic Block extraction failed!\n";
-    errs() << "Error creating temporary file: " << toString(Temp.takeError())
-           << "\n";
+    errs() << "Error creating temporary file: " << EC.message() << "\n";
     EmitProgressBitcode(M, "basicblockextractfail", true);
     return nullptr;
   }
-  DiscardTemp Discard{*Temp};
+  sys::RemoveFileOnSignal(Filename);
 
-  raw_fd_ostream OS(Temp->FD, /*shouldClose*/ false);
+  tool_output_file BlocksToNotExtractFile(Filename.c_str(), FD);
   for (std::vector<BasicBlock *>::const_iterator I = BBs.begin(), E = BBs.end();
        I != E; ++I) {
     BasicBlock *BB = *I;
@@ -391,23 +393,27 @@ BugDriver::extractMappedBlocksFromModule(const std::vector<BasicBlock *> &BBs,
     // off of.
     if (!BB->hasName())
       BB->setName("tmpbb");
-    OS << BB->getParent()->getName() << " " << BB->getName() << "\n";
+    BlocksToNotExtractFile.os() << BB->getParent()->getName() << " "
+                                << BB->getName() << "\n";
   }
-  OS.flush();
-  if (OS.has_error()) {
+  BlocksToNotExtractFile.os().close();
+  if (BlocksToNotExtractFile.os().has_error()) {
     errs() << "Error writing list of blocks to not extract\n";
     EmitProgressBitcode(M, "basicblockextractfail", true);
-    OS.clear_error();
+    BlocksToNotExtractFile.os().clear_error();
     return nullptr;
   }
+  BlocksToNotExtractFile.keep();
 
   std::string uniqueFN = "--extract-blocks-file=";
-  uniqueFN += Temp->TmpName;
+  uniqueFN += Filename.str();
   const char *ExtraArg = uniqueFN.c_str();
 
   std::vector<std::string> PI;
   PI.push_back("extract-blocks");
   std::unique_ptr<Module> Ret = runPassesOn(M, PI, 1, &ExtraArg);
+
+  sys::fs::remove(Filename.c_str());
 
   if (!Ret) {
     outs() << "*** Basic Block extraction failed, please report a bug!\n";

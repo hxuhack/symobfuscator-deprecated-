@@ -44,12 +44,26 @@ class OrcCBindingsStack;
 
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(std::shared_ptr<Module>,
                                    LLVMSharedModuleRef)
+DEFINE_SIMPLE_CONVERSION_FUNCTIONS(std::shared_ptr<MemoryBuffer>,
+                                   LLVMSharedObjectBufferRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(OrcCBindingsStack, LLVMOrcJITStackRef)
 DEFINE_SIMPLE_CONVERSION_FUNCTIONS(TargetMachine, LLVMTargetMachineRef)
 
-namespace detail {
+class OrcCBindingsStack {
+public:
 
+  using CompileCallbackMgr = orc::JITCompileCallbackManager;
+  using ObjLayerT = orc::RTDyldObjectLinkingLayer;
+  using CompileLayerT = orc::IRCompileLayer<ObjLayerT, orc::SimpleCompiler>;
+  using CODLayerT =
+        orc::CompileOnDemandLayer<CompileLayerT, CompileCallbackMgr>;
 
+  using CallbackManagerBuilder =
+      std::function<std::unique_ptr<CompileCallbackMgr>()>;
+
+  using IndirectStubsManagerBuilder = CODLayerT::IndirectStubsManagerBuilderT;
+
+private:
   class GenericHandle {
   public:
     virtual ~GenericHandle() = default;
@@ -76,55 +90,12 @@ namespace detail {
     typename LayerT::ModuleHandleT Handle;
   };
 
-  template <>
-  class GenericHandleImpl<orc::RTDyldObjectLinkingLayer>
-    : public GenericHandle {
-  private:
-    using LayerT = orc::RTDyldObjectLinkingLayer;
-  public:
-
-    GenericHandleImpl(LayerT &Layer, typename LayerT::ObjHandleT Handle)
-        : Layer(Layer), Handle(std::move(Handle)) {}
-
-    JITSymbol findSymbolIn(const std::string &Name,
-                           bool ExportedSymbolsOnly) override {
-      return Layer.findSymbolIn(Handle, Name, ExportedSymbolsOnly);
-    }
-
-    Error removeModule() override { return Layer.removeObject(Handle); }
-
-  private:
-    LayerT &Layer;
-    typename LayerT::ObjHandleT Handle;
-  };
-
-
-  template <typename LayerT, typename HandleT>
+  template <typename LayerT>
   std::unique_ptr<GenericHandleImpl<LayerT>>
-  createGenericHandle(LayerT &Layer, HandleT Handle) {
+  createGenericHandle(LayerT &Layer, typename LayerT::ModuleHandleT Handle) {
     return llvm::make_unique<GenericHandleImpl<LayerT>>(Layer,
                                                         std::move(Handle));
   }
-
-} // end namespace detail
-
-class OrcCBindingsStack {
-public:
-
-  using CompileCallbackMgr = orc::JITCompileCallbackManager;
-  using ObjLayerT = orc::RTDyldObjectLinkingLayer;
-  using CompileLayerT = orc::IRCompileLayer<ObjLayerT, orc::SimpleCompiler>;
-  using CODLayerT =
-        orc::CompileOnDemandLayer<CompileLayerT, CompileCallbackMgr>;
-
-  using CallbackManagerBuilder =
-      std::function<std::unique_ptr<CompileCallbackMgr>()>;
-
-  using IndirectStubsManagerBuilder = CODLayerT::IndirectStubsManagerBuilderT;
-
-private:
-
-  using OwningObject = object::OwningBinary<object::ObjectFile>;
 
 public:
   using ModuleHandleT = unsigned;
@@ -174,15 +145,12 @@ public:
   createLazyCompileCallback(JITTargetAddress &RetAddr,
                             LLVMOrcLazyCompileCallbackFn Callback,
                             void *CallbackCtx) {
-    if (auto CCInfoOrErr = CCMgr->getCompileCallback()) {
-      auto &CCInfo = *CCInfoOrErr;
-      CCInfo.setCompileAction([=]() -> JITTargetAddress {
-          return Callback(wrap(this), CallbackCtx);
-        });
-      RetAddr = CCInfo.getAddress();
-      return LLVMOrcErrSuccess;
-    } else
-      return mapError(CCInfoOrErr.takeError());
+    auto CCInfo = CCMgr->getCompileCallback();
+    CCInfo.setCompileAction([=]() -> JITTargetAddress {
+      return Callback(wrap(this), CallbackCtx);
+    });
+    RetAddr = CCInfo.getAddress();
+    return LLVMOrcErrSuccess;
   }
 
   LLVMOrcErrorCode createIndirectStub(StringRef StubName,
@@ -295,33 +263,6 @@ public:
     return LLVMOrcErrSuccess;
   }
 
-  LLVMOrcErrorCode addObject(ModuleHandleT &RetHandle,
-                             std::unique_ptr<MemoryBuffer> ObjBuffer,
-                             LLVMOrcSymbolResolverFn ExternalResolver,
-                             void *ExternalResolverCtx) {
-    if (auto ObjOrErr =
-        object::ObjectFile::createObjectFile(ObjBuffer->getMemBufferRef())) {
-      auto &Obj = *ObjOrErr;
-      auto OwningObj =
-        std::make_shared<OwningObject>(std::move(Obj), std::move(ObjBuffer));
-
-      // Create the resolver.
-      auto Resolver = createResolver(ExternalResolver, ExternalResolverCtx);
-
-      ModuleHandleT H;
-      if (auto HOrErr = ObjectLayer.addObject(std::move(OwningObj),
-                                              std::move(Resolver)))
-        H = createHandle(ObjectLayer, *HOrErr);
-      else
-        return mapError(HOrErr.takeError());
-
-      RetHandle = H;
-
-      return LLVMOrcErrSuccess;
-    } else
-      return mapError(ObjOrErr.takeError());
-  }
-
   JITSymbol findSymbol(const std::string &Name,
                                  bool ExportedSymbolsOnly) {
     if (auto Sym = IndirectStubsMgr->findStub(Name, ExportedSymbolsOnly))
@@ -357,19 +298,17 @@ public:
   const std::string &getErrorMessage() const { return ErrMsg; }
 
 private:
-  template <typename LayerT, typename HandleT>
-  unsigned createHandle(LayerT &Layer, HandleT Handle) {
+  template <typename LayerT>
+  unsigned createHandle(LayerT &Layer, typename LayerT::ModuleHandleT Handle) {
     unsigned NewHandle;
     if (!FreeHandleIndexes.empty()) {
       NewHandle = FreeHandleIndexes.back();
       FreeHandleIndexes.pop_back();
-      GenericHandles[NewHandle] =
-        detail::createGenericHandle(Layer, std::move(Handle));
+      GenericHandles[NewHandle] = createGenericHandle(Layer, std::move(Handle));
       return NewHandle;
     } else {
       NewHandle = GenericHandles.size();
-      GenericHandles.push_back(
-        detail::createGenericHandle(Layer, std::move(Handle)));
+      GenericHandles.push_back(createGenericHandle(Layer, std::move(Handle)));
     }
     return NewHandle;
   }
@@ -396,7 +335,7 @@ private:
   CompileLayerT CompileLayer;
   CODLayerT CODLayer;
 
-  std::vector<std::unique_ptr<detail::GenericHandle>> GenericHandles;
+  std::vector<std::unique_ptr<GenericHandle>> GenericHandles;
   std::vector<unsigned> FreeHandleIndexes;
 
   orc::LocalCXXRuntimeOverrides CXXRuntimeOverrides;

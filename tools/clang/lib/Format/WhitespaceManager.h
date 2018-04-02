@@ -57,8 +57,6 @@ public:
   /// was not called.
   void addUntouchableToken(const FormatToken &Tok, bool InPPDirective);
 
-  llvm::Error addReplacement(const tooling::Replacement &Replacement);
-
   /// \brief Inserts or replaces whitespace in the middle of a token.
   ///
   /// Inserts \p PreviousPostfix, \p Newlines, \p Spaces and \p CurrentPrefix
@@ -196,9 +194,9 @@ private:
   /// \brief Stores \p Text as the replacement for the whitespace in \p Range.
   void storeReplacement(SourceRange Range, StringRef Text);
   void appendNewlineText(std::string &Text, unsigned Newlines);
-  void appendEscapedNewlineText(std::string &Text, unsigned Newlines,
-                                unsigned PreviousEndOfTokenColumn,
-                                unsigned EscapedNewlineColumn);
+  void appendNewlineText(std::string &Text, unsigned Newlines,
+                         unsigned PreviousEndOfTokenColumn,
+                         unsigned EscapedNewlineColumn);
   void appendIndentText(std::string &Text, unsigned IndentLevel,
                         unsigned Spaces, unsigned WhitespaceStartColumn);
 

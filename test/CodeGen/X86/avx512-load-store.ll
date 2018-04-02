@@ -4,14 +4,15 @@
 
 define <4 x float> @test_mm_mask_move_ss(<4 x float> %__W, i8 zeroext %__U, <4 x float> %__A, <4 x float> %__B) local_unnamed_addr #0 {
 ; CHECK64-LABEL: test_mm_mask_move_ss:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovss %xmm2, %xmm1, %xmm0 {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_move_ss:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; CHECK32-NEXT:    andb $1, %al
 ; CHECK32-NEXT:    kmovw %eax, %k1
 ; CHECK32-NEXT:    vmovss %xmm2, %xmm0, %xmm0 {%k1}
 ; CHECK32-NEXT:    vmovss {{.*#+}} xmm0 = xmm0[0],xmm1[1,2,3]
@@ -28,14 +29,15 @@ entry:
 
 define <4 x float> @test_mm_maskz_move_ss(i8 zeroext %__U, <4 x float> %__A, <4 x float> %__B) local_unnamed_addr #0 {
 ; CHECK64-LABEL: test_mm_maskz_move_ss:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovss %xmm1, %xmm0, %xmm0 {%k1} {z}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_maskz_move_ss:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; CHECK32-NEXT:    andb $1, %al
 ; CHECK32-NEXT:    kmovw %eax, %k1
 ; CHECK32-NEXT:    vxorps %xmm2, %xmm2, %xmm2
 ; CHECK32-NEXT:    vmovss %xmm1, %xmm0, %xmm2 {%k1}
@@ -52,14 +54,15 @@ entry:
 
 define <2 x double> @test_mm_mask_move_sd(<2 x double> %__W, i8 zeroext %__U, <2 x double> %__A, <2 x double> %__B) local_unnamed_addr #0 {
 ; CHECK64-LABEL: test_mm_mask_move_sd:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovsd %xmm2, %xmm1, %xmm0 {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_move_sd:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; CHECK32-NEXT:    andb $1, %al
 ; CHECK32-NEXT:    kmovw %eax, %k1
 ; CHECK32-NEXT:    vmovsd %xmm2, %xmm0, %xmm0 {%k1}
 ; CHECK32-NEXT:    vmovsd {{.*#+}} xmm0 = xmm0[0],xmm1[1]
@@ -76,14 +79,15 @@ entry:
 
 define <2 x double> @test_mm_maskz_move_sd(i8 zeroext %__U, <2 x double> %__A, <2 x double> %__B) local_unnamed_addr #0 {
 ; CHECK64-LABEL: test_mm_maskz_move_sd:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovsd %xmm1, %xmm0, %xmm0 {%k1} {z}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_maskz_move_sd:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %al
+; CHECK32-NEXT:    andb $1, %al
 ; CHECK32-NEXT:    kmovw %eax, %k1
 ; CHECK32-NEXT:    vxorpd %xmm2, %xmm2, %xmm2
 ; CHECK32-NEXT:    vmovsd %xmm1, %xmm0, %xmm2 {%k1}
@@ -100,13 +104,13 @@ entry:
 
 define void @test_mm_mask_store_ss(float* %__W, i8 zeroext %__U, <4 x float> %__A) local_unnamed_addr #1 {
 ; CHECK64-LABEL: test_mm_mask_store_ss:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %esi, %k1
 ; CHECK64-NEXT:    vmovss %xmm0, (%rdi) {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_store_ss:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movzbl {{[0-9]+}}(%esp), %ecx
 ; CHECK32-NEXT:    kmovw %ecx, %k1
@@ -124,13 +128,13 @@ entry:
 
 define void @test_mm_mask_store_sd(double* %__W, i8 zeroext %__U, <2 x double> %__A) local_unnamed_addr #1 {
 ; CHECK64-LABEL: test_mm_mask_store_sd:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %esi, %k1
 ; CHECK64-NEXT:    vmovsd %xmm0, (%rdi) {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_store_sd:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; CHECK32-NEXT:    kmovw %ecx, %k1
@@ -147,13 +151,13 @@ entry:
 
 define <4 x float> @test_mm_mask_load_ss(<4 x float> %__A, i8 zeroext %__U, float* %__W) local_unnamed_addr #2 {
 ; CHECK64-LABEL: test_mm_mask_load_ss:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovss (%rsi), %xmm0 {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_load_ss:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movzbl {{[0-9]+}}(%esp), %ecx
 ; CHECK32-NEXT:    kmovw %ecx, %k1
@@ -173,13 +177,13 @@ entry:
 
 define <2 x double> @test_mm_mask_load_sd(<2 x double> %__A, i8 zeroext %__U, double* %__W) local_unnamed_addr #2 {
 ; CHECK64-LABEL: test_mm_mask_load_sd:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovsd (%rsi), %xmm0 {%k1}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_mask_load_sd:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; CHECK32-NEXT:    kmovw %ecx, %k1
@@ -198,13 +202,13 @@ entry:
 
 define <4 x float> @test_mm_maskz_load_ss(i8 zeroext %__U, float* %__W) local_unnamed_addr #2 {
 ; CHECK64-LABEL: test_mm_maskz_load_ss:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovss (%rsi), %xmm0 {%k1} {z}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_maskz_load_ss:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movzbl {{[0-9]+}}(%esp), %ecx
 ; CHECK32-NEXT:    kmovw %ecx, %k1
@@ -222,13 +226,13 @@ entry:
 
 define <2 x double> @test_mm_maskz_load_sd(i8 zeroext %__U, double* %__W) local_unnamed_addr #2 {
 ; CHECK64-LABEL: test_mm_maskz_load_sd:
-; CHECK64:       # %bb.0: # %entry
+; CHECK64:       # BB#0: # %entry
 ; CHECK64-NEXT:    kmovw %edi, %k1
 ; CHECK64-NEXT:    vmovsd (%rsi), %xmm0 {%k1} {z}
 ; CHECK64-NEXT:    retq
 ;
 ; CHECK32-LABEL: test_mm_maskz_load_sd:
-; CHECK32:       # %bb.0: # %entry
+; CHECK32:       # BB#0: # %entry
 ; CHECK32-NEXT:    movl {{[0-9]+}}(%esp), %eax
 ; CHECK32-NEXT:    movb {{[0-9]+}}(%esp), %cl
 ; CHECK32-NEXT:    kmovw %ecx, %k1

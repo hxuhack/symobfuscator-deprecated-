@@ -41,12 +41,9 @@ using namespace llvm;
 
 #define DEBUG_TYPE "WinCOFFStreamer"
 
-MCWinCOFFStreamer::MCWinCOFFStreamer(MCContext &Context,
-                                     std::unique_ptr<MCAsmBackend> MAB,
-                                     std::unique_ptr<MCCodeEmitter> CE,
-                                     raw_pwrite_stream &OS)
-    : MCObjectStreamer(Context, std::move(MAB), OS, std::move(CE)),
-      CurSymbol(nullptr) {}
+MCWinCOFFStreamer::MCWinCOFFStreamer(MCContext &Context, MCAsmBackend &MAB,
+                                     MCCodeEmitter &CE, raw_pwrite_stream &OS)
+    : MCObjectStreamer(Context, MAB, OS, &CE), CurSymbol(nullptr) {}
 
 void MCWinCOFFStreamer::EmitInstToData(const MCInst &Inst,
                                        const MCSubtargetInfo &STI) {
@@ -182,7 +179,7 @@ void MCWinCOFFStreamer::EmitCOFFSafeSEH(MCSymbol const *Symbol) {
   if (SXData->getAlignment() < 4)
     SXData->setAlignment(4);
 
-  new MCSymbolIdFragment(Symbol, SXData);
+  new MCSafeSEHFragment(Symbol, SXData);
 
   getAssembler().registerSymbol(*Symbol);
   CSymbol->setIsSafeSEH();
@@ -257,13 +254,20 @@ void MCWinCOFFStreamer::EmitLocalCommonSymbol(MCSymbol *S, uint64_t Size,
   auto *Symbol = cast<MCSymbolCOFF>(S);
 
   MCSection *Section = getContext().getObjectFileInfo()->getBSSSection();
-  PushSection();
-  SwitchSection(Section);
-  EmitValueToAlignment(ByteAlignment, 0, 1, 0);
-  EmitLabel(Symbol);
+  getAssembler().registerSection(*Section);
+  if (Section->getAlignment() < ByteAlignment)
+    Section->setAlignment(ByteAlignment);
+
+  getAssembler().registerSymbol(*Symbol);
   Symbol->setExternal(false);
-  EmitZeros(Size);
-  PopSection();
+
+  if (ByteAlignment != 1)
+    new MCAlignFragment(ByteAlignment, /*Value=*/0, /*ValueSize=*/0,
+                        ByteAlignment, Section);
+
+  MCFillFragment *Fragment = new MCFillFragment(
+      /*Value=*/0, Size, Section);
+  Symbol->setFragment(Fragment);
 }
 
 void MCWinCOFFStreamer::EmitZerofill(MCSection *Section, MCSymbol *Symbol,
@@ -281,7 +285,7 @@ void MCWinCOFFStreamer::EmitIdent(StringRef IdentString) {
   llvm_unreachable("not implemented");
 }
 
-void MCWinCOFFStreamer::EmitWinEHHandlerData(SMLoc Loc) {
+void MCWinCOFFStreamer::EmitWinEHHandlerData() {
   llvm_unreachable("not implemented");
 }
 

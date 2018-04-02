@@ -1,4 +1,3 @@
-; XFAIL: *
 ; RUN: llc -verify-machineinstrs -mcpu=pwr7 < %s | FileCheck %s
 target datalayout = "E-m:e-i64:64-n32:64"
 target triple = "powerpc64-unknown-linux-gnu"
@@ -12,13 +11,9 @@ entry:
   br i1 %or.cond, label %if.then, label %if.else
 
 ; CHECK-LABEL: @foo
-; CHECK: li
-; CHECK: li
-; CHECK: sub
-; CHECK: sub
-; CHECK: rldicl
-; CHECK: rldicl
-; CHECK: or.
+; CHECK: cmpwi
+; CHECK: cmpwi
+; CHECK: cror
 ; CHECK: blr
 
 if.then:                                          ; preds = %entry

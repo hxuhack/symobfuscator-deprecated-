@@ -15,7 +15,6 @@
 #include "llvm/ADT/TinyPtrVector.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetLoweringObjectFile.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Instructions.h"
@@ -27,6 +26,7 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Target/TargetLoweringObjectFile.h"
 #include "llvm/Target/TargetMachine.h"
 #include <algorithm>
 #include <cassert>
@@ -207,9 +207,9 @@ bool MachineModuleInfo::doInitialization(Module &M) {
   ObjFileMMI = nullptr;
   CurCallSite = 0;
   DbgInfoAvailable = UsesVAFloatArgument = UsesMorestackAddr = false;
-  HasSplitStack = HasNosplitStack = false;
   AddrLabelSymbols = nullptr;
   TheModule = &M;
+
   return false;
 }
 
@@ -276,8 +276,7 @@ MachineModuleInfo::getOrCreateMachineFunction(const Function &F) {
   MachineFunction *MF;
   if (I.second) {
     // No pre-existing machine function, create a new one.
-    const TargetSubtargetInfo &STI = *TM.getSubtargetImpl(F);
-    MF = new MachineFunction(F, TM, STI, NextFnNum++, *this);
+    MF = new MachineFunction(&F, TM, NextFnNum++, *this);
     // Update the set entry.
     I.first->second.reset(MF);
   } else {

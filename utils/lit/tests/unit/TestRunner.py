@@ -28,7 +28,6 @@ class TestIntegratedTestKeywordParser(unittest.TestCase):
                                              quiet=False,
                                              useValgrind=False,
                                              valgrindLeakCheck=False,
-                                             singleProcess=False,
                                              valgrindArgs=[],
                                              noExecute=False,
                                              debug=False,

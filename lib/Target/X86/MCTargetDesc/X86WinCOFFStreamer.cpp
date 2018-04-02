@@ -8,9 +8,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "X86MCTargetDesc.h"
-#include "X86TargetStreamer.h"
-#include "llvm/MC/MCAsmBackend.h"
-#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCWin64EH.h"
 #include "llvm/MC/MCWinCOFFStreamer.h"
 
@@ -20,18 +17,17 @@ namespace {
 class X86WinCOFFStreamer : public MCWinCOFFStreamer {
   Win64EH::UnwindEmitter EHStreamer;
 public:
-  X86WinCOFFStreamer(MCContext &C, std::unique_ptr<MCAsmBackend> AB,
-                     std::unique_ptr<MCCodeEmitter> CE, raw_pwrite_stream &OS)
-      : MCWinCOFFStreamer(C, std::move(AB), std::move(CE), OS) {}
+  X86WinCOFFStreamer(MCContext &C, MCAsmBackend &AB, MCCodeEmitter *CE,
+                     raw_pwrite_stream &OS)
+      : MCWinCOFFStreamer(C, AB, *CE, OS) {}
 
-  void EmitWinEHHandlerData(SMLoc Loc) override;
+  void EmitWinEHHandlerData() override;
   void EmitWindowsUnwindTables() override;
-  void EmitCVFPOData(const MCSymbol *ProcSym, SMLoc Loc) override;
   void FinishImpl() override;
 };
 
-void X86WinCOFFStreamer::EmitWinEHHandlerData(SMLoc Loc) {
-  MCStreamer::EmitWinEHHandlerData(Loc);
+void X86WinCOFFStreamer::EmitWinEHHandlerData() {
+  MCStreamer::EmitWinEHHandlerData();
 
   // We have to emit the unwind info now, because this directive
   // actually switches to the .xdata section!
@@ -44,12 +40,6 @@ void X86WinCOFFStreamer::EmitWindowsUnwindTables() {
   EHStreamer.Emit(*this);
 }
 
-void X86WinCOFFStreamer::EmitCVFPOData(const MCSymbol *ProcSym, SMLoc Loc) {
-  X86TargetStreamer *XTS =
-      static_cast<X86TargetStreamer *>(getTargetStreamer());
-  XTS->emitFPOData(ProcSym, Loc);
-}
-
 void X86WinCOFFStreamer::FinishImpl() {
   EmitFrames(nullptr);
   EmitWindowsUnwindTables();
@@ -58,14 +48,11 @@ void X86WinCOFFStreamer::FinishImpl() {
 }
 }
 
-MCStreamer *llvm::createX86WinCOFFStreamer(MCContext &C,
-                                           std::unique_ptr<MCAsmBackend> &&AB,
+MCStreamer *llvm::createX86WinCOFFStreamer(MCContext &C, MCAsmBackend &AB,
                                            raw_pwrite_stream &OS,
-                                           std::unique_ptr<MCCodeEmitter> &&CE,
-                                           bool RelaxAll,
+                                           MCCodeEmitter *CE, bool RelaxAll,
                                            bool IncrementalLinkerCompatible) {
-  X86WinCOFFStreamer *S =
-      new X86WinCOFFStreamer(C, std::move(AB), std::move(CE), OS);
+  X86WinCOFFStreamer *S = new X86WinCOFFStreamer(C, AB, CE, OS);
   S->getAssembler().setRelaxAll(RelaxAll);
   S->getAssembler().setIncrementalLinkerCompatible(IncrementalLinkerCompatible);
   return S;

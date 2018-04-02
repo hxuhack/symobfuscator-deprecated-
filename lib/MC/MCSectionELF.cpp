@@ -113,7 +113,8 @@ void MCSectionELF::PrintSwitchToSection(const MCAsmInfo &MAI, const Triple &T,
       OS << 'c';
     if (Flags & ELF::XCORE_SHF_DP_SECTION)
       OS << 'd';
-  } else if (T.isARM() || T.isThumb()) {
+  } else if (Arch == Triple::arm || Arch == Triple::armeb ||
+             Arch == Triple::thumb || Arch == Triple::thumbeb) {
     if (Flags & ELF::SHF_ARM_PURECODE)
       OS << 'y';
   }

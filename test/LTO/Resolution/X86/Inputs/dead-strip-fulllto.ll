@@ -14,11 +14,3 @@ define void @dead1() {
 }
 
 declare void @dead2()
-
-define linkonce_odr i8* @odr() {
-  ret i8* bitcast (void ()* @dead3 to i8*)
-}
-
-define internal void @dead3() {
-  ret void
-}

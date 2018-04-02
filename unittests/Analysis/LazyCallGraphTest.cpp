@@ -1166,21 +1166,20 @@ TEST(LazyCallGraphTest, InlineAndDeleteFunction) {
   LazyCallGraph::SCC &NewDC = *NewCs.begin();
   EXPECT_EQ(&NewDC, CG.lookupSCC(D1));
   EXPECT_EQ(&NewDC, CG.lookupSCC(D3));
-  auto NewRCs = DRC.removeInternalRefEdge(D1, {&D2});
-  ASSERT_EQ(2u, NewRCs.size());
-  LazyCallGraph::RefSCC &NewDRC = *NewRCs[0];
+  auto NewRCs = DRC.removeInternalRefEdge(D1, D2);
+  EXPECT_EQ(&DRC, CG.lookupRefSCC(D2));
+  EXPECT_EQ(NewRCs.end(), std::next(NewRCs.begin()));
+  LazyCallGraph::RefSCC &NewDRC = **NewRCs.begin();
   EXPECT_EQ(&NewDRC, CG.lookupRefSCC(D1));
   EXPECT_EQ(&NewDRC, CG.lookupRefSCC(D3));
-  LazyCallGraph::RefSCC &D2RC = *NewRCs[1];
-  EXPECT_EQ(&D2RC, CG.lookupRefSCC(D2));
-  EXPECT_FALSE(NewDRC.isParentOf(D2RC));
-  EXPECT_TRUE(CRC.isParentOf(D2RC));
+  EXPECT_FALSE(NewDRC.isParentOf(DRC));
+  EXPECT_TRUE(CRC.isParentOf(DRC));
   EXPECT_TRUE(CRC.isParentOf(NewDRC));
-  EXPECT_TRUE(D2RC.isParentOf(NewDRC));
+  EXPECT_TRUE(DRC.isParentOf(NewDRC));
   CRC.removeOutgoingEdge(C1, D2);
-  EXPECT_FALSE(CRC.isParentOf(D2RC));
+  EXPECT_FALSE(CRC.isParentOf(DRC));
   EXPECT_TRUE(CRC.isParentOf(NewDRC));
-  EXPECT_TRUE(D2RC.isParentOf(NewDRC));
+  EXPECT_TRUE(DRC.isParentOf(NewDRC));
 
   // Now that we've updated the call graph, D2 is dead, so remove it.
   CG.removeDeadFunction(D2F);
@@ -1341,7 +1340,7 @@ TEST(LazyCallGraphTest, InternalEdgeRemoval) {
   // Remove the edge from b -> a, which should leave the 3 functions still in
   // a single connected component because of a -> b -> c -> a.
   SmallVector<LazyCallGraph::RefSCC *, 1> NewRCs =
-      RC.removeInternalRefEdge(B, {&A});
+      RC.removeInternalRefEdge(B, A);
   EXPECT_EQ(0u, NewRCs.size());
   EXPECT_EQ(&RC, CG.lookupRefSCC(A));
   EXPECT_EQ(&RC, CG.lookupRefSCC(B));
@@ -1351,94 +1350,24 @@ TEST(LazyCallGraphTest, InternalEdgeRemoval) {
   EXPECT_EQ(&RC, &*J);
   EXPECT_EQ(E, std::next(J));
 
-  // Increment I before we actually mutate the structure so that it remains
-  // a valid iterator.
-  ++I;
-
   // Remove the edge from c -> a, which should leave 'a' in the original RefSCC
   // and form a new RefSCC for 'b' and 'c'.
-  NewRCs = RC.removeInternalRefEdge(C, {&A});
-  ASSERT_EQ(2u, NewRCs.size());
-  LazyCallGraph::RefSCC &BCRC = *NewRCs[0];
-  LazyCallGraph::RefSCC &ARC = *NewRCs[1];
-  EXPECT_EQ(&ARC, CG.lookupRefSCC(A));
-  EXPECT_EQ(1, std::distance(ARC.begin(), ARC.end()));
-  EXPECT_EQ(&BCRC, CG.lookupRefSCC(B));
-  EXPECT_EQ(&BCRC, CG.lookupRefSCC(C));
+  NewRCs = RC.removeInternalRefEdge(C, A);
+  EXPECT_EQ(1u, NewRCs.size());
+  EXPECT_EQ(&RC, CG.lookupRefSCC(A));
+  EXPECT_EQ(1, std::distance(RC.begin(), RC.end()));
+  LazyCallGraph::RefSCC &RC2 = *CG.lookupRefSCC(B);
+  EXPECT_EQ(&RC2, CG.lookupRefSCC(C));
+  EXPECT_EQ(&RC2, NewRCs[0]);
   J = CG.postorder_ref_scc_begin();
   EXPECT_NE(I, J);
-  EXPECT_EQ(&BCRC, &*J);
-  ++J;
-  EXPECT_NE(I, J);
-  EXPECT_EQ(&ARC, &*J);
+  EXPECT_EQ(&RC2, &*J);
   ++J;
   EXPECT_EQ(I, J);
-  EXPECT_EQ(E, J);
-}
-
-TEST(LazyCallGraphTest, InternalMultiEdgeRemoval) {
-  LLVMContext Context;
-  // A nice fully connected (including self-edges) RefSCC.
-  std::unique_ptr<Module> M = parseAssembly(
-      Context, "define void @a(i8** %ptr) {\n"
-               "entry:\n"
-               "  store i8* bitcast (void(i8**)* @a to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @b to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @c to i8*), i8** %ptr\n"
-               "  ret void\n"
-               "}\n"
-               "define void @b(i8** %ptr) {\n"
-               "entry:\n"
-               "  store i8* bitcast (void(i8**)* @a to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @b to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @c to i8*), i8** %ptr\n"
-               "  ret void\n"
-               "}\n"
-               "define void @c(i8** %ptr) {\n"
-               "entry:\n"
-               "  store i8* bitcast (void(i8**)* @a to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @b to i8*), i8** %ptr\n"
-               "  store i8* bitcast (void(i8**)* @c to i8*), i8** %ptr\n"
-               "  ret void\n"
-               "}\n");
-  LazyCallGraph CG = buildCG(*M);
-
-  // Force the graph to be fully expanded.
-  CG.buildRefSCCs();
-  auto I = CG.postorder_ref_scc_begin(), E = CG.postorder_ref_scc_end();
-  LazyCallGraph::RefSCC &RC = *I;
-  EXPECT_EQ(E, std::next(I));
-
-  LazyCallGraph::Node &A = *CG.lookup(lookupFunction(*M, "a"));
-  LazyCallGraph::Node &B = *CG.lookup(lookupFunction(*M, "b"));
-  LazyCallGraph::Node &C = *CG.lookup(lookupFunction(*M, "c"));
-  EXPECT_EQ(&RC, CG.lookupRefSCC(A));
-  EXPECT_EQ(&RC, CG.lookupRefSCC(B));
-  EXPECT_EQ(&RC, CG.lookupRefSCC(C));
-
-  // Increment I before we actually mutate the structure so that it remains
-  // a valid iterator.
+  EXPECT_EQ(&RC, &*J);
   ++I;
-
-  // Remove the edges from b -> a and b -> c, leaving b in its own RefSCC.
-  SmallVector<LazyCallGraph::RefSCC *, 1> NewRCs =
-      RC.removeInternalRefEdge(B, {&A, &C});
-
-  ASSERT_EQ(2u, NewRCs.size());
-  LazyCallGraph::RefSCC &BRC = *NewRCs[0];
-  LazyCallGraph::RefSCC &ACRC = *NewRCs[1];
-  EXPECT_EQ(&BRC, CG.lookupRefSCC(B));
-  EXPECT_EQ(1, std::distance(BRC.begin(), BRC.end()));
-  EXPECT_EQ(&ACRC, CG.lookupRefSCC(A));
-  EXPECT_EQ(&ACRC, CG.lookupRefSCC(C));
-  auto J = CG.postorder_ref_scc_begin();
-  EXPECT_NE(I, J);
-  EXPECT_EQ(&BRC, &*J);
+  EXPECT_EQ(E, I);
   ++J;
-  EXPECT_NE(I, J);
-  EXPECT_EQ(&ACRC, &*J);
-  ++J;
-  EXPECT_EQ(I, J);
   EXPECT_EQ(E, J);
 }
 
@@ -1491,7 +1420,7 @@ TEST(LazyCallGraphTest, InternalNoOpEdgeRemoval) {
 
   // Remove the edge from a -> c which doesn't change anything.
   SmallVector<LazyCallGraph::RefSCC *, 1> NewRCs =
-      RC.removeInternalRefEdge(AN, {&CN});
+      RC.removeInternalRefEdge(AN, CN);
   EXPECT_EQ(0u, NewRCs.size());
   EXPECT_EQ(&RC, CG.lookupRefSCC(AN));
   EXPECT_EQ(&RC, CG.lookupRefSCC(BN));
@@ -1506,8 +1435,8 @@ TEST(LazyCallGraphTest, InternalNoOpEdgeRemoval) {
 
   // Remove the edge from b -> a and c -> b; again this doesn't change
   // anything.
-  NewRCs = RC.removeInternalRefEdge(BN, {&AN});
-  NewRCs = RC.removeInternalRefEdge(CN, {&BN});
+  NewRCs = RC.removeInternalRefEdge(BN, AN);
+  NewRCs = RC.removeInternalRefEdge(CN, BN);
   EXPECT_EQ(0u, NewRCs.size());
   EXPECT_EQ(&RC, CG.lookupRefSCC(AN));
   EXPECT_EQ(&RC, CG.lookupRefSCC(BN));

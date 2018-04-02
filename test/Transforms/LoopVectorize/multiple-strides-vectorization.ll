@@ -25,7 +25,7 @@
 ; CHECK-LABEL: Test
 ; CHECK: <4 x i64>
 ; CHECK: <4 x i32>, <4 x i32>
-; CHECK: !{!"llvm.loop.isvectorized", i32 1}
+; CHECK: llvm.loop.vectorize.width
 
 target datalayout = "e-m:e-i64:64-f80:128-n8:16:32:64-S128"
 

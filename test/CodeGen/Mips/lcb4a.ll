@@ -26,7 +26,7 @@ if.end:                                           ; preds = %if.else, %if.then
 }
 
 ; ci:	beqz	$3, $BB0_2
-; ci: # %bb.1:                                 # %if.else
+; ci: # BB#1:                                 # %if.else
 
 
 ; Function Attrs: nounwind optsize

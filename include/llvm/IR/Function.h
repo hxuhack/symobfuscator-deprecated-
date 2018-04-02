@@ -30,6 +30,7 @@
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/GlobalObject.h"
 #include "llvm/IR/GlobalValue.h"
+#include "llvm/IR/Intrinsics.h"
 #include "llvm/IR/OperandTraits.h"
 #include "llvm/IR/SymbolTableListTraits.h"
 #include "llvm/IR/Value.h"
@@ -42,10 +43,6 @@
 #include <string>
 
 namespace llvm {
-
-namespace Intrinsic {
-enum ID : unsigned;
-}
 
 class AssemblyAnnotationWriter;
 class Constant;
@@ -127,11 +124,6 @@ public:
   Function(const Function&) = delete;
   void operator=(const Function&) = delete;
   ~Function();
-
-  // This is here to help easily convert from FunctionT * (Function * or
-  // MachineFunction *) in BlockFrequencyInfoImpl to Function * by calling
-  // FunctionT->getFunction().
-  const Function &getFunction() const { return *this; }
 
   static Function *Create(FunctionType *Ty, LinkageTypes Linkage,
                           const Twine &N = "", Module *M = nullptr) {
@@ -218,7 +210,6 @@ public:
                  Attribute::get(getContext(), Kind, Val));
   }
 
-  /// @brief Add function attributes to this function.
   void addFnAttr(Attribute Attr) {
     addAttribute(AttributeList::FunctionIndex, Attr);
   }
@@ -249,12 +240,6 @@ public:
   /// pgo data.
   Optional<uint64_t> getEntryCount() const;
 
-  /// Return true if the function is annotated with profile data.
-  ///
-  /// Presence of entry counts from a profile run implies the function has
-  /// profile annotations.
-  bool hasProfileData() const { return getEntryCount().hasValue(); }
-
   /// Returns the set of GUIDs that needs to be imported to the function for
   /// sample PGO, to enable the same inlines as the profiled optimized binary.
   DenseSet<GlobalValue::GUID> getImportGUIDs() const;
@@ -269,8 +254,6 @@ public:
   bool hasFnAttribute(Attribute::AttrKind Kind) const {
     return AttributeSets.hasFnAttribute(Kind);
   }
-
-  /// @brief Return true if the function has the attribute.
   bool hasFnAttribute(StringRef Kind) const {
     return AttributeSets.hasFnAttribute(Kind);
   }
@@ -279,8 +262,6 @@ public:
   Attribute getFnAttribute(Attribute::AttrKind Kind) const {
     return getAttribute(AttributeList::FunctionIndex, Kind);
   }
-
-  /// @brief Return the attribute for the given attribute kind.
   Attribute getFnAttribute(StringRef Kind) const {
     return getAttribute(AttributeList::FunctionIndex, Kind);
   }
@@ -347,12 +328,10 @@ public:
     return getAttributes().hasParamAttribute(ArgNo, Kind);
   }
 
-  /// @brief gets the attribute from the list of attributes.
   Attribute getAttribute(unsigned i, Attribute::AttrKind Kind) const {
     return AttributeSets.getAttribute(i, Kind);
   }
 
-  /// @brief gets the attribute from the list of attributes.
   Attribute getAttribute(unsigned i, StringRef Kind) const {
     return AttributeSets.getAttribute(i, Kind);
   }
@@ -435,7 +414,7 @@ public:
   }
   void setOnlyAccessesArgMemory() { addFnAttr(Attribute::ArgMemOnly); }
 
-  /// @brief Determine if the function may only access memory that is
+  /// @brief Determine if the function may only access memory that is 
   ///  inaccessible from the IR.
   bool onlyAccessesInaccessibleMemory() const {
     return hasFnAttribute(Attribute::InaccessibleMemOnly);
@@ -503,7 +482,7 @@ public:
   }
   void setDoesNotRecurse() {
     addFnAttr(Attribute::NoRecurse);
-  }
+  }  
 
   /// @brief True if the ABI mandates (or the user requested) that this
   /// function be in a unwind table.

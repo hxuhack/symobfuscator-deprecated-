@@ -1,17 +1,17 @@
-; RUN: llc < %s -march=nvptx -mcpu=sm_20 | FileCheck %s
-; RUN: llc < %s -march=nvptx64 -mcpu=sm_20 | FileCheck %s
+; RUN: llc < %s -march=nvptx -mcpu=sm_20 | FileCheck %s --check-prefix=PTX32
+; RUN: llc < %s -march=nvptx64 -mcpu=sm_20 | FileCheck %s --check-prefix=PTX64
 
 ; Verify that the NVPTX target removes invalid symbol names prior to emitting
 ; PTX.
 
-; CHECK-NOT: .str
-; CHECK-NOT: .function.
+; PTX32-NOT: .str
+; PTX64-NOT: .str
 
-; CHECK-DAG: _$_str
-; CHECK-DAG: _$_str1
+; PTX32-DAG: _$_str.1
+; PTX32-DAG: _$_str
 
-; CHECK-DAG: _$_function_$_
-; CHECK-DAG: _$_function_$_2
+; PTX64-DAG: _$_str.1
+; PTX64-DAG: _$_str
 
 target datalayout = "e-i64:64-v16:16-v32:32-n16:32:64"
 target triple = "nvptx64-unknown-unknown"
@@ -22,24 +22,9 @@ target triple = "nvptx64-unknown-unknown"
 
 
 ; Function Attrs: nounwind
-define internal void @.function.() {
+define void @foo(i32 %a, float %b, i8 signext %c, i32 %e) {
 entry:
   %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @.str, i32 0, i32 0))
-  ret void
-}
-
-; Function Attrs: nounwind
-define internal void @_$_function_$_() {
-entry:
-  %call = call i32 (i8*, ...) @printf(i8* getelementptr inbounds ([13 x i8], [13 x i8]* @_$_str, i32 0, i32 0))
-  ret void
-}
-
-; Function Attrs: nounwind
-define void @global_function() {
-entry:
-  call void @.function.()
-  call void @_$_function_$_()
   ret void
 }
 

@@ -16,7 +16,6 @@ set(IRSources
   DebugInfoTest.cpp
   DebugTypeODRUniquingTest.cpp
   DominatorTreeTest.cpp
-  DominatorTreeBatchUpdatesTest.cpp
   FunctionTest.cpp
   PassBuilderCallbacksTest.cpp
   IRBuilderTest.cpp

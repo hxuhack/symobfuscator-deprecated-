@@ -117,10 +117,9 @@ class MachObjectWriter : public MCObjectWriter {
   MachSymbolData *findSymbolData(const MCSymbol &Sym);
 
 public:
-  MachObjectWriter(std::unique_ptr<MCMachObjectTargetWriter> MOTW,
-                   raw_pwrite_stream &OS, bool IsLittleEndian)
-      : MCObjectWriter(OS, IsLittleEndian),
-        TargetObjectWriter(std::move(MOTW)) {}
+  MachObjectWriter(MCMachObjectTargetWriter *MOTW, raw_pwrite_stream &OS,
+                   bool IsLittleEndian)
+      : MCObjectWriter(OS, IsLittleEndian), TargetObjectWriter(MOTW) {}
 
   const MCSymbol &findAliasedSymbol(const MCSymbol &Sym) const;
 
@@ -270,9 +269,9 @@ public:
 /// \param MOTW - The target specific Mach-O writer subclass.
 /// \param OS - The stream to write to.
 /// \returns The constructed object writer.
-std::unique_ptr<MCObjectWriter>
-createMachObjectWriter(std::unique_ptr<MCMachObjectTargetWriter> MOTW,
-                       raw_pwrite_stream &OS, bool IsLittleEndian);
+MCObjectWriter *createMachObjectWriter(MCMachObjectTargetWriter *MOTW,
+                                       raw_pwrite_stream &OS,
+                                       bool IsLittleEndian);
 
 } // end namespace llvm
 

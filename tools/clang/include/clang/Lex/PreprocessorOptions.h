@@ -1,4 +1,4 @@
-//===- PreprocessorOptions.h ------------------------------------*- C++ -*-===//
+//===--- PreprocessorOptions.h ----------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,30 +10,30 @@
 #ifndef LLVM_CLANG_LEX_PREPROCESSOROPTIONS_H_
 #define LLVM_CLANG_LEX_PREPROCESSOROPTIONS_H_
 
-#include "clang/Basic/LLVM.h"
+#include "clang/Basic/SourceLocation.h"
+#include "llvm/ADT/IntrusiveRefCntPtr.h"
 #include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/StringSet.h"
-#include <memory> 
+#include <cassert>
 #include <set>
 #include <string>
 #include <utility>
 #include <vector>
 
 namespace llvm {
-
-class MemoryBuffer;
-
-} // namespace llvm
+  class MemoryBuffer;
+}
 
 namespace clang {
+
+class Preprocessor;
+class LangOptions;
 
 /// \brief Enumerate the kinds of standard library that 
 enum ObjCXXARCStandardLibraryKind {
   ARCXX_nolib,
-
   /// \brief libc++
   ARCXX_libcxx,
-
   /// \brief libstdc++
   ARCXX_libstdcxx
 };
@@ -42,17 +42,17 @@ enum ObjCXXARCStandardLibraryKind {
 /// used in preprocessor initialization to InitializePreprocessor().
 class PreprocessorOptions {
 public:
-  std::vector<std::pair<std::string, bool/*isUndef*/>> Macros;
+  std::vector<std::pair<std::string, bool/*isUndef*/> > Macros;
   std::vector<std::string> Includes;
   std::vector<std::string> MacroIncludes;
 
   /// \brief Initialize the preprocessor with the compiler and target specific
   /// predefines.
-  bool UsePredefines = true;
+  unsigned UsePredefines : 1;
 
   /// \brief Whether we should maintain a detailed record of all macro
   /// definitions and expansions.
-  bool DetailedRecord = false;
+  unsigned DetailedRecord : 1;
 
   /// The implicit PCH included at the start of the translation unit, or empty.
   std::string ImplicitPCHInclude;
@@ -62,13 +62,13 @@ public:
 
   /// \brief When true, disables most of the normal validation performed on
   /// precompiled headers.
-  bool DisablePCHValidation = false;
+  bool DisablePCHValidation;
 
   /// \brief When true, a PCH with compiler errors will not be rejected.
-  bool AllowPCHWithCompilerErrors = false;
+  bool AllowPCHWithCompilerErrors;
 
   /// \brief Dump declarations that are deserialized from PCH, for testing.
-  bool DumpDeserializedPCHDecls = false;
+  bool DumpDeserializedPCHDecls;
 
   /// \brief This is a set of names for decls that we do not want to be
   /// deserialized, and we emit an error if they are; for testing purposes.
@@ -86,7 +86,7 @@ public:
   /// When the lexer is done, one of the things that need to be preserved is the
   /// conditional #if stack, so the ASTWriter/ASTReader can save/restore it when
   /// processing the rest of the file.
-  bool GeneratePreamble = false;
+  bool GeneratePreamble;
 
   /// The implicit PTH input included at the start of the translation unit, or
   /// empty.
@@ -107,7 +107,7 @@ public:
 
   /// \brief True if the SourceManager should report the original file name for
   /// contents of files that were remapped to other files. Defaults to true.
-  bool RemappedFilesKeepOriginalName = true;
+  bool RemappedFilesKeepOriginalName;
 
   /// \brief The set of file remappings, which take existing files on
   /// the system (the first part of each pair) and gives them the
@@ -126,12 +126,12 @@ public:
   /// This flag defaults to false; it can be set true only through direct
   /// manipulation of the compiler invocation object, in cases where the 
   /// compiler invocation and its buffers will be reused.
-  bool RetainRemappedFileBuffers = false;
+  bool RetainRemappedFileBuffers;
   
   /// \brief The Objective-C++ ARC standard library that we should support,
   /// by providing appropriate definitions to retrofit the standard library
   /// with support for lifetime-qualified pointers.
-  ObjCXXARCStandardLibraryKind ObjCXXARCStandardLibrary = ARCXX_nolib;
+  ObjCXXARCStandardLibraryKind ObjCXXARCStandardLibrary;
     
   /// \brief Records the set of modules
   class FailedModulesSet {
@@ -156,11 +156,18 @@ public:
   std::shared_ptr<FailedModulesSet> FailedModules;
 
 public:
-  PreprocessorOptions() : PrecompiledPreambleBytes(0, false) {}
+  PreprocessorOptions() : UsePredefines(true), DetailedRecord(false),
+                          DisablePCHValidation(false),
+                          AllowPCHWithCompilerErrors(false),
+                          DumpDeserializedPCHDecls(false),
+                          PrecompiledPreambleBytes(0, true),
+                          GeneratePreamble(false),
+                          RemappedFilesKeepOriginalName(true),
+                          RetainRemappedFileBuffers(false),
+                          ObjCXXARCStandardLibrary(ARCXX_nolib) { }
 
   void addMacroDef(StringRef Name) { Macros.emplace_back(Name, false); }
   void addMacroUndef(StringRef Name) { Macros.emplace_back(Name, true); }
-
   void addRemappedFile(StringRef From, StringRef To) {
     RemappedFiles.emplace_back(From, To);
   }
@@ -188,10 +195,10 @@ public:
     LexEditorPlaceholders = true;
     RetainRemappedFileBuffers = true;
     PrecompiledPreambleBytes.first = 0;
-    PrecompiledPreambleBytes.second = false;
+    PrecompiledPreambleBytes.second = 0;
   }
 };
 
-} // namespace clang
+} // end namespace clang
 
-#endif // LLVM_CLANG_LEX_PREPROCESSOROPTIONS_H_
+#endif

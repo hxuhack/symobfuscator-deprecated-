@@ -88,15 +88,13 @@ namespace {
   /// A collection of using directives, as used by C++ unqualified
   /// lookup.
   class UnqualUsingDirectiveSet {
-    Sema &SemaRef;
-
     typedef SmallVector<UnqualUsingEntry, 8> ListTy;
 
     ListTy list;
     llvm::SmallPtrSet<DeclContext*, 8> visited;
 
   public:
-    UnqualUsingDirectiveSet(Sema &SemaRef) : SemaRef(SemaRef) {}
+    UnqualUsingDirectiveSet() {}
 
     void visitScopeChain(Scope *S, Scope *InnermostFileScope) {
       // C++ [namespace.udir]p1:
@@ -115,8 +113,7 @@ namespace {
           visit(Ctx, Ctx);
         } else if (!Ctx || Ctx->isFunctionOrMethod()) {
           for (auto *I : S->using_directives())
-            if (SemaRef.isVisible(I))
-              visit(I, InnermostFileDC);
+            visit(I, InnermostFileDC);
         }
       }
     }
@@ -155,7 +152,7 @@ namespace {
       while (true) {
         for (auto UD : DC->using_directives()) {
           DeclContext *NS = UD->getNominatedNamespace();
-          if (SemaRef.isVisible(UD) && visited.insert(NS).second) {
+          if (visited.insert(NS).second) {
             addUsingDirective(UD, EffectiveDC);
             queue.push_back(NS);
           }
@@ -1034,8 +1031,7 @@ struct FindLocalExternScope {
   FindLocalExternScope(LookupResult &R)
       : R(R), OldFindLocalExtern(R.getIdentifierNamespace() &
                                  Decl::IDNS_LocalExtern) {
-    R.setFindLocalExtern(R.getIdentifierNamespace() &
-                         (Decl::IDNS_Ordinary | Decl::IDNS_NonMemberOperator));
+    R.setFindLocalExtern(R.getIdentifierNamespace() & Decl::IDNS_Ordinary);
   }
   void restore() {
     R.setFindLocalExtern(OldFindLocalExtern);
@@ -1088,7 +1084,7 @@ bool Sema::CppLookupName(LookupResult &R, Scope *S) {
   //   }
   // }
   //
-  UnqualUsingDirectiveSet UDirs(*this);
+  UnqualUsingDirectiveSet UDirs;
   bool VisitedUsingDirectives = false;
   bool LeftStartingScope = false;
   DeclContext *OutsideOfTemplateParamDC = nullptr;
@@ -1374,7 +1370,7 @@ static Module *getDefiningModule(Sema &S, Decl *Entity) {
 
   // Walk up to the containing context. That might also have been instantiated
   // from a template.
-  DeclContext *Context = Entity->getLexicalDeclContext();
+  DeclContext *Context = Entity->getDeclContext();
   if (Context->isFileContext())
     return S.getOwningModule(Entity);
   return getDefiningModule(S, cast<Decl>(Context));
@@ -1589,7 +1585,7 @@ bool LookupResult::isVisibleSlow(Sema &SemaRef, NamedDecl *D) {
     return false;
 
   // Find the extra places where we need to look.
-  const auto &LookupModules = SemaRef.getLookupModules();
+  llvm::DenseSet<Module*> &LookupModules = SemaRef.getLookupModules();
   if (LookupModules.empty())
     return false;
 
@@ -1604,8 +1600,7 @@ bool LookupResult::isVisibleSlow(Sema &SemaRef, NamedDecl *D) {
   // Check whether DeclModule is transitively exported to an import of
   // the lookup set.
   return std::any_of(LookupModules.begin(), LookupModules.end(),
-                     [&](const Module *M) {
-                       return M->isModuleVisible(DeclModule); });
+                     [&](Module *M) { return M->isModuleVisible(DeclModule); });
 }
 
 bool Sema::isVisibleSlow(const NamedDecl *D) {
@@ -1613,39 +1608,11 @@ bool Sema::isVisibleSlow(const NamedDecl *D) {
 }
 
 bool Sema::shouldLinkPossiblyHiddenDecl(LookupResult &R, const NamedDecl *New) {
-  // FIXME: If there are both visible and hidden declarations, we need to take
-  // into account whether redeclaration is possible. Example:
-  // 
-  // Non-imported module:
-  //   int f(T);        // #1
-  // Some TU:
-  //   static int f(U); // #2, not a redeclaration of #1
-  //   int f(T);        // #3, finds both, should link with #1 if T != U, but
-  //                    // with #2 if T == U; neither should be ambiguous.
   for (auto *D : R) {
     if (isVisible(D))
       return true;
-    assert(D->isExternallyDeclarable() &&
-           "should not have hidden, non-externally-declarable result here");
   }
-
-  // This function is called once "New" is essentially complete, but before a
-  // previous declaration is attached. We can't query the linkage of "New" in
-  // general, because attaching the previous declaration can change the
-  // linkage of New to match the previous declaration.
-  //
-  // However, because we've just determined that there is no *visible* prior
-  // declaration, we can compute the linkage here. There are two possibilities:
-  //
-  //  * This is not a redeclaration; it's safe to compute the linkage now.
-  //
-  //  * This is a redeclaration of a prior declaration that is externally
-  //    redeclarable. In that case, the linkage of the declaration is not
-  //    changed by attaching the prior declaration, because both are externally
-  //    declarable (and thus ExternalLinkage or VisibleNoLinkage).
-  //
-  // FIXME: This is subtle and fragile.
-  return New->isExternallyDeclarable();
+  return New->isExternallyVisible();
 }
 
 /// \brief Retrieve the visible declaration corresponding to D, if any.
@@ -1872,19 +1839,22 @@ static bool LookupQualifiedNameInUsingDirectives(Sema &S, LookupResult &R,
                                                  DeclContext *StartDC) {
   assert(StartDC->isFileContext() && "start context is not a file context");
 
-  // We have not yet looked into these namespaces, much less added
-  // their "using-children" to the queue.
-  SmallVector<NamespaceDecl*, 8> Queue;
+  DeclContext::udir_range UsingDirectives = StartDC->using_directives();
+  if (UsingDirectives.begin() == UsingDirectives.end()) return false;
 
   // We have at least added all these contexts to the queue.
   llvm::SmallPtrSet<DeclContext*, 8> Visited;
   Visited.insert(StartDC);
 
+  // We have not yet looked into these namespaces, much less added
+  // their "using-children" to the queue.
+  SmallVector<NamespaceDecl*, 8> Queue;
+
   // We have already looked into the initial namespace; seed the queue
   // with its using-children.
-  for (auto *I : StartDC->using_directives()) {
+  for (auto *I : UsingDirectives) {
     NamespaceDecl *ND = I->getNominatedNamespace()->getOriginalNamespace();
-    if (S.isVisible(I) && Visited.insert(ND).second)
+    if (Visited.insert(ND).second)
       Queue.push_back(ND);
   }
 
@@ -1932,7 +1902,7 @@ static bool LookupQualifiedNameInUsingDirectives(Sema &S, LookupResult &R,
 
     for (auto I : ND->using_directives()) {
       NamespaceDecl *Nom = I->getNominatedNamespace();
-      if (S.isVisible(I) && Visited.insert(Nom).second)
+      if (Visited.insert(Nom).second)
         Queue.push_back(Nom);
     }
   }
@@ -3151,7 +3121,7 @@ Sema::LiteralOperatorLookupResult
 Sema::LookupLiteralOperator(Scope *S, LookupResult &R,
                             ArrayRef<QualType> ArgTys,
                             bool AllowRaw, bool AllowTemplate,
-                            bool AllowStringTemplate, bool DiagnoseMissing) {
+                            bool AllowStringTemplate) {
   LookupName(R, S);
   assert(R.getResultKind() != LookupResult::Ambiguous &&
          "literal operator lookup can't be ambiguous");
@@ -3252,15 +3222,11 @@ Sema::LookupLiteralOperator(Scope *S, LookupResult &R,
     return LOLR_StringTemplate;
 
   // Didn't find anything we could use.
-  if (DiagnoseMissing) {
-    Diag(R.getNameLoc(), diag::err_ovl_no_viable_literal_operator)
-        << R.getLookupName() << (int)ArgTys.size() << ArgTys[0]
-        << (ArgTys.size() == 2 ? ArgTys[1] : QualType()) << AllowRaw
-        << (AllowTemplate || AllowStringTemplate);
-    return LOLR_Error;
-  }
-
-  return LOLR_ErrorNoDiagnostic;
+  Diag(R.getNameLoc(), diag::err_ovl_no_viable_literal_operator)
+    << R.getLookupName() << (int)ArgTys.size() << ArgTys[0]
+    << (ArgTys.size() == 2 ? ArgTys[1] : QualType()) << AllowRaw
+    << (AllowTemplate || AllowStringTemplate);
+  return LOLR_Error;
 }
 
 void ADLResult::insert(NamedDecl *New) {
@@ -3350,24 +3316,16 @@ void Sema::ArgumentDependentLookup(DeclarationName Name, SourceLocation Loc,
           continue;
       }
 
-      auto *Underlying = D;
-      if (auto *USD = dyn_cast<UsingShadowDecl>(D))
-        Underlying = USD->getTargetDecl();
+      if (isa<UsingShadowDecl>(D))
+        D = cast<UsingShadowDecl>(D)->getTargetDecl();
 
-      if (!isa<FunctionDecl>(Underlying) &&
-          !isa<FunctionTemplateDecl>(Underlying))
+      if (!isa<FunctionDecl>(D) && !isa<FunctionTemplateDecl>(D))
         continue;
 
-      if (!isVisible(D)) {
-        D = findAcceptableDecl(*this, D);
-        if (!D)
-          continue;
-        if (auto *USD = dyn_cast<UsingShadowDecl>(D))
-          Underlying = USD->getTargetDecl();
-      }
+      if (!isVisible(D) && !(D = findAcceptableDecl(*this, D)))
+        continue;
 
-      // FIXME: Preserve D as the FoundDecl.
-      Result.insert(Underlying);
+      Result.insert(D);
     }
   }
 }
@@ -3549,8 +3507,6 @@ static void LookupVisibleDecls(DeclContext *Ctx, LookupResult &Result,
   if (QualifiedNameLookup) {
     ShadowContextRAII Shadow(Visited);
     for (auto I : Ctx->using_directives()) {
-      if (!Result.getSema().isVisible(I))
-        continue;
       LookupVisibleDecls(I->getNominatedNamespace(), Result,
                          QualifiedNameLookup, InBaseClass, Consumer, Visited,
                          IncludeDependentBases);
@@ -3678,10 +3634,8 @@ static void LookupVisibleDecls(Scope *S, LookupResult &Result,
        !Visited.alreadyVisitedContext(S->getEntity())) ||
       (S->getEntity())->isFunctionOrMethod()) {
     FindLocalExternScope FindLocals(Result);
-    // Walk through the declarations in this Scope. The consumer might add new
-    // decls to the scope as part of deserialization, so make a copy first.
-    SmallVector<Decl *, 8> ScopeDecls(S->decls().begin(), S->decls().end());
-    for (Decl *D : ScopeDecls) {
+    // Walk through the declarations in this Scope.
+    for (auto *D : S->decls()) {
       if (NamedDecl *ND = dyn_cast<NamedDecl>(D))
         if ((ND = Result.getAcceptableDecl(ND))) {
           Consumer.FoundDecl(ND, Visited.checkHidden(ND), nullptr, false);
@@ -3759,7 +3713,7 @@ void Sema::LookupVisibleDecls(Scope *S, LookupNameKind Kind,
   // Determine the set of using directives available during
   // unqualified name lookup.
   Scope *Initial = S;
-  UnqualUsingDirectiveSet UDirs(*this);
+  UnqualUsingDirectiveSet UDirs;
   if (getLangOpts().CPlusPlus) {
     // Find the first namespace or translation-unit scope.
     while (S && !isNamespaceOrTranslationUnitScope(S))

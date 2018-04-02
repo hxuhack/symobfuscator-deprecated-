@@ -22,10 +22,9 @@
 ; CHECK-NEXT:       Lower Garbage Collection Instructions
 ; CHECK-NEXT:       Shadow Stack GC Lowering
 ; CHECK-NEXT:       Remove unreachable blocks from the CFG
-; CHECK-NEXT:       Instrument function entry/exit with calls to e.g. mcount() (post inlining)
+; CHECK-NEXT:       Inserts calls to mcount-like functions
 ; CHECK-NEXT:       Scalarize Masked Memory Intrinsics
 ; CHECK-NEXT:       Expand reduction intrinsics
-; CHECK-NEXT:       Expand indirectbr instructions
 ; CHECK-NEXT:     Rewrite Symbols
 ; CHECK-NEXT:     FunctionPass Manager
 ; CHECK-NEXT:       Dominator Tree Construction
@@ -43,8 +42,6 @@
 ; CHECK-NEXT:       Fast Register Allocator
 ; CHECK-NEXT:       Bundle Machine CFG Edges
 ; CHECK-NEXT:       X86 FP Stackifier
-; CHECK-NEXT:       Lazy Machine Block Frequency Analysis
-; CHECK-NEXT:       Machine Optimization Remark Emitter
 ; CHECK-NEXT:       Prologue/Epilogue Insertion & Frame Finalization
 ; CHECK-NEXT:       Post-RA pseudo instruction expansion pass
 ; CHECK-NEXT:       X86 pseudo instruction expansion pass
@@ -58,7 +55,6 @@
 ; CHECK-NEXT:       Machine Natural Loop Construction
 ; CHECK-NEXT:       Insert XRay ops
 ; CHECK-NEXT:       Implement the 'patchable-function' attribute
-; CHECK-NEXT:       X86 Retpoline Thunks
 ; CHECK-NEXT:       Lazy Machine Block Frequency Analysis
 ; CHECK-NEXT:       Machine Optimization Remark Emitter
 ; CHECK-NEXT:       MachineDominator Tree Construction

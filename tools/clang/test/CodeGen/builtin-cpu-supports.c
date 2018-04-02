@@ -5,10 +5,6 @@
 extern void a(const char *);
 
 int main() {
-  __builtin_cpu_init();
-
-  // CHECK: call void @__cpu_indicator_init
-
   if (__builtin_cpu_supports("sse4.2"))
     a("sse4.2");
 

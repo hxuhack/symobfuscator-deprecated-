@@ -36,11 +36,10 @@ namespace prec {
     And             = 8,    // &
     Equality        = 9,    // ==, !=
     Relational      = 10,   //  >=, <=, >, <
-    Spaceship       = 11,   // <=>
-    Shift           = 12,   // <<, >>
-    Additive        = 13,   // -, +
-    Multiplicative  = 14,   // *, /, %
-    PointerToMember = 15    // .*, ->*
+    Shift           = 11,   // <<, >>
+    Additive        = 12,   // -, +
+    Multiplicative  = 13,   // *, /, %
+    PointerToMember = 14    // .*, ->*
   };
 }
 

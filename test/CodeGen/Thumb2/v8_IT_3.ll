@@ -55,11 +55,7 @@ bb4:
 ; CHECK-PIC: cmp
 ; CHECK-PIC: cmp
 ; CHECK-PIC: cmp
-; CHECK-PIC: it eq
-; CHECK-PIC-NEXT: ldreq
-; CHECK-PIC-NEXT: it eq
-; CHECK-PIC-NEXT: cmpeq
-; CHECK-PIC-NEXT: beq
+; CHECK-PIC-NEXT: bne
 ; CHECK-PIC: %bb6
 ; CHECK-PIC-NEXT: movs
 ; CHECK-PIC-NEXT: add

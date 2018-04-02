@@ -1,4 +1,4 @@
-//===- PreprocessingRecord.cpp - Record of Preprocessing ------------------===//
+//===--- PreprocessingRecord.cpp - Record of Preprocessing ------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,34 +11,15 @@
 //  of what occurred during preprocessing, and its helpers.
 //
 //===----------------------------------------------------------------------===//
-
 #include "clang/Lex/PreprocessingRecord.h"
-#include "clang/Basic/IdentifierTable.h"
-#include "clang/Basic/LLVM.h"
-#include "clang/Basic/SourceLocation.h"
-#include "clang/Basic/SourceManager.h"
-#include "clang/Basic/TokenKinds.h"
 #include "clang/Lex/MacroInfo.h"
 #include "clang/Lex/Token.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/Optional.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Capacity.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
-#include <algorithm>
-#include <cassert>
-#include <cstddef>
-#include <cstring>
-#include <iterator>
-#include <utility>
-#include <vector>
 
 using namespace clang;
 
-ExternalPreprocessingRecordSource::~ExternalPreprocessingRecordSource() =
-    default;
+ExternalPreprocessingRecordSource::~ExternalPreprocessingRecordSource() { }
 
 InclusionDirective::InclusionDirective(PreprocessingRecord &PPRec,
                                        InclusionKind Kind, StringRef FileName,
@@ -52,7 +33,10 @@ InclusionDirective::InclusionDirective(PreprocessingRecord &PPRec,
   this->FileName = StringRef(Memory, FileName.size());
 }
 
-PreprocessingRecord::PreprocessingRecord(SourceManager &SM) : SourceMgr(SM) {}
+PreprocessingRecord::PreprocessingRecord(SourceManager &SM)
+  : SourceMgr(SM),
+    ExternalSource(nullptr) {
+}
 
 /// \brief Returns a pair of [Begin, End) iterators of preprocessed entities
 /// that source range \p Range encompasses.
@@ -182,7 +166,7 @@ template <SourceLocation (SourceRange::*getRangeLoc)() const>
 struct PPEntityComp {
   const SourceManager &SM;
 
-  explicit PPEntityComp(const SourceManager &SM) : SM(SM) {}
+  explicit PPEntityComp(const SourceManager &SM) : SM(SM) { }
 
   bool operator()(PreprocessedEntity *L, PreprocessedEntity *R) const {
     SourceLocation LHS = getLoc(L);
@@ -206,7 +190,7 @@ struct PPEntityComp {
   }
 };
 
-} // namespace
+}
 
 unsigned PreprocessingRecord::findBeginLocalPreprocessedEntity(
                                                      SourceLocation Loc) const {
@@ -287,7 +271,7 @@ PreprocessingRecord::addPreprocessedEntity(PreprocessedEntity *Entity) {
   //  FM(M1, M2)
   // \endcode
 
-  using pp_iter = std::vector<PreprocessedEntity *>::iterator;
+  typedef std::vector<PreprocessedEntity *>::iterator pp_iter;
 
   // Usually there are few macro expansions when defining the filename, do a
   // linear search for a few entities.
@@ -416,9 +400,8 @@ void PreprocessingRecord::Defined(const Token &MacroNameTok,
                       MacroNameTok.getLocation());
 }
 
-void PreprocessingRecord::SourceRangeSkipped(SourceRange Range,
-                                             SourceLocation EndifLoc) {
-  SkippedRanges.emplace_back(Range.getBegin(), EndifLoc);
+void PreprocessingRecord::SourceRangeSkipped(SourceRange Range) {
+  SkippedRanges.push_back(Range);
 }
 
 void PreprocessingRecord::MacroExpands(const Token &Id,
@@ -446,7 +429,7 @@ void PreprocessingRecord::MacroUndefined(const Token &Id,
 
 void PreprocessingRecord::InclusionDirective(
     SourceLocation HashLoc,
-    const Token &IncludeTok,
+    const clang::Token &IncludeTok,
     StringRef FileName,
     bool IsAngled,
     CharSourceRange FilenameRange,
@@ -486,10 +469,10 @@ void PreprocessingRecord::InclusionDirective(
       EndLoc = EndLoc.getLocWithOffset(-1); // the InclusionDirective expects
                                             // a token range.
   }
-  clang::InclusionDirective *ID =
-      new (*this) clang::InclusionDirective(*this, Kind, FileName, !IsAngled,
-                                            (bool)Imported, File,
-                                            SourceRange(HashLoc, EndLoc));
+  clang::InclusionDirective *ID
+    = new (*this) clang::InclusionDirective(*this, Kind, FileName, !IsAngled,
+                                            (bool)Imported,
+                                            File, SourceRange(HashLoc, EndLoc));
   addPreprocessedEntity(ID);
 }
 

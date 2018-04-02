@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -fopenmp -triple x86_64-unknown-unknown -verify %s
 
-// RUN: %clang_cc1 -fsyntax-only -fopenmp-simd -triple x86_64-unknown-unknown -verify %s
-
 // expected-error@+1 {{unexpected OpenMP directive '#pragma omp taskloop'}}
 #pragma omp taskloop
 

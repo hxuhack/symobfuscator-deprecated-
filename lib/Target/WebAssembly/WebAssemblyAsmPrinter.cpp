@@ -90,13 +90,10 @@ void WebAssemblyAsmPrinter::EmitEndOfAsmFile(Module &M) {
   }
   for (const auto &G : M.globals()) {
     if (!G.hasInitializer() && G.hasExternalLinkage()) {
-      if (G.getValueType()->isSized()) {
-        uint16_t Size = M.getDataLayout().getTypeAllocSize(G.getValueType());
-        if (TM.getTargetTriple().isOSBinFormatELF())
-          getTargetStreamer()->emitGlobalImport(G.getGlobalIdentifier());
-        OutStreamer->emitELFSize(getSymbol(&G),
-                                 MCConstantExpr::create(Size, OutContext));
-      }
+      uint16_t Size = M.getDataLayout().getTypeAllocSize(G.getValueType());
+      getTargetStreamer()->emitGlobalImport(G.getGlobalIdentifier());
+      OutStreamer->emitELFSize(getSymbol(&G),
+                               MCConstantExpr::create(Size, OutContext));
     }
   }
 }
@@ -114,7 +111,7 @@ void WebAssemblyAsmPrinter::EmitFunctionBodyStart() {
   getTargetStreamer()->emitParam(CurrentFnSym, MFI->getParams());
 
   SmallVector<MVT, 4> ResultVTs;
-  const Function &F = MF->getFunction();
+  const Function &F(*MF->getFunction());
 
   // Emit the function index.
   if (MDNode *Idx = F.getMetadata("wasm.index")) {
@@ -190,7 +187,7 @@ void WebAssemblyAsmPrinter::EmitInstruction(const MachineInstr *MI) {
 
     if (isVerbose()) {
       OutStreamer->AddComment("fallthrough-return: $pop" +
-                              Twine(MFI->getWARegStackId(
+                              utostr(MFI->getWARegStackId(
                                   MFI->getWAReg(MI->getOperand(0).getReg()))));
       OutStreamer->AddBlankLine();
     }
@@ -270,11 +267,12 @@ bool WebAssemblyAsmPrinter::PrintAsmMemoryOperand(const MachineInstr *MI,
   if (AsmVariant != 0)
     report_fatal_error("There are no defined alternate asm variants");
 
-  // The current approach to inline asm is that "r" constraints are expressed
-  // as local indices, rather than values on the operand stack. This simplifies
-  // using "r" as it eliminates the need to push and pop the values in a
-  // particular order, however it also makes it impossible to have an "m"
-  // constraint. So we don't support it.
+  if (!ExtraCode) {
+    // TODO: For now, we just hard-code 0 as the constant offset; teach
+    // SelectInlineAsmMemoryOperand how to do address mode matching.
+    OS << "0(" + regToString(MI->getOperand(OpNo)) + ')';
+    return false;
+  }
 
   return AsmPrinter::PrintAsmMemoryOperand(MI, OpNo, AsmVariant, ExtraCode, OS);
 }

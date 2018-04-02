@@ -1277,7 +1277,7 @@ int main(int argc, char *argv[]) {
   BinopPrecedence['*'] = 40; // highest.
 
   auto TCPChannel = connect();
-  auto Remote = ExitOnErr(MyRemote::Create(*TCPChannel, ExitOnErr));
+  auto Remote = ExitOnErr(MyRemote::Create(*TCPChannel));
   TheJIT = llvm::make_unique<KaleidoscopeJIT>(*Remote);
 
   // Automatically inject a definition for 'printExprResult'.

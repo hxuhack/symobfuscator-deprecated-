@@ -1,6 +1,5 @@
-; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,CI,CIVI %s
-; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,VI,CIVI %s
-; RUN: llc -march=amdgcn -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -enable-var-scope -check-prefixes=GCN,GFX9 %s
+; RUN: llc -march=amdgcn -mcpu=bonaire -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=CI %s
+; RUN: llc -march=amdgcn -mcpu=tonga -mattr=-flat-for-global -verify-machineinstrs < %s | FileCheck -check-prefix=GCN -check-prefix=VI %s
 
 declare i32 @llvm.amdgcn.atomic.inc.i32.p1i32(i32 addrspace(1)* nocapture, i32, i32, i32, i1) #2
 declare i32 @llvm.amdgcn.atomic.inc.i32.p3i32(i32 addrspace(3)* nocapture, i32, i32, i32, i1) #2
@@ -13,10 +12,7 @@ declare i64 @llvm.amdgcn.atomic.inc.i64.p4i64(i64 addrspace(4)* nocapture, i64, 
 declare i32 @llvm.amdgcn.workitem.id.x() #1
 
 ; GCN-LABEL: {{^}}lds_atomic_inc_ret_i32:
-; CIVI-DAG: s_mov_b32 m0
-; GFX9-NOT: m0
-
-; GCN-DAG: v_mov_b32_e32 [[K:v[0-9]+]], 42
+; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
 ; GCN: ds_inc_rtn_u32 v{{[0-9]+}}, v{{[0-9]+}}, [[K]]
 define amdgpu_kernel void @lds_atomic_inc_ret_i32(i32 addrspace(1)* %out, i32 addrspace(3)* %ptr) #0 {
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p3i32(i32 addrspace(3)* %ptr, i32 42, i32 0, i32 0, i1 false)
@@ -25,10 +21,7 @@ define amdgpu_kernel void @lds_atomic_inc_ret_i32(i32 addrspace(1)* %out, i32 ad
 }
 
 ; GCN-LABEL: {{^}}lds_atomic_inc_ret_i32_offset:
-; CIVI-DAG: s_mov_b32 m0
-; GFX9-NOT: m0
-
-; GCN-DAG: v_mov_b32_e32 [[K:v[0-9]+]], 42
+; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
 ; GCN: ds_inc_rtn_u32 v{{[0-9]+}}, v{{[0-9]+}}, [[K]] offset:16
 define amdgpu_kernel void @lds_atomic_inc_ret_i32_offset(i32 addrspace(1)* %out, i32 addrspace(3)* %ptr) #0 {
   %gep = getelementptr i32, i32 addrspace(3)* %ptr, i32 4
@@ -37,24 +30,18 @@ define amdgpu_kernel void @lds_atomic_inc_ret_i32_offset(i32 addrspace(1)* %out,
   ret void
 }
 
-; GCN-LABEL: {{^}}lds_atomic_inc_noret_i32:
-; CIVI-DAG: s_mov_b32 m0
-; GFX9-NOT: m0
-
-; GCN-DAG: s_load_dword [[SPTR:s[0-9]+]],
-; GCN-DAG: v_mov_b32_e32 [[DATA:v[0-9]+]], 4
-; GCN-DAG: v_mov_b32_e32 [[VPTR:v[0-9]+]], [[SPTR]]
+; FUNC-LABEL: {{^}}lds_atomic_inc_noret_i32:
+; GCN: s_load_dword [[SPTR:s[0-9]+]],
+; GCN: v_mov_b32_e32 [[DATA:v[0-9]+]], 4
+; GCN: v_mov_b32_e32 [[VPTR:v[0-9]+]], [[SPTR]]
 ; GCN: ds_inc_u32 [[VPTR]], [[DATA]]
 define amdgpu_kernel void @lds_atomic_inc_noret_i32(i32 addrspace(3)* %ptr) nounwind {
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p3i32(i32 addrspace(3)* %ptr, i32 42, i32 0, i32 0, i1 false)
   ret void
 }
 
-; GCN-LABEL: {{^}}lds_atomic_inc_noret_i32_offset:
-; CIVI-DAG: s_mov_b32 m0
-; GFX9-NOT: m0
-
-; GCN-DAG: v_mov_b32_e32 [[K:v[0-9]+]], 42
+; FUNC-LABEL: {{^}}lds_atomic_inc_noret_i32_offset:
+; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
 ; GCN: ds_inc_u32 v{{[0-9]+}}, [[K]] offset:16
 define amdgpu_kernel void @lds_atomic_inc_noret_i32_offset(i32 addrspace(3)* %ptr) nounwind {
   %gep = getelementptr i32, i32 addrspace(3)* %ptr, i32 4
@@ -64,8 +51,7 @@ define amdgpu_kernel void @lds_atomic_inc_noret_i32_offset(i32 addrspace(3)* %pt
 
 ; GCN-LABEL: {{^}}global_atomic_inc_ret_i32:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 glc{{$}}
-; GFX9: global_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]], off glc{{$}}
+; GCN: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 glc{{$}}
 define amdgpu_kernel void @global_atomic_inc_ret_i32(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) #0 {
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p1i32(i32 addrspace(1)* %ptr, i32 42, i32 0, i32 0, i1 false)
   store i32 %result, i32 addrspace(1)* %out
@@ -74,8 +60,7 @@ define amdgpu_kernel void @global_atomic_inc_ret_i32(i32 addrspace(1)* %out, i32
 
 ; GCN-LABEL: {{^}}global_atomic_inc_ret_i32_offset:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:16 glc{{$}}
-; GFX9: global_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]], off offset:16 glc{{$}}
+; GCN: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:16 glc{{$}}
 define amdgpu_kernel void @global_atomic_inc_ret_i32_offset(i32 addrspace(1)* %out, i32 addrspace(1)* %ptr) #0 {
   %gep = getelementptr i32, i32 addrspace(1)* %ptr, i32 4
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p1i32(i32 addrspace(1)* %gep, i32 42, i32 0, i32 0, i1 false)
@@ -83,19 +68,16 @@ define amdgpu_kernel void @global_atomic_inc_ret_i32_offset(i32 addrspace(1)* %o
   ret void
 }
 
-; GCN-LABEL: {{^}}global_atomic_inc_noret_i32:
-; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0{{$}}
-; GFX9: global_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]], off{{$}}
+; FUNC-LABEL: {{^}}global_atomic_inc_noret_i32:
+; GCN: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0{{$}}
 define amdgpu_kernel void @global_atomic_inc_noret_i32(i32 addrspace(1)* %ptr) nounwind {
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p1i32(i32 addrspace(1)* %ptr, i32 42, i32 0, i32 0, i1 false)
   ret void
 }
 
-; GCN-LABEL: {{^}}global_atomic_inc_noret_i32_offset:
+; FUNC-LABEL: {{^}}global_atomic_inc_noret_i32_offset:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:16{{$}}
-; GFX9: global_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]], off offset:16{{$}}
+; GCN: buffer_atomic_inc [[K]], off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:16{{$}}
 define amdgpu_kernel void @global_atomic_inc_noret_i32_offset(i32 addrspace(1)* %ptr) nounwind {
   %gep = getelementptr i32, i32 addrspace(1)* %ptr, i32 4
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p1i32(i32 addrspace(1)* %gep, i32 42, i32 0, i32 0, i1 false)
@@ -164,7 +146,7 @@ define amdgpu_kernel void @lds_atomic_inc_ret_i64_offset(i64 addrspace(1)* %out,
   ret void
 }
 
-; GCN-LABEL: {{^}}lds_atomic_inc_noret_i64:
+; FUNC-LABEL: {{^}}lds_atomic_inc_noret_i64:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
 ; GCN: ds_inc_u64 v{{[0-9]+}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}}{{$}}
@@ -173,7 +155,7 @@ define amdgpu_kernel void @lds_atomic_inc_noret_i64(i64 addrspace(3)* %ptr) noun
   ret void
 }
 
-; GCN-LABEL: {{^}}lds_atomic_inc_noret_i64_offset:
+; FUNC-LABEL: {{^}}lds_atomic_inc_noret_i64_offset:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
 ; GCN: ds_inc_u64 v{{[0-9]+}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} offset:32{{$}}
@@ -186,8 +168,7 @@ define amdgpu_kernel void @lds_atomic_inc_noret_i64_offset(i64 addrspace(3)* %pt
 ; GCN-LABEL: {{^}}global_atomic_inc_ret_i64:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 glc{{$}}
-; GFX9: global_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off glc{{$}}
+; GCN: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 glc{{$}}
 define amdgpu_kernel void @global_atomic_inc_ret_i64(i64 addrspace(1)* %out, i64 addrspace(1)* %ptr) #0 {
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p1i64(i64 addrspace(1)* %ptr, i64 42, i32 0, i32 0, i1 false)
   store i64 %result, i64 addrspace(1)* %out
@@ -197,8 +178,7 @@ define amdgpu_kernel void @global_atomic_inc_ret_i64(i64 addrspace(1)* %out, i64
 ; GCN-LABEL: {{^}}global_atomic_inc_ret_i64_offset:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:32 glc{{$}}
-; GFX9: global_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off offset:32 glc{{$}}
+; GCN: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:32 glc{{$}}
 define amdgpu_kernel void @global_atomic_inc_ret_i64_offset(i64 addrspace(1)* %out, i64 addrspace(1)* %ptr) #0 {
   %gep = getelementptr i64, i64 addrspace(1)* %ptr, i32 4
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p1i64(i64 addrspace(1)* %gep, i64 42, i32 0, i32 0, i1 false)
@@ -206,22 +186,19 @@ define amdgpu_kernel void @global_atomic_inc_ret_i64_offset(i64 addrspace(1)* %o
   ret void
 }
 
-; GCN-LABEL: {{^}}global_atomic_inc_noret_i64:
+; FUNC-LABEL: {{^}}global_atomic_inc_noret_i64:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0{{$}}
-
-; GFX9: global_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off{{$}}
+; GCN: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0{{$}}
 define amdgpu_kernel void @global_atomic_inc_noret_i64(i64 addrspace(1)* %ptr) nounwind {
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p1i64(i64 addrspace(1)* %ptr, i64 42, i32 0, i32 0, i1 false)
   ret void
 }
 
-; GCN-LABEL: {{^}}global_atomic_inc_noret_i64_offset:
+; FUNC-LABEL: {{^}}global_atomic_inc_noret_i64_offset:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:32{{$}}
-; GFX9: global_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off offset:32{{$}}
+; GCN: buffer_atomic_inc_x2 v{{\[}}[[KLO]]:[[KHI]]{{\]}}, off, s{{\[[0-9]+:[0-9]+\]}}, 0 offset:32{{$}}
 define amdgpu_kernel void @global_atomic_inc_noret_i64_offset(i64 addrspace(1)* %ptr) nounwind {
   %gep = getelementptr i64, i64 addrspace(1)* %ptr, i32 4
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p1i64(i64 addrspace(1)* %gep, i64 42, i32 0, i32 0, i1 false)
@@ -269,8 +246,7 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i32(i32 addrspace(4)* %out, i32 a
 
 ; GCN-LABEL: {{^}}flat_atomic_inc_ret_i32_offset:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] glc{{$}}
-; GFX9: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] offset:16 glc{{$}}
+; GCN: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] glc{{$}}
 define amdgpu_kernel void @flat_atomic_inc_ret_i32_offset(i32 addrspace(4)* %out, i32 addrspace(4)* %ptr) #0 {
   %gep = getelementptr i32, i32 addrspace(4)* %ptr, i32 4
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p4i32(i32 addrspace(4)* %gep, i32 42, i32 0, i32 0, i1 false)
@@ -278,18 +254,16 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i32_offset(i32 addrspace(4)* %out
   ret void
 }
 
-; GCN-LABEL: {{^}}flat_atomic_inc_noret_i32:
-; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
+; FUNC-LABEL: {{^}}flat_atomic_inc_noret_i32:
 ; GCN: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]]{{$}}
 define amdgpu_kernel void @flat_atomic_inc_noret_i32(i32 addrspace(4)* %ptr) nounwind {
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p4i32(i32 addrspace(4)* %ptr, i32 42, i32 0, i32 0, i1 false)
   ret void
 }
 
-; GCN-LABEL: {{^}}flat_atomic_inc_noret_i32_offset:
+; FUNC-LABEL: {{^}}flat_atomic_inc_noret_i32_offset:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]]{{$}}
-; GFX9: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]] offset:16{{$}}
+; GCN: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]]{{$}}
 define amdgpu_kernel void @flat_atomic_inc_noret_i32_offset(i32 addrspace(4)* %ptr) nounwind {
   %gep = getelementptr i32, i32 addrspace(4)* %ptr, i32 4
   %result = call i32 @llvm.amdgcn.atomic.inc.i32.p4i32(i32 addrspace(4)* %gep, i32 42, i32 0, i32 0, i1 false)
@@ -298,8 +272,7 @@ define amdgpu_kernel void @flat_atomic_inc_noret_i32_offset(i32 addrspace(4)* %p
 
 ; GCN-LABEL: {{^}}flat_atomic_inc_ret_i32_offset_addr64:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] glc{{$}}
-; GFX9: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] offset:20 glc{{$}}
+; GCN: flat_atomic_inc v{{[0-9]+}}, v{{\[[0-9]+:[0-9]+\]}}, [[K]] glc{{$}}
 define amdgpu_kernel void @flat_atomic_inc_ret_i32_offset_addr64(i32 addrspace(4)* %out, i32 addrspace(4)* %ptr) #0 {
   %id = call i32 @llvm.amdgcn.workitem.id.x()
   %gep.tid = getelementptr i32, i32 addrspace(4)* %ptr, i32 %id
@@ -312,8 +285,7 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i32_offset_addr64(i32 addrspace(4
 
 ; GCN-LABEL: {{^}}flat_atomic_inc_noret_i32_offset_addr64:
 ; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; CIVI: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]]{{$}}
-; GFX9: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]] offset:20{{$}}
+; GCN: flat_atomic_inc v{{\[[0-9]+:[0-9]+\]}}, [[K]]{{$}}
 define amdgpu_kernel void @flat_atomic_inc_noret_i32_offset_addr64(i32 addrspace(4)* %ptr) #0 {
   %id = call i32 @llvm.amdgcn.workitem.id.x()
   %gep.tid = getelementptr i32, i32 addrspace(4)* %ptr, i32 %id
@@ -350,8 +322,7 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i64(i64 addrspace(4)* %out, i64 a
 ; GCN-LABEL: {{^}}flat_atomic_inc_ret_i64_offset:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} glc{{$}}
-; GFX9: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} offset:32 glc{{$}}
+; GCN: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} glc{{$}}
 define amdgpu_kernel void @flat_atomic_inc_ret_i64_offset(i64 addrspace(4)* %out, i64 addrspace(4)* %ptr) #0 {
   %gep = getelementptr i64, i64 addrspace(4)* %ptr, i32 4
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p4i64(i64 addrspace(4)* %gep, i64 42, i32 0, i32 0, i1 false)
@@ -359,7 +330,7 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i64_offset(i64 addrspace(4)* %out
   ret void
 }
 
-; GCN-LABEL: {{^}}flat_atomic_inc_noret_i64:
+; FUNC-LABEL: {{^}}flat_atomic_inc_noret_i64:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
 ; GCN: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]$}}
@@ -368,11 +339,10 @@ define amdgpu_kernel void @flat_atomic_inc_noret_i64(i64 addrspace(4)* %ptr) nou
   ret void
 }
 
-; GCN-LABEL: {{^}}flat_atomic_inc_noret_i64_offset:
+; FUNC-LABEL: {{^}}flat_atomic_inc_noret_i64_offset:
 ; GCN-DAG: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN-DAG: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]$}}
-; GFX9: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} offset:32{{$}}
+; GCN: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]$}}
 define amdgpu_kernel void @flat_atomic_inc_noret_i64_offset(i64 addrspace(4)* %ptr) nounwind {
   %gep = getelementptr i64, i64 addrspace(4)* %ptr, i32 4
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p4i64(i64 addrspace(4)* %gep, i64 42, i32 0, i32 0, i1 false)
@@ -382,8 +352,7 @@ define amdgpu_kernel void @flat_atomic_inc_noret_i64_offset(i64 addrspace(4)* %p
 ; GCN-LABEL: {{^}}flat_atomic_inc_ret_i64_offset_addr64:
 ; GCN: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} glc{{$}}
-; GFX9: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} offset:40 glc{{$}}
+; GCN: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} glc{{$}}
 define amdgpu_kernel void @flat_atomic_inc_ret_i64_offset_addr64(i64 addrspace(4)* %out, i64 addrspace(4)* %ptr) #0 {
   %id = call i32 @llvm.amdgcn.workitem.id.x()
   %gep.tid = getelementptr i64, i64 addrspace(4)* %ptr, i32 %id
@@ -397,26 +366,12 @@ define amdgpu_kernel void @flat_atomic_inc_ret_i64_offset_addr64(i64 addrspace(4
 ; GCN-LABEL: {{^}}flat_atomic_inc_noret_i64_offset_addr64:
 ; GCN: v_mov_b32_e32 v[[KLO:[0-9]+]], 42
 ; GCN: v_mov_b32_e32 v[[KHI:[0-9]+]], 0{{$}}
-; CIVI: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]$}}
-; GFX9: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]}} offset:40{{$}}
+; GCN: flat_atomic_inc_x2 v{{\[[0-9]+:[0-9]+\]}}, v{{\[}}[[KLO]]:[[KHI]]{{\]$}}
 define amdgpu_kernel void @flat_atomic_inc_noret_i64_offset_addr64(i64 addrspace(4)* %ptr) #0 {
   %id = call i32 @llvm.amdgcn.workitem.id.x()
   %gep.tid = getelementptr i64, i64 addrspace(4)* %ptr, i32 %id
   %gep = getelementptr i64, i64 addrspace(4)* %gep.tid, i32 5
   %result = call i64 @llvm.amdgcn.atomic.inc.i64.p4i64(i64 addrspace(4)* %gep, i64 42, i32 0, i32 0, i1 false)
-  ret void
-}
-
-; GCN-LABEL: {{^}}nocse_lds_atomic_inc_ret_i32:
-; GCN: v_mov_b32_e32 [[K:v[0-9]+]], 42
-; GCN: ds_inc_rtn_u32 v{{[0-9]+}}, v{{[0-9]+}}, [[K]]
-; GCN: ds_inc_rtn_u32 v{{[0-9]+}}, v{{[0-9]+}}, [[K]]
-define amdgpu_kernel void @nocse_lds_atomic_inc_ret_i32(i32 addrspace(1)* %out0, i32 addrspace(1)* %out1, i32 addrspace(3)* %ptr) #0 {
-  %result0 = call i32 @llvm.amdgcn.atomic.inc.i32.p3i32(i32 addrspace(3)* %ptr, i32 42, i32 0, i32 0, i1 false)
-  %result1 = call i32 @llvm.amdgcn.atomic.inc.i32.p3i32(i32 addrspace(3)* %ptr, i32 42, i32 0, i32 0, i1 false)
-
-  store i32 %result0, i32 addrspace(1)* %out0
-  store i32 %result1, i32 addrspace(1)* %out1
   ret void
 }
 

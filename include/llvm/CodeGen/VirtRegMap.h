@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/VirtRegMap.h - Virtual Register Map ---------*- C++ -*-===//
+//===-- llvm/CodeGen/VirtRegMap.h - Virtual Register Map -*- C++ -*--------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,17 +19,15 @@
 
 #include "llvm/ADT/IndexedMap.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/MC/MCRegisterInfo.h"
-#include "llvm/Pass.h"
-#include <cassert>
+#include "llvm/Target/TargetRegisterInfo.h"
 
 namespace llvm {
-
-class MachineFunction;
-class MachineRegisterInfo;
-class raw_ostream;
-class TargetInstrInfo;
+  class MachineInstr;
+  class MachineFunction;
+  class MachineRegisterInfo;
+  class TargetInstrInfo;
+  class raw_ostream;
+  class SlotIndexes;
 
   class VirtRegMap : public MachineFunctionPass {
   public:
@@ -65,14 +63,13 @@ class TargetInstrInfo;
     /// createSpillSlot - Allocate a spill slot for RC from MFI.
     unsigned createSpillSlot(const TargetRegisterClass *RC);
 
+    VirtRegMap(const VirtRegMap&) = delete;
+    void operator=(const VirtRegMap&) = delete;
+
   public:
     static char ID;
-
     VirtRegMap() : MachineFunctionPass(ID), Virt2PhysMap(NO_PHYS_REG),
-                   Virt2StackSlotMap(NO_STACK_SLOT), Virt2SplitMap(0) {}
-    VirtRegMap(const VirtRegMap &) = delete;
-    VirtRegMap &operator=(const VirtRegMap &) = delete;
-
+                   Virt2StackSlotMap(NO_STACK_SLOT), Virt2SplitMap(0) { }
     bool runOnMachineFunction(MachineFunction &MF) override;
 
     void getAnalysisUsage(AnalysisUsage &AU) const override {
@@ -169,7 +166,6 @@ class TargetInstrInfo;
     /// @brief create a mapping for the specifed virtual register to
     /// the next available stack slot
     int assignVirt2StackSlot(unsigned virtReg);
-
     /// @brief create a mapping for the specified virtual register to
     /// the specified stack slot
     void assignVirt2StackSlot(unsigned virtReg, int frameIndex);
@@ -182,7 +178,6 @@ class TargetInstrInfo;
     VRM.print(OS);
     return OS;
   }
+} // End llvm namespace
 
-} // end llvm namespace
-
-#endif // LLVM_CODEGEN_VIRTREGMAP_H
+#endif

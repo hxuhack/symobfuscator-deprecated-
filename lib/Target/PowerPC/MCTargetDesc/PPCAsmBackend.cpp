@@ -18,7 +18,6 @@
 #include "llvm/MC/MCMachObjectWriter.h"
 #include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSectionMachO.h"
-#include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/MC/MCSymbolELF.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -205,8 +204,7 @@ namespace {
   public:
     DarwinPPCAsmBackend(const Target &T) : PPCAsmBackend(T, false) { }
 
-    std::unique_ptr<MCObjectWriter>
-    createObjectWriter(raw_pwrite_stream &OS) const override {
+    MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
       bool is64 = getPointerSize() == 8;
       return createPPCMachObjectWriter(
           OS,
@@ -222,8 +220,7 @@ namespace {
     ELFPPCAsmBackend(const Target &T, bool IsLittleEndian, uint8_t OSABI) :
       PPCAsmBackend(T, IsLittleEndian), OSABI(OSABI) { }
 
-    std::unique_ptr<MCObjectWriter>
-    createObjectWriter(raw_pwrite_stream &OS) const override {
+    MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
       bool is64 = getPointerSize() == 8;
       return createPPCELFObjectWriter(OS, is64, isLittleEndian(), OSABI);
     }
@@ -232,10 +229,9 @@ namespace {
 } // end anonymous namespace
 
 MCAsmBackend *llvm::createPPCAsmBackend(const Target &T,
-                                        const MCSubtargetInfo &STI,
                                         const MCRegisterInfo &MRI,
+                                        const Triple &TT, StringRef CPU,
                                         const MCTargetOptions &Options) {
-  const Triple &TT = STI.getTargetTriple();
   if (TT.isOSDarwin())
     return new DarwinPPCAsmBackend(T);
 

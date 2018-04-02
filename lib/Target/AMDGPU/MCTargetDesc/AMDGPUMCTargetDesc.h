@@ -18,8 +18,6 @@
 
 #include "llvm/Support/DataTypes.h"
 
-#include <memory>
-
 namespace llvm {
 class MCAsmBackend;
 class MCCodeEmitter;
@@ -45,14 +43,13 @@ MCCodeEmitter *createSIMCCodeEmitter(const MCInstrInfo &MCII,
                                      const MCRegisterInfo &MRI,
                                      MCContext &Ctx);
 
-MCAsmBackend *createAMDGPUAsmBackend(const Target &T,
-                                     const MCSubtargetInfo &STI,
-                                     const MCRegisterInfo &MRI,
+MCAsmBackend *createAMDGPUAsmBackend(const Target &T, const MCRegisterInfo &MRI,
+                                     const Triple &TT, StringRef CPU,
                                      const MCTargetOptions &Options);
 
-std::unique_ptr<MCObjectWriter>
-createAMDGPUELFObjectWriter(bool Is64Bit, uint8_t OSABI,
-                            bool HasRelocationAddend, raw_pwrite_stream &OS);
+MCObjectWriter *createAMDGPUELFObjectWriter(bool Is64Bit,
+                                            bool HasRelocationAddend,
+                                            raw_pwrite_stream &OS);
 } // End llvm namespace
 
 #define GET_REGINFO_ENUM
@@ -61,9 +58,7 @@ createAMDGPUELFObjectWriter(bool Is64Bit, uint8_t OSABI,
 
 #define GET_INSTRINFO_ENUM
 #define GET_INSTRINFO_OPERAND_ENUM
-#define GET_INSTRINFO_SCHED_ENUM
 #include "AMDGPUGenInstrInfo.inc"
-#undef GET_INSTRINFO_SCHED_ENUM
 #undef GET_INSTRINFO_OPERAND_ENUM
 #undef GET_INSTRINFO_ENUM
 

@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/AddressPool.cpp - Dwarf Debug Framework ---------------===//
+//===-- llvm/CodeGen/AddressPool.cpp - Dwarf Debug Framework ---*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -8,12 +8,9 @@
 //===----------------------------------------------------------------------===//
 
 #include "AddressPool.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/AsmPrinter.h"
-#include "llvm/CodeGen/TargetLoweringObjectFile.h"
-#include "llvm/IR/DataLayout.h"
 #include "llvm/MC/MCStreamer.h"
-#include <utility>
+#include "llvm/Target/TargetLoweringObjectFile.h"
 
 using namespace llvm;
 

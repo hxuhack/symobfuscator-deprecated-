@@ -132,17 +132,12 @@ func (d *DIBuilder) CreateCompileUnit(cu DICompileUnit) Metadata {
 	defer C.free(unsafe.Pointer(flags))
 	result := C.LLVMDIBuilderCreateCompileUnit(
 		d.ref,
-		C.LLVMDWARFSourceLanguage(cu.Language),
-		C.LLVMDIBuilderCreateFile(d.ref, file, C.size_t(len(cu.File)), dir, C.size_t(len(cu.Dir))),
-		producer, C.size_t(len(cu.Producer)),
-		C.LLVMBool(boolToCInt(cu.Optimized)),
-		flags, C.size_t(len(cu.Flags)),
+		C.unsigned(cu.Language),
+		file, dir,
+		producer,
+		boolToCInt(cu.Optimized),
+		flags,
 		C.unsigned(cu.RuntimeVersion),
-		/*SplitName=*/ nil, 0,
-		C.LLVMDWARFEmissionFull,
-		/*DWOId=*/ 0,
-		/*SplitDebugInlining*/ C.LLVMBool(boolToCInt(true)),
-		/*DebugInfoForProfiling*/ C.LLVMBool(boolToCInt(false)),
 	)
 	return Metadata{C: result}
 }
@@ -153,9 +148,7 @@ func (d *DIBuilder) CreateFile(filename, dir string) Metadata {
 	defer C.free(unsafe.Pointer(cfilename))
 	cdir := C.CString(dir)
 	defer C.free(unsafe.Pointer(cdir))
-	result := C.LLVMDIBuilderCreateFile(d.ref,
-		cfilename, C.size_t(len(filename)),
-		cdir, C.size_t(len(dir)))
+	result := C.LLVMDIBuilderCreateFile(d.ref, cfilename, cdir)
 	return Metadata{C: result}
 }
 
@@ -540,8 +533,8 @@ func (d *DIBuilder) InsertDeclareAtEnd(v Value, diVarInfo, expr Metadata, bb Bas
 
 // InsertValueAtEnd inserts a call to llvm.dbg.value at the end of the
 // specified basic block for the given value and associated debug metadata.
-func (d *DIBuilder) InsertValueAtEnd(v Value, diVarInfo, expr Metadata, bb BasicBlock) Value {
-	result := C.LLVMDIBuilderInsertValueAtEnd(d.ref, v.C, diVarInfo.C, expr.C, bb.C)
+func (d *DIBuilder) InsertValueAtEnd(v Value, diVarInfo, expr Metadata, offset uint64, bb BasicBlock) Value {
+	result := C.LLVMDIBuilderInsertValueAtEnd(d.ref, v.C, C.uint64_t(offset), diVarInfo.C, expr.C, bb.C)
 	return Value{C: result}
 }
 

@@ -20,14 +20,12 @@ add_llvm_target(HexagonCodeGen
   HexagonBranchRelaxation.cpp
   HexagonCFGOptimizer.cpp
   HexagonCommonGEP.cpp
-  HexagonConstExtenders.cpp
   HexagonConstPropagation.cpp
   HexagonCopyToCombine.cpp
   HexagonEarlyIfConv.cpp
   HexagonExpandCondsets.cpp
   HexagonFixupHwLoops.cpp
   HexagonFrameLowering.cpp
-  HexagonGatherPacketize.cpp
   HexagonGenExtract.cpp
   HexagonGenInsert.cpp
   HexagonGenMux.cpp
@@ -36,9 +34,7 @@ add_llvm_target(HexagonCodeGen
   HexagonHazardRecognizer.cpp
   HexagonInstrInfo.cpp
   HexagonISelDAGToDAG.cpp
-  HexagonISelDAGToDAGHVX.cpp
   HexagonISelLowering.cpp
-  HexagonISelLoweringHVX.cpp
   HexagonLoopIdiomRecognition.cpp
   HexagonMachineFunctionInfo.cpp
   HexagonMachineScheduler.cpp
@@ -57,7 +53,6 @@ add_llvm_target(HexagonCodeGen
   HexagonTargetMachine.cpp
   HexagonTargetObjectFile.cpp
   HexagonTargetTransformInfo.cpp
-  HexagonVectorLoopCarriedReuse.cpp
   HexagonVectorPrint.cpp
   HexagonVLIWPacketizer.cpp
   RDFCopy.cpp
@@ -71,4 +66,3 @@ add_subdirectory(AsmParser)
 add_subdirectory(TargetInfo)
 add_subdirectory(MCTargetDesc)
 add_subdirectory(Disassembler)
-

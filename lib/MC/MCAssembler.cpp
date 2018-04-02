@@ -68,10 +68,6 @@ STATISTIC(FragmentLayouts, "Number of fragment layouts");
 STATISTIC(ObjectBytes, "Number of emitted object file bytes");
 STATISTIC(RelaxationSteps, "Number of assembler layout and relaxation steps");
 STATISTIC(RelaxedInstructions, "Number of relaxed instructions");
-STATISTIC(PaddingFragmentsRelaxations,
-          "Number of Padding Fragments relaxations");
-STATISTIC(PaddingFragmentsBytes,
-          "Total size of all padding from adding Fragments");
 
 } // end namespace stats
 } // end anonymous namespace
@@ -88,7 +84,7 @@ MCAssembler::MCAssembler(MCContext &Context, MCAsmBackend &Backend,
     : Context(Context), Backend(Backend), Emitter(Emitter), Writer(Writer),
       BundleAlignSize(0), RelaxAll(false), SubsectionsViaSymbols(false),
       IncrementalLinkerCompatible(false), ELFHeaderEFlags(0) {
-  VersionInfo.Major = 0; // Major version == 0 for "none specified"
+  VersionMinInfo.Major = 0; // Major version == 0 for "none specified"
 }
 
 MCAssembler::~MCAssembler() = default;
@@ -107,7 +103,7 @@ void MCAssembler::reset() {
   IncrementalLinkerCompatible = false;
   ELFHeaderEFlags = 0;
   LOHContainer.reset();
-  VersionInfo.Major = 0;
+  VersionMinInfo.Major = 0;
 
   // reset objects owned by us
   getBackend().reset();
@@ -281,26 +277,13 @@ uint64_t MCAssembler::computeFragmentSize(const MCAsmLayout &Layout,
     return cast<MCRelaxableFragment>(F).getContents().size();
   case MCFragment::FT_CompactEncodedInst:
     return cast<MCCompactEncodedInstFragment>(F).getContents().size();
-  case MCFragment::FT_Fill: {
-    auto &FF = cast<MCFillFragment>(F);
-    int64_t Size = 0;
-    if (!FF.getSize().evaluateAsAbsolute(Size, Layout))
-      getContext().reportError(FF.getLoc(),
-                               "expected assembly-time absolute expression");
-    if (Size < 0) {
-      getContext().reportError(FF.getLoc(), "invalid number of bytes");
-      return 0;
-    }
-    return Size;
-  }
+  case MCFragment::FT_Fill:
+    return cast<MCFillFragment>(F).getSize();
 
   case MCFragment::FT_LEB:
     return cast<MCLEBFragment>(F).getContents().size();
 
-  case MCFragment::FT_Padding:
-    return cast<MCPaddingFragment>(F).getSize();
-
-  case MCFragment::FT_SymbolId:
+  case MCFragment::FT_SafeSEH:
     return 4;
 
   case MCFragment::FT_Align: {
@@ -550,7 +533,7 @@ static void writeFragment(const MCAssembler &Asm, const MCAsmLayout &Layout,
     for (unsigned I = 1; I < MaxChunkSize; ++I)
       Data[I] = Data[0];
 
-    uint64_t Size = FragmentSize;
+    uint64_t Size = FF.getSize();
     for (unsigned ChunkSize = MaxChunkSize; ChunkSize; ChunkSize /= 2) {
       StringRef Ref(Data, ChunkSize);
       for (uint64_t I = 0, E = Size / ChunkSize; I != E; ++I)
@@ -566,15 +549,8 @@ static void writeFragment(const MCAssembler &Asm, const MCAsmLayout &Layout,
     break;
   }
 
-  case MCFragment::FT_Padding: {
-    if (!Asm.getBackend().writeNopData(FragmentSize, OW))
-      report_fatal_error("unable to write nop sequence of " +
-                         Twine(FragmentSize) + " bytes");
-    break;
-  }
-
-  case MCFragment::FT_SymbolId: {
-    const MCSymbolIdFragment &SF = cast<MCSymbolIdFragment>(F);
+  case MCFragment::FT_SafeSEH: {
+    const MCSafeSEHFragment &SF = cast<MCSafeSEHFragment>(F);
     OW->write32(SF.getSymbol()->getIndex());
     break;
   }
@@ -846,19 +822,6 @@ bool MCAssembler::relaxInstruction(MCAsmLayout &Layout,
   return true;
 }
 
-bool MCAssembler::relaxPaddingFragment(MCAsmLayout &Layout,
-                                       MCPaddingFragment &PF) {
-  uint64_t OldSize = PF.getSize();
-  if (!getBackend().relaxFragment(&PF, Layout))
-    return false;
-  uint64_t NewSize = PF.getSize();
-
-  ++stats::PaddingFragmentsRelaxations;
-  stats::PaddingFragmentsBytes += NewSize;
-  stats::PaddingFragmentsBytes -= OldSize;
-  return true;
-}
-
 bool MCAssembler::relaxLEB(MCAsmLayout &Layout, MCLEBFragment &LF) {
   uint64_t OldSize = LF.getContents().size();
   int64_t Value;
@@ -952,9 +915,6 @@ bool MCAssembler::layoutSectionOnce(MCAsmLayout &Layout, MCSection &Sec) {
       break;
     case MCFragment::FT_LEB:
       RelaxedFrag = relaxLEB(Layout, *cast<MCLEBFragment>(I));
-      break;
-    case MCFragment::FT_Padding:
-      RelaxedFrag = relaxPaddingFragment(Layout, *cast<MCPaddingFragment>(I));
       break;
     case MCFragment::FT_CVInlineLines:
       RelaxedFrag =

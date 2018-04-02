@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp -ferror-limit 100 %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd -ferror-limit 100 %s
-
 int foo() {
 L1:
   foo();

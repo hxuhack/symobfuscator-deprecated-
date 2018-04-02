@@ -1,5 +1,4 @@
 ; RUN: opt -S -rewrite-statepoints-for-gc < %s | FileCheck %s
-; RUN: opt -S -passes=rewrite-statepoints-for-gc < %s | FileCheck %s
 
 ; constants don't get relocated.
 @G = addrspace(1) global i8 5

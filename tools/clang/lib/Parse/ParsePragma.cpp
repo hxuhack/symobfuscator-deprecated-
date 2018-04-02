@@ -422,20 +422,15 @@ void Parser::HandlePragmaPack() {
   assert(Tok.is(tok::annot_pragma_pack));
   PragmaPackInfo *Info =
     static_cast<PragmaPackInfo *>(Tok.getAnnotationValue());
-  SourceLocation PragmaLoc = Tok.getLocation();
+  SourceLocation PragmaLoc = ConsumeAnnotationToken();
   ExprResult Alignment;
   if (Info->Alignment.is(tok::numeric_constant)) {
     Alignment = Actions.ActOnNumericConstant(Info->Alignment);
-    if (Alignment.isInvalid()) {
-      ConsumeAnnotationToken();
+    if (Alignment.isInvalid())
       return;
-    }
   }
   Actions.ActOnPragmaPack(PragmaLoc, Info->Action, Info->SlotLabel,
                           Alignment.get());
-  // Consume the token after processing the pragma to enable pragma-specific
-  // #include warnings.
-  ConsumeAnnotationToken();
 }
 
 void Parser::HandlePragmaMSStruct() {
@@ -533,8 +528,7 @@ StmtResult Parser::HandlePragmaCaptured()
 
   SourceLocation Loc = Tok.getLocation();
 
-  ParseScope CapturedRegionScope(this, Scope::FnScope | Scope::DeclScope |
-                                           Scope::CompoundStmtScope);
+  ParseScope CapturedRegionScope(this, Scope::FnScope | Scope::DeclScope);
   Actions.ActOnCapturedRegionStart(Loc, getCurScope(), CR_Default,
                                    /*NumParams=*/1);
 

@@ -80,9 +80,11 @@
 #include "llvm/Analysis/CFG.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/Loads.h"
+#include "llvm/Analysis/MemoryBuiltins.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Metadata.h"
+#include "llvm/IR/PatternMatch.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
@@ -193,7 +195,7 @@ bool MergedLoadStoreMotion::isStoreSinkBarrierInRange(const Instruction &Start,
        make_range(Start.getIterator(), End.getIterator()))
     if (Inst.mayThrow())
       return true;
-  return AA->canInstructionRangeModRef(Start, End, Loc, ModRefInfo::ModRef);
+  return AA->canInstructionRangeModRef(Start, End, Loc, MRI_ModRef);
 }
 
 ///

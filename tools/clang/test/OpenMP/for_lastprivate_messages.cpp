@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd %s
-
 void foo() {
 }
 
@@ -20,9 +18,9 @@ public:
   const S2 &operator =(const S2&) const;
   S2 &operator =(const S2&);
   static float S2s; // expected-note {{static data member is predetermined as shared}}
-  static const float S2sc; // expected-note {{static data member is predetermined as shared}}
+  static const float S2sc;
 };
-const float S2::S2sc = 0;
+const float S2::S2sc = 0; // expected-note {{static data member is predetermined as shared}}
 const S2 b;
 const S2 ba[5];
 class S3 {

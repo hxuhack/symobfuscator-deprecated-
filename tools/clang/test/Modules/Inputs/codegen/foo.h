@@ -29,7 +29,4 @@ inline void inst_decl() {
   inst<float>();
 }
 
-__attribute__((always_inline)) inline void always_inl() {
-}
-
 asm("narf");

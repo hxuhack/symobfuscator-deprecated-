@@ -11,7 +11,6 @@
 #include "MCTargetDesc/LanaiFixupKinds.h"
 #include "llvm/BinaryFormat/ELF.h"
 #include "llvm/MC/MCELFObjectWriter.h"
-#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/Support/ErrorHandling.h"
 
 using namespace llvm;
@@ -87,8 +86,8 @@ bool LanaiELFObjectWriter::needsRelocateWithSymbol(const MCSymbol & /*SD*/,
   }
 }
 
-std::unique_ptr<MCObjectWriter>
-llvm::createLanaiELFObjectWriter(raw_pwrite_stream &OS, uint8_t OSABI) {
-  return createELFObjectWriter(llvm::make_unique<LanaiELFObjectWriter>(OSABI),
-                               OS, /*IsLittleEndian=*/false);
+MCObjectWriter *llvm::createLanaiELFObjectWriter(raw_pwrite_stream &OS,
+                                                 uint8_t OSABI) {
+  MCELFObjectTargetWriter *MOTW = new LanaiELFObjectWriter(OSABI);
+  return createELFObjectWriter(MOTW, OS, /*IsLittleEndian=*/false);
 }

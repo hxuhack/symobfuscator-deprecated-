@@ -11,7 +11,7 @@
 	.globl	_main
 	.align	4
 _main:                                  ; @main
-; %bb.0:                                ; %entry
+; BB#0:                                 ; %entry
 	mflr r0
 	stw r31, -4(r1)
 	stw r0, 8(r1)

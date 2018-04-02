@@ -12,6 +12,7 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
 
 using namespace llvm;
 
@@ -263,7 +264,7 @@ LLVM_DUMP_METHOD void SlotIndexes::dump() const {
   }
 
   for (unsigned i = 0, e = MBBRanges.size(); i != e; ++i)
-    dbgs() << "%bb." << i << "\t[" << MBBRanges[i].first << ';'
+    dbgs() << "BB#" << i << "\t[" << MBBRanges[i].first << ';'
            << MBBRanges[i].second << ")\n";
 }
 #endif

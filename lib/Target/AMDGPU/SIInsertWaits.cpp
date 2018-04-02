@@ -1,4 +1,4 @@
-//===- SILowerControlFlow.cpp - Use predicates for control flow -----------===//
+//===-- SILowerControlFlow.cpp - Use predicates for control flow ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -33,14 +33,15 @@
 #include "llvm/CodeGen/MachineOperand.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/IR/DebugLoc.h"
-#include "llvm/MC/MCInstrDesc.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
 #include <cstring>
+#include <new>
 #include <utility>
 
 #define DEBUG_TYPE "si-insert-waits"
@@ -50,23 +51,23 @@ using namespace llvm;
 namespace {
 
 /// \brief One variable for each of the hardware counters
-using Counters = union {
+typedef union {
   struct {
     unsigned VM;
     unsigned EXP;
     unsigned LGKM;
   } Named;
   unsigned Array[3];
-};
+} Counters;
 
-using InstType = enum {
+typedef enum {
   OTHER,
   SMEM,
   VMEM
-};
+} InstType;
 
-using RegCounters =  Counters[512];
-using RegInterval = std::pair<unsigned, unsigned>;
+typedef Counters RegCounters[512];
+typedef std::pair<unsigned, unsigned> RegInterval;
 
 class SIInsertWaits : public MachineFunctionPass {
 private:
@@ -408,6 +409,7 @@ bool SIInsertWaits::insertWait(MachineBasicBlock &MBB,
 
       // Adjust the value to the real hardware possibilities.
       Counts.Array[i] = std::min(Value, HardwareLimits.Array[i]);
+
     } else
       Counts.Array[i] = 0;
 
@@ -566,10 +568,12 @@ bool SIInsertWaits::runOnMachineFunction(MachineFunction &MF) {
 
   for (MachineFunction::iterator BI = MF.begin(), BE = MF.end();
        BI != BE; ++BI) {
+
     MachineBasicBlock &MBB = *BI;
 
     for (MachineBasicBlock::iterator I = MBB.begin(), E = MBB.end();
          I != E; ++I) {
+
       if (!HaveScalarStores && TII->isScalarStore(*I))
         HaveScalarStores = true;
 
@@ -667,6 +671,7 @@ bool SIInsertWaits::runOnMachineFunction(MachineFunction &MF) {
 
       for (MachineBasicBlock::iterator I = MBB->begin(), E = MBB->end();
            I != E; ++I) {
+
         if (I->getOpcode() == AMDGPU::S_DCACHE_WB)
           SeenDCacheWB = true;
         else if (TII->isScalarStore(*I))

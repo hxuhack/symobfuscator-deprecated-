@@ -19,7 +19,7 @@ class COFFImportFile;
 class ObjectFile;
 }
 namespace codeview {
-class MergingTypeTableBuilder;
+class TypeTableBuilder;
 }
 
 class ScopedPrinter;
@@ -58,6 +58,9 @@ public:
   virtual void printMipsReginfo() { }
   virtual void printMipsOptions() { }
 
+  // Only implemented for AMDGPU ELF at this time.
+  virtual void printAMDGPUCodeObjectMetadata() {}
+
   // Only implemented for PE/COFF.
   virtual void printCOFFImports() { }
   virtual void printCOFFExports() { }
@@ -67,9 +70,8 @@ public:
   virtual void printCOFFResources() {}
   virtual void printCOFFLoadConfig() { }
   virtual void printCodeViewDebugInfo() { }
-  virtual void
-  mergeCodeViewTypes(llvm::codeview::MergingTypeTableBuilder &CVIDs,
-                     llvm::codeview::MergingTypeTableBuilder &CVTypes) {}
+  virtual void mergeCodeViewTypes(llvm::codeview::TypeTableBuilder &CVIDs,
+                                  llvm::codeview::TypeTableBuilder &CVTypes) {}
 
   // Only implemented for MachO.
   virtual void printMachODataInCode() { }
@@ -103,9 +105,9 @@ std::error_code createWasmDumper(const object::ObjectFile *Obj,
 
 void dumpCOFFImportFile(const object::COFFImportFile *File);
 
-void dumpCodeViewMergedTypes(
-    ScopedPrinter &Writer, llvm::codeview::MergingTypeTableBuilder &IDTable,
-    llvm::codeview::MergingTypeTableBuilder &TypeTable);
+void dumpCodeViewMergedTypes(ScopedPrinter &Writer,
+                             llvm::codeview::TypeTableBuilder &IDTable,
+                             llvm::codeview::TypeTableBuilder &TypeTable);
 
 } // namespace llvm
 

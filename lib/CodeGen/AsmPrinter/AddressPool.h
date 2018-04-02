@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/AddressPool.h - Dwarf Debug Framework -------*- C++ -*-===//
+//===-- llvm/CodeGen/AddressPool.h - Dwarf Debug Framework -----*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,13 +11,11 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_ADDRESSPOOL_H
 
 #include "llvm/ADT/DenseMap.h"
+#include "llvm/MC/MCSymbol.h"
 
 namespace llvm {
-
-class AsmPrinter;
 class MCSection;
-class MCSymbol;
-
+class AsmPrinter;
 // Collection of addresses for this unit and assorted labels.
 // A Symbol->unsigned mapping of addresses used by indirect
 // references.
@@ -25,7 +23,6 @@ class AddressPool {
   struct AddressPoolEntry {
     unsigned Number;
     bool TLS;
-
     AddressPoolEntry(unsigned Number, bool TLS) : Number(Number), TLS(TLS) {}
   };
   DenseMap<const MCSymbol *, AddressPoolEntry> Pool;
@@ -34,10 +31,10 @@ class AddressPool {
   /// the last "resetUsedFlag" call. Used to implement type unit fallback - a
   /// type that references addresses cannot be placed in a type unit when using
   /// fission.
-  bool HasBeenUsed = false;
+  bool HasBeenUsed;
 
 public:
-  AddressPool() = default;
+  AddressPool() : HasBeenUsed(false) {}
 
   /// \brief Returns the index into the address pool with the given
   /// label/symbol.
@@ -51,7 +48,5 @@ public:
 
   void resetUsedFlag() { HasBeenUsed = false; }
 };
-
-} // end namespace llvm
-
-#endif // LLVM_LIB_CODEGEN_ASMPRINTER_ADDRESSPOOL_H
+}
+#endif

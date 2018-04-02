@@ -13,7 +13,6 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/MC/MCELFObjectWriter.h"
 #include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCValue.h"
 #include "llvm/Support/ErrorHandling.h"
 
@@ -132,9 +131,10 @@ bool SparcELFObjectWriter::needsRelocateWithSymbol(const MCSymbol &Sym,
   }
 }
 
-std::unique_ptr<MCObjectWriter>
-llvm::createSparcELFObjectWriter(raw_pwrite_stream &OS, bool Is64Bit,
-                                 bool IsLittleEndian, uint8_t OSABI) {
-  auto MOTW = llvm::make_unique<SparcELFObjectWriter>(Is64Bit, OSABI);
-  return createELFObjectWriter(std::move(MOTW), OS, IsLittleEndian);
+MCObjectWriter *llvm::createSparcELFObjectWriter(raw_pwrite_stream &OS,
+                                                 bool Is64Bit,
+                                                 bool IsLittleEndian,
+                                                 uint8_t OSABI) {
+  MCELFObjectTargetWriter *MOTW = new SparcELFObjectWriter(Is64Bit, OSABI);
+  return createELFObjectWriter(MOTW, OS, IsLittleEndian);
 }

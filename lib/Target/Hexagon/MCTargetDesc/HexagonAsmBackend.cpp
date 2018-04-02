@@ -65,8 +65,7 @@ public:
       OSABI(OSABI), CPU(CPU), MCII(T.createMCInstrInfo()),
       RelaxTarget(new MCInst *), Extender(nullptr) {}
 
-  std::unique_ptr<MCObjectWriter>
-  createObjectWriter(raw_pwrite_stream &OS) const override {
+  MCObjectWriter *createObjectWriter(raw_pwrite_stream &OS) const override {
     return createHexagonELFObjectWriter(OS, OSABI, CPU);
   }
 
@@ -655,8 +654,7 @@ public:
     assert(HexagonMCInstrInfo::isBundle(Inst) &&
            "Hexagon relaxInstruction only works on bundles");
 
-    Res.setOpcode(Hexagon::BUNDLE);
-    Res.addOperand(MCOperand::createImm(Inst.getOperand(0).getImm()));
+    Res = HexagonMCInstrInfo::createBundle();
     // Copy the results into the bundle.
     bool Update = false;
     for (auto &I : HexagonMCInstrInfo::bundleInstructions(Inst)) {
@@ -765,12 +763,11 @@ public:
 
 // MCAsmBackend
 MCAsmBackend *llvm::createHexagonAsmBackend(Target const &T,
-                                            const MCSubtargetInfo &STI,
-                                            MCRegisterInfo const & /*MRI*/,
-                                            const MCTargetOptions &Options) {
-  const Triple &TT = STI.getTargetTriple();
+                                      MCRegisterInfo const & /*MRI*/,
+                                      const Triple &TT, StringRef CPU,
+                                      const MCTargetOptions &Options) {
   uint8_t OSABI = MCELFObjectTargetWriter::getOSABI(TT.getOS());
 
-  StringRef CPUString = Hexagon_MC::selectHexagonCPU(STI.getCPU());
+  StringRef CPUString = Hexagon_MC::selectHexagonCPU(TT, CPU);
   return new HexagonAsmBackend(T, TT, OSABI, CPUString);
 }

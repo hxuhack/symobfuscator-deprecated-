@@ -259,7 +259,6 @@ void ArrayBoundCheckerV2::reportOOB(CheckerContext &checkerContext,
       llvm::make_unique<BugReport>(*BT, os.str(), errorNode));
 }
 
-#ifndef NDEBUG
 LLVM_DUMP_METHOD void RegionRawOffsetV2::dump() const {
   dumpToStream(llvm::errs());
 }
@@ -267,7 +266,7 @@ LLVM_DUMP_METHOD void RegionRawOffsetV2::dump() const {
 void RegionRawOffsetV2::dumpToStream(raw_ostream &os) const {
   os << "raw_offset_v2{" << getRegion() << ',' << getByteOffset() << '}';
 }
-#endif
+
 
 // Lazily computes a value to be used by 'computeOffset'.  If 'val'
 // is unknown or undefined, we lazily substitute '0'.  Otherwise,

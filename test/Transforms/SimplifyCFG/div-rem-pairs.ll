@@ -1,8 +1,7 @@
 ; RUN: opt -simplifycfg -S < %s | FileCheck %s
 
-; We could hoist the div/rem in these tests because it's safe to do so.
+; FIXME: Hoist the sdiv because it's safe and free.
 ; PR31028 - https://bugs.llvm.org/show_bug.cgi?id=31028
-; ...but since there's a separate pass for that, don't bother.
 
 define i32 @hoist_sdiv(i32 %a, i32 %b) {
 ; CHECK-LABEL: @hoist_sdiv(
@@ -31,6 +30,8 @@ end:
   ret i32 %ret
 }
 
+; FIXME: Hoist the udiv because it's safe and free.
+
 define i64 @hoist_udiv(i64 %a, i64 %b) {
 ; CHECK-LABEL: @hoist_udiv(
 ; CHECK-NEXT:  entry:
@@ -58,6 +59,8 @@ end:
   ret i64 %ret
 }
 
+; FIXME: Hoist the srem because it's safe and likely free.
+
 define i16 @hoist_srem(i16 %a, i16 %b) {
 ; CHECK-LABEL: @hoist_srem(
 ; CHECK-NEXT:  entry:
@@ -84,6 +87,8 @@ end:
   %ret = phi i16 [ %rem, %if ], [ 3, %entry ]
   ret i16 %ret
 }
+
+; FIXME: Hoist the urem because it's safe and likely free.
 
 define i8 @hoist_urem(i8 %a, i8 %b) {
 ; CHECK-LABEL: @hoist_urem(

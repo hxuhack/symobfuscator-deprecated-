@@ -20,7 +20,6 @@
 #define LLVM_CODEGEN_PHYSICALREGISTERUSAGEINFO_H
 
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/Pass.h"
 #include <cstdint>
 #include <vector>

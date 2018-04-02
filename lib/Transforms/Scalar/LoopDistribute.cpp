@@ -23,60 +23,31 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Transforms/Scalar/LoopDistribute.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/ADT/EquivalenceClasses.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
-#include "llvm/ADT/StringRef.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/ADT/iterator_range.h"
-#include "llvm/Analysis/AliasAnalysis.h"
-#include "llvm/Analysis/AssumptionCache.h"
+#include "llvm/Analysis/BlockFrequencyInfo.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/LoopAccessAnalysis.h"
-#include "llvm/Analysis/LoopAnalysisManager.h"
 #include "llvm/Analysis/LoopInfo.h"
-#include "llvm/Analysis/OptimizationRemarkEmitter.h"
-#include "llvm/Analysis/ScalarEvolution.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
-#include "llvm/Analysis/TargetTransformInfo.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/Constants.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/IR/DiagnosticInfo.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/IR/PassManager.h"
-#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Transforms/Scalar.h"
+#include "llvm/Transforms/Scalar/LoopPassManager.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
 #include "llvm/Transforms/Utils/Cloning.h"
 #include "llvm/Transforms/Utils/LoopUtils.h"
 #include "llvm/Transforms/Utils/LoopVersioning.h"
-#include "llvm/Transforms/Utils/ValueMapper.h"
-#include <cassert>
-#include <functional>
 #include <list>
-#include <tuple>
-#include <utility>
-
-using namespace llvm;
 
 #define LDIST_NAME "loop-distribute"
 #define DEBUG_TYPE LDIST_NAME
+
+using namespace llvm;
 
 static cl::opt<bool>
     LDistVerify("loop-distribute-verify", cl::Hidden,
@@ -110,15 +81,14 @@ static cl::opt<bool> EnableLoopDistribute(
 STATISTIC(NumLoopsDistributed, "Number of loops distributed");
 
 namespace {
-
 /// \brief Maintains the set of instructions of the loop for a partition before
 /// cloning.  After cloning, it hosts the new loop.
 class InstPartition {
-  using InstructionSet = SmallPtrSet<Instruction *, 8>;
+  typedef SmallPtrSet<Instruction *, 8> InstructionSet;
 
 public:
   InstPartition(Instruction *I, Loop *L, bool DepCycle = false)
-      : DepCycle(DepCycle), OrigLoop(L) {
+      : DepCycle(DepCycle), OrigLoop(L), ClonedLoop(nullptr) {
     Set.insert(I);
   }
 
@@ -250,7 +220,7 @@ private:
 
   /// \brief The cloned loop.  If this partition is mapped to the original loop,
   /// this is null.
-  Loop *ClonedLoop = nullptr;
+  Loop *ClonedLoop;
 
   /// \brief The blocks of ClonedLoop including the preheader.  If this
   /// partition is mapped to the original loop, this is empty.
@@ -265,7 +235,7 @@ private:
 /// \brief Holds the set of Partitions.  It populates them, merges them and then
 /// clones the loops.
 class InstPartitionContainer {
-  using InstToPartitionIdT = DenseMap<Instruction *, int>;
+  typedef DenseMap<Instruction *, int> InstToPartitionIdT;
 
 public:
   InstPartitionContainer(Loop *L, LoopInfo *LI, DominatorTree *DT)
@@ -338,8 +308,8 @@ public:
   ///
   /// Return if any partitions were merged.
   bool mergeToAvoidDuplicatedLoads() {
-    using LoadToPartitionT = DenseMap<Instruction *, InstPartition *>;
-    using ToBeMergedT = EquivalenceClasses<InstPartition *>;
+    typedef DenseMap<Instruction *, InstPartition *> LoadToPartitionT;
+    typedef EquivalenceClasses<InstPartition *> ToBeMergedT;
 
     LoadToPartitionT LoadToPartition;
     ToBeMergedT ToBeMerged;
@@ -541,7 +511,7 @@ public:
   }
 
 private:
-  using PartitionContainerT = std::list<InstPartition>;
+  typedef std::list<InstPartition> PartitionContainerT;
 
   /// \brief List of partitions.
   PartitionContainerT PartitionContainer;
@@ -582,17 +552,17 @@ private:
 /// By traversing the memory instructions in program order and accumulating this
 /// number, we know whether any unsafe dependence crosses over a program point.
 class MemoryInstructionDependences {
-  using Dependence = MemoryDepChecker::Dependence;
+  typedef MemoryDepChecker::Dependence Dependence;
 
 public:
   struct Entry {
     Instruction *Inst;
-    unsigned NumUnsafeDependencesStartOrEnd = 0;
+    unsigned NumUnsafeDependencesStartOrEnd;
 
-    Entry(Instruction *Inst) : Inst(Inst) {}
+    Entry(Instruction *Inst) : Inst(Inst), NumUnsafeDependencesStartOrEnd(0) {}
   };
 
-  using AccessesType = SmallVector<Entry, 8>;
+  typedef SmallVector<Entry, 8> AccessesType;
 
   AccessesType::const_iterator begin() const { return Accesses.begin(); }
   AccessesType::const_iterator end() const { return Accesses.end(); }
@@ -624,7 +594,7 @@ class LoopDistributeForLoop {
 public:
   LoopDistributeForLoop(Loop *L, Function *F, LoopInfo *LI, DominatorTree *DT,
                         ScalarEvolution *SE, OptimizationRemarkEmitter *ORE)
-      : L(L), F(F), LI(LI), DT(DT), SE(SE), ORE(ORE) {
+      : L(L), F(F), LI(LI), LAI(nullptr), DT(DT), SE(SE), ORE(ORE) {
     setForced();
   }
 
@@ -785,11 +755,9 @@ public:
 
     ++NumLoopsDistributed;
     // Report the success.
-    ORE->emit([&]() {
-      return OptimizationRemark(LDIST_NAME, "Distribute", L->getStartLoc(),
-                                L->getHeader())
-             << "distributed loop";
-    });
+    ORE->emit(OptimizationRemark(LDIST_NAME, "Distribute", L->getStartLoc(),
+                                 L->getHeader())
+              << "distributed loop");
     return true;
   }
 
@@ -801,13 +769,11 @@ public:
     DEBUG(dbgs() << "Skipping; " << Message << "\n");
 
     // With Rpass-missed report that distribution failed.
-    ORE->emit([&]() {
-      return OptimizationRemarkMissed(LDIST_NAME, "NotDistributed",
-                                      L->getStartLoc(), L->getHeader())
-             << "loop not distributed: use -Rpass-analysis=loop-distribute for "
-                "more "
-                "info";
-    });
+    ORE->emit(
+        OptimizationRemarkMissed(LDIST_NAME, "NotDistributed", L->getStartLoc(),
+                                 L->getHeader())
+        << "loop not distributed: use -Rpass-analysis=loop-distribute for more "
+           "info");
 
     // With Rpass-analysis report why.  This is on by default if distribution
     // was requested explicitly.
@@ -891,7 +857,7 @@ private:
 
   // Analyses used.
   LoopInfo *LI;
-  const LoopAccessInfo *LAI = nullptr;
+  const LoopAccessInfo *LAI;
   DominatorTree *DT;
   ScalarEvolution *SE;
   OptimizationRemarkEmitter *ORE;
@@ -904,8 +870,6 @@ private:
   /// distribution was not forced either way.
   Optional<bool> IsForced;
 };
-
-} // end anonymous namespace
 
 /// Shared implementation between new and old PMs.
 static bool runImpl(Function &F, LoopInfo *LI, DominatorTree *DT,
@@ -937,13 +901,9 @@ static bool runImpl(Function &F, LoopInfo *LI, DominatorTree *DT,
   return Changed;
 }
 
-namespace {
-
 /// \brief The pass class.
 class LoopDistributeLegacy : public FunctionPass {
 public:
-  static char ID;
-
   LoopDistributeLegacy() : FunctionPass(ID) {
     // The default is set by the caller.
     initializeLoopDistributeLegacyPass(*PassRegistry::getPassRegistry());
@@ -974,9 +934,10 @@ public:
     AU.addRequired<OptimizationRemarkEmitterWrapperPass>();
     AU.addPreserved<GlobalsAAWrapperPass>();
   }
-};
 
-} // end anonymous namespace
+  static char ID;
+};
+} // anonymous namespace
 
 PreservedAnalyses LoopDistributePass::run(Function &F,
                                           FunctionAnalysisManager &AM) {
@@ -995,7 +956,7 @@ PreservedAnalyses LoopDistributePass::run(Function &F,
   auto &LAM = AM.getResult<LoopAnalysisManagerFunctionProxy>(F).getManager();
   std::function<const LoopAccessInfo &(Loop &)> GetLAA =
       [&](Loop &L) -> const LoopAccessInfo & {
-    LoopStandardAnalysisResults AR = {AA, AC, DT, LI, SE, TLI, TTI, nullptr};
+    LoopStandardAnalysisResults AR = {AA, AC, DT, LI, SE, TLI, TTI};
     return LAM.getResult<LoopAccessAnalysis>(L, AR);
   };
 
@@ -1010,7 +971,6 @@ PreservedAnalyses LoopDistributePass::run(Function &F,
 }
 
 char LoopDistributeLegacy::ID;
-
 static const char ldist_name[] = "Loop Distribution";
 
 INITIALIZE_PASS_BEGIN(LoopDistributeLegacy, LDIST_NAME, ldist_name, false,
@@ -1022,4 +982,6 @@ INITIALIZE_PASS_DEPENDENCY(ScalarEvolutionWrapperPass)
 INITIALIZE_PASS_DEPENDENCY(OptimizationRemarkEmitterWrapperPass)
 INITIALIZE_PASS_END(LoopDistributeLegacy, LDIST_NAME, ldist_name, false, false)
 
-FunctionPass *llvm::createLoopDistributePass() { return new LoopDistributeLegacy(); }
+namespace llvm {
+FunctionPass *createLoopDistributePass() { return new LoopDistributeLegacy(); }
+}

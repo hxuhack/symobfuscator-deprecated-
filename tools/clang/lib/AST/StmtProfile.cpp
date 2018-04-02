@@ -573,34 +573,6 @@ void OMPClauseProfiler::VisitOMPTaskReductionClause(
       Profiler->VisitStmt(E);
   }
 }
-void OMPClauseProfiler::VisitOMPInReductionClause(
-    const OMPInReductionClause *C) {
-  Profiler->VisitNestedNameSpecifier(
-      C->getQualifierLoc().getNestedNameSpecifier());
-  Profiler->VisitName(C->getNameInfo().getName());
-  VisitOMPClauseList(C);
-  VistOMPClauseWithPostUpdate(C);
-  for (auto *E : C->privates()) {
-    if (E)
-      Profiler->VisitStmt(E);
-  }
-  for (auto *E : C->lhs_exprs()) {
-    if (E)
-      Profiler->VisitStmt(E);
-  }
-  for (auto *E : C->rhs_exprs()) {
-    if (E)
-      Profiler->VisitStmt(E);
-  }
-  for (auto *E : C->reduction_ops()) {
-    if (E)
-      Profiler->VisitStmt(E);
-  }
-  for (auto *E : C->taskgroup_descriptors()) {
-    if (E)
-      Profiler->VisitStmt(E);
-  }
-}
 void OMPClauseProfiler::VisitOMPLinearClause(const OMPLinearClause *C) {
   VisitOMPClauseList(C);
   VistOMPClauseWithPostUpdate(C);
@@ -802,8 +774,6 @@ void StmtProfiler::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *S) {
 
 void StmtProfiler::VisitOMPTaskgroupDirective(const OMPTaskgroupDirective *S) {
   VisitOMPExecutableDirective(S);
-  if (const Expr *E = S->getReductionRef())
-    VisitStmt(E);
 }
 
 void StmtProfiler::VisitOMPFlushDirective(const OMPFlushDirective *S) {
@@ -1384,10 +1354,6 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
   case OO_GreaterEqual:
     BinaryOp = BO_GE;
     return Stmt::BinaryOperatorClass;
-
-  case OO_Spaceship:
-    // FIXME: Update this once we support <=> expressions.
-    llvm_unreachable("<=> expressions not supported yet");
       
   case OO_AmpAmp:
     BinaryOp = BO_LAnd;
@@ -1422,7 +1388,7 @@ static Stmt::StmtClass DecodeOperatorCall(const CXXOperatorCallExpr *S,
   llvm_unreachable("Invalid overloaded operator expression");
 }
 
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER)
 #if _MSC_VER == 1911
 // Work around https://developercommunity.visualstudio.com/content/problem/84002/clang-cl-when-built-with-vc-2017-crashes-cause-vc.html
 // MSVC 2017 update 3 miscompiles this function, and a clang built with it
@@ -1463,7 +1429,7 @@ void StmtProfiler::VisitCXXOperatorCallExpr(const CXXOperatorCallExpr *S) {
   ID.AddInteger(S->getOperator());
 }
 
-#if defined(_MSC_VER) && !defined(__clang__)
+#if defined(_MSC_VER)
 #if _MSC_VER == 1911
 #pragma optimize("", on)
 #endif
@@ -1594,9 +1560,6 @@ StmtProfiler::VisitLambdaExpr(const LambdaExpr *S) {
   for (LambdaExpr::capture_iterator C = S->explicit_capture_begin(),
                                  CEnd = S->explicit_capture_end();
        C != CEnd; ++C) {
-    if (C->capturesVLAType())
-      continue;
-
     ID.AddInteger(C->getCaptureKind());
     switch (C->getCaptureKind()) {
     case LCK_StarThis:
@@ -1708,7 +1671,6 @@ void StmtProfiler::VisitCXXUnresolvedConstructExpr(
     const CXXUnresolvedConstructExpr *S) {
   VisitExpr(S);
   VisitType(S->getTypeAsWritten());
-  ID.AddInteger(S->isListInitialization());
 }
 
 void StmtProfiler::VisitCXXDependentScopeMemberExpr(

@@ -140,8 +140,7 @@ Memory leak detection
 ---------------------
 
 For more information on leak detector in AddressSanitizer, see
-:doc:`LeakSanitizer`. The leak detection is turned on by default on Linux,
-and can be enabled using ``ASAN_OPTIONS=detect_leaks=1`` on OS X;
+:doc:`LeakSanitizer`. The leak detection is turned on by default on Linux;
 however, it is not yet supported on other platforms.
 
 Issue Suppression

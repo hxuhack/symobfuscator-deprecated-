@@ -24,7 +24,6 @@ class XRayArgs {
   std::vector<std::string> ExtraDeps;
   bool XRayInstrument = false;
   int InstructionThreshold = 200;
-  bool XRayAlwaysEmitCustomEvents = false;
 
 public:
   /// Parses the XRay arguments from an argument list.

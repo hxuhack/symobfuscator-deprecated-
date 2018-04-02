@@ -13,13 +13,11 @@
 
 #include "MipsMCTargetDesc.h"
 #include "InstPrinter/MipsInstPrinter.h"
-#include "MipsAsmBackend.h"
 #include "MipsELFStreamer.h"
 #include "MipsMCAsmInfo.h"
 #include "MipsMCNaCl.h"
 #include "MipsTargetStreamer.h"
 #include "llvm/ADT/Triple.h"
-#include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCELFStreamer.h"
 #include "llvm/MC/MCInstrAnalysis.h"
 #include "llvm/MC/MCInstrInfo.h"
@@ -92,17 +90,13 @@ static MCInstPrinter *createMipsMCInstPrinter(const Triple &T,
 }
 
 static MCStreamer *createMCStreamer(const Triple &T, MCContext &Context,
-                                    std::unique_ptr<MCAsmBackend> &&MAB,
-                                    raw_pwrite_stream &OS,
-                                    std::unique_ptr<MCCodeEmitter> &&Emitter,
-                                    bool RelaxAll) {
+                                    MCAsmBackend &MAB, raw_pwrite_stream &OS,
+                                    MCCodeEmitter *Emitter, bool RelaxAll) {
   MCStreamer *S;
   if (!T.isOSNaCl())
-    S = createMipsELFStreamer(Context, std::move(MAB), OS, std::move(Emitter),
-                              RelaxAll);
+    S = createMipsELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
   else
-    S = createMipsNaClELFStreamer(Context, std::move(MAB), OS,
-                                  std::move(Emitter), RelaxAll);
+    S = createMipsNaClELFStreamer(Context, MAB, OS, Emitter, RelaxAll);
   return S;
 }
 
@@ -186,9 +180,6 @@ extern "C" void LLVMInitializeMipsTargetMC() {
 
     TargetRegistry::RegisterObjectTargetStreamer(
         *T, createMipsObjectTargetStreamer);
-
-    // Register the asm backend.
-    TargetRegistry::RegisterMCAsmBackend(*T, createMipsAsmBackend);
   }
 
   // Register the MC Code Emitter
@@ -197,4 +188,14 @@ extern "C" void LLVMInitializeMipsTargetMC() {
 
   for (Target *T : {&getTheMipselTarget(), &getTheMips64elTarget()})
     TargetRegistry::RegisterMCCodeEmitter(*T, createMipsMCCodeEmitterEL);
+
+  // Register the asm backend.
+  TargetRegistry::RegisterMCAsmBackend(getTheMipsTarget(),
+                                       createMipsAsmBackendEB32);
+  TargetRegistry::RegisterMCAsmBackend(getTheMipselTarget(),
+                                       createMipsAsmBackendEL32);
+  TargetRegistry::RegisterMCAsmBackend(getTheMips64Target(),
+                                       createMipsAsmBackendEB64);
+  TargetRegistry::RegisterMCAsmBackend(getTheMips64elTarget(),
+                                       createMipsAsmBackendEL64);
 }

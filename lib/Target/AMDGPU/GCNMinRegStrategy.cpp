@@ -1,4 +1,4 @@
-//===- GCNMinRegStrategy.cpp ----------------------------------------------===//
+//===----------------------- GCNMinRegStrategy.cpp - ----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,27 +6,18 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
+/// \file
+//
+//===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/ilist_node.h"
-#include "llvm/ADT/simple_ilist.h"
 #include "llvm/CodeGen/ScheduleDAG.h"
-#include "llvm/Support/Allocator.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/raw_ostream.h"
-#include <cassert>
-#include <cstdint>
-#include <limits>
-#include <vector>
 
 using namespace llvm;
 
 #define DEBUG_TYPE "machine-scheduler"
 
 namespace {
-
 class GCNMinRegScheduler {
   struct Candidate : ilist_node<Candidate> {
     const SUnit *SU;
@@ -37,7 +28,7 @@ class GCNMinRegScheduler {
   };
 
   SpecificBumpPtrAllocator<Candidate> Alloc;
-  using Queue = simple_ilist<Candidate>;
+  typedef simple_ilist<Candidate> Queue;
   Queue RQ; // Ready queue
 
   std::vector<unsigned> NumPreds;
@@ -81,8 +72,7 @@ public:
   std::vector<const SUnit*> schedule(ArrayRef<const SUnit*> TopRoots,
                                      const ScheduleDAG &DAG);
 };
-
-} // end anonymous namespace
+} // namespace
 
 void GCNMinRegScheduler::initNumPreds(const decltype(ScheduleDAG::SUnits) &SUnits) {
   NumPreds.resize(SUnits.size());
@@ -114,9 +104,7 @@ int GCNMinRegScheduler::getNotReadySuccessors(const SUnit *SU) const {
 template <typename Calc>
 unsigned GCNMinRegScheduler::findMax(unsigned Num, Calc C) {
   assert(!RQ.empty() && Num <= RQ.size());
-
-  using T = decltype(C(*RQ.begin())) ;
-
+  typedef decltype(C(*RQ.begin())) T;
   T Max = std::numeric_limits<T>::min();
   unsigned NumMax = 0;
   for (auto I = RQ.begin(); Num; --Num) {
@@ -272,11 +260,9 @@ GCNMinRegScheduler::schedule(ArrayRef<const SUnit*> TopRoots,
 }
 
 namespace llvm {
-
 std::vector<const SUnit*> makeMinRegSchedule(ArrayRef<const SUnit*> TopRoots,
                                              const ScheduleDAG &DAG) {
   GCNMinRegScheduler S;
   return S.schedule(TopRoots, DAG);
 }
-
-} // end namespace llvm
+}

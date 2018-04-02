@@ -15,40 +15,28 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallPtrSet.h"
+#include "llvm/ADT/SmallSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
-#include "llvm/Analysis/MemoryLocation.h"
 #include "llvm/Analysis/OrderedBasicBlock.h"
 #include "llvm/Analysis/PHITransAddr.h"
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/Attributes.h"
-#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
 #include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/IR/Module.h"
 #include "llvm/IR/PredIteratorCache.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Use.h"
-#include "llvm/IR/User.h"
-#include "llvm/IR/Value.h"
-#include "llvm/Pass.h"
 #include "llvm/Support/AtomicOrdering.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
@@ -57,9 +45,7 @@
 #include "llvm/Support/MathExtras.h"
 #include <algorithm>
 #include <cassert>
-#include <cstdint>
 #include <iterator>
-#include <utility>
 
 using namespace llvm;
 
@@ -119,38 +105,38 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
   if (const LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
     if (LI->isUnordered()) {
       Loc = MemoryLocation::get(LI);
-      return ModRefInfo::Ref;
+      return MRI_Ref;
     }
     if (LI->getOrdering() == AtomicOrdering::Monotonic) {
       Loc = MemoryLocation::get(LI);
-      return ModRefInfo::ModRef;
+      return MRI_ModRef;
     }
     Loc = MemoryLocation();
-    return ModRefInfo::ModRef;
+    return MRI_ModRef;
   }
 
   if (const StoreInst *SI = dyn_cast<StoreInst>(Inst)) {
     if (SI->isUnordered()) {
       Loc = MemoryLocation::get(SI);
-      return ModRefInfo::Mod;
+      return MRI_Mod;
     }
     if (SI->getOrdering() == AtomicOrdering::Monotonic) {
       Loc = MemoryLocation::get(SI);
-      return ModRefInfo::ModRef;
+      return MRI_ModRef;
     }
     Loc = MemoryLocation();
-    return ModRefInfo::ModRef;
+    return MRI_ModRef;
   }
 
   if (const VAArgInst *V = dyn_cast<VAArgInst>(Inst)) {
     Loc = MemoryLocation::get(V);
-    return ModRefInfo::ModRef;
+    return MRI_ModRef;
   }
 
   if (const CallInst *CI = isFreeCall(Inst, &TLI)) {
     // calls to free() deallocate the entire structure
     Loc = MemoryLocation(CI->getArgOperand(0));
-    return ModRefInfo::Mod;
+    return MRI_Mod;
   }
 
   if (const IntrinsicInst *II = dyn_cast<IntrinsicInst>(Inst)) {
@@ -166,7 +152,7 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
           cast<ConstantInt>(II->getArgOperand(0))->getZExtValue(), AAInfo);
       // These intrinsics don't really modify the memory, but returning Mod
       // will allow them to be handled conservatively.
-      return ModRefInfo::Mod;
+      return MRI_Mod;
     case Intrinsic::invariant_end:
       II->getAAMetadata(AAInfo);
       Loc = MemoryLocation(
@@ -174,7 +160,7 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
           cast<ConstantInt>(II->getArgOperand(1))->getZExtValue(), AAInfo);
       // These intrinsics don't really modify the memory, but returning Mod
       // will allow them to be handled conservatively.
-      return ModRefInfo::Mod;
+      return MRI_Mod;
     default:
       break;
     }
@@ -182,10 +168,10 @@ static ModRefInfo GetLocation(const Instruction *Inst, MemoryLocation &Loc,
 
   // Otherwise, just do the coarse-grained thing that always works.
   if (Inst->mayWriteToMemory())
-    return ModRefInfo::ModRef;
+    return MRI_ModRef;
   if (Inst->mayReadFromMemory())
-    return ModRefInfo::Ref;
-  return ModRefInfo::NoModRef;
+    return MRI_Ref;
+  return MRI_NoModRef;
 }
 
 /// Private helper for finding the local dependencies of a call site.
@@ -196,46 +182,48 @@ MemDepResult MemoryDependenceResults::getCallSiteDependencyFrom(
 
   // Walk backwards through the block, looking for dependencies.
   while (ScanIt != BB->begin()) {
-    Instruction *Inst = &*--ScanIt;
-    // Debug intrinsics don't cause dependences and should not affect Limit
-    if (isa<DbgInfoIntrinsic>(Inst))
-      continue;
-
     // Limit the amount of scanning we do so we don't end up with quadratic
     // running time on extreme testcases.
     --Limit;
     if (!Limit)
       return MemDepResult::getUnknown();
 
+    Instruction *Inst = &*--ScanIt;
+
     // If this inst is a memory op, get the pointer it accessed
     MemoryLocation Loc;
     ModRefInfo MR = GetLocation(Inst, Loc, TLI);
     if (Loc.Ptr) {
       // A simple instruction.
-      if (isModOrRefSet(AA.getModRefInfo(CS, Loc)))
+      if (AA.getModRefInfo(CS, Loc) != MRI_NoModRef)
         return MemDepResult::getClobber(Inst);
       continue;
     }
 
     if (auto InstCS = CallSite(Inst)) {
+      // Debug intrinsics don't cause dependences.
+      if (isa<DbgInfoIntrinsic>(Inst))
+        continue;
       // If these two calls do not interfere, look past it.
-      if (isNoModRef(AA.getModRefInfo(CS, InstCS))) {
+      switch (AA.getModRefInfo(CS, InstCS)) {
+      case MRI_NoModRef:
         // If the two calls are the same, return InstCS as a Def, so that
         // CS can be found redundant and eliminated.
-        if (isReadOnlyCall && !isModSet(MR) &&
+        if (isReadOnlyCall && !(MR & MRI_Mod) &&
             CS.getInstruction()->isIdenticalToWhenDefined(Inst))
           return MemDepResult::getDef(Inst);
 
         // Otherwise if the two calls don't interact (e.g. InstCS is readnone)
         // keep scanning.
         continue;
-      } else
+      default:
         return MemDepResult::getClobber(Inst);
+      }
     }
 
     // If we could not obtain a pointer for the instruction and the instruction
     // touches memory then assume that this is a dependency.
-    if (isModOrRefSet(MR))
+    if (MR != MRI_NoModRef)
       return MemDepResult::getClobber(Inst);
   }
 
@@ -306,10 +294,8 @@ unsigned MemoryDependenceResults::getLoadLoadClobberFullWidthSize(
       return 0;
 
     if (LIOffs + NewLoadByteSize > MemLocEnd &&
-        (LI->getParent()->getParent()->hasFnAttribute(
-             Attribute::SanitizeAddress) ||
-         LI->getParent()->getParent()->hasFnAttribute(
-             Attribute::SanitizeHWAddress)))
+        LI->getParent()->getParent()->hasFnAttribute(
+            Attribute::SanitizeAddress))
       // We will be reading past the location accessed by the original program.
       // While this is safe in a regular build, Address Safety analysis tools
       // may start reporting false warnings. So, don't do widening.
@@ -336,6 +322,7 @@ static bool isVolatile(Instruction *Inst) {
 MemDepResult MemoryDependenceResults::getPointerDependencyFrom(
     const MemoryLocation &MemLoc, bool isLoad, BasicBlock::iterator ScanIt,
     BasicBlock *BB, Instruction *QueryInst, unsigned *Limit) {
+
   MemDepResult InvariantGroupDependency = MemDepResult::getUnknown();
   if (QueryInst != nullptr) {
     if (auto *LI = dyn_cast<LoadInst>(QueryInst)) {
@@ -363,6 +350,7 @@ MemDepResult MemoryDependenceResults::getPointerDependencyFrom(
 MemDepResult
 MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
                                                             BasicBlock *BB) {
+
   auto *InvariantGroupMD = LI->getMetadata(LLVMContext::MD_invariant_group);
   if (!InvariantGroupMD)
     return MemDepResult::getUnknown();
@@ -391,6 +379,7 @@ MemoryDependenceResults::getInvariantGroupPointerDependency(LoadInst *LI,
       return Other;
     return Best;
   };
+
 
   // FIXME: This loop is O(N^2) because dominates can be O(n) and in worst case
   // we will see all the instructions. This should be fixed in MSSA.
@@ -552,6 +541,7 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     // it does not alias with when this atomic load indicates that another
     // thread may be accessing the location.
     if (LoadInst *LI = dyn_cast<LoadInst>(Inst)) {
+
       // While volatile access cannot be eliminated, they do not have to clobber
       // non-aliasing locations, as normal accesses, for example, can be safely
       // reordered with volatile accesses.
@@ -642,12 +632,11 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
       // If alias analysis can tell that this store is guaranteed to not modify
       // the query pointer, ignore it.  Use getModRefInfo to handle cases where
       // the query pointer points to constant memory etc.
-      if (!isModOrRefSet(AA.getModRefInfo(SI, MemLoc)))
+      if (AA.getModRefInfo(SI, MemLoc) == MRI_NoModRef)
         continue;
 
       // Ok, this store might clobber the query pointer.  Check to see if it is
       // a must alias: in this case, we want to return this as a def.
-      // FIXME: Use ModRefInfo::Must bit from getModRefInfo call above.
       MemoryLocation StoreLoc = MemoryLocation::get(SI);
 
       // If we found a pointer, check if it could be the same as our pointer.
@@ -689,15 +678,15 @@ MemDepResult MemoryDependenceResults::getSimplePointerDependencyFrom(
     // See if this instruction (e.g. a call or vaarg) mod/ref's the pointer.
     ModRefInfo MR = AA.getModRefInfo(Inst, MemLoc);
     // If necessary, perform additional analysis.
-    if (isModAndRefSet(MR))
+    if (MR == MRI_ModRef)
       MR = AA.callCapturesBefore(Inst, MemLoc, &DT, &OBB);
-    switch (clearMust(MR)) {
-    case ModRefInfo::NoModRef:
+    switch (MR) {
+    case MRI_NoModRef:
       // If the call has no effect on the queried pointer, just ignore it.
       continue;
-    case ModRefInfo::Mod:
+    case MRI_Mod:
       return MemDepResult::getClobber(Inst);
-    case ModRefInfo::Ref:
+    case MRI_Ref:
       // If the call is known to never store to the pointer, and if this is a
       // load query, we can safely ignore it (scan past it).
       if (isLoad)
@@ -750,7 +739,7 @@ MemDepResult MemoryDependenceResults::getDependency(Instruction *QueryInst) {
     ModRefInfo MR = GetLocation(QueryInst, MemLoc, TLI);
     if (MemLoc.Ptr) {
       // If we can do a pointer scan, make it happen.
-      bool isLoad = !isModSet(MR);
+      bool isLoad = !(MR & MRI_Mod);
       if (auto *II = dyn_cast<IntrinsicInst>(QueryInst))
         isLoad |= II->getIntrinsicID() == Intrinsic::lifetime_start;
 
@@ -1519,6 +1508,7 @@ void MemoryDependenceResults::removeInstruction(Instruction *RemInst) {
   }
 
   // If we have a cached local dependence query for this instruction, remove it.
+  //
   LocalDepMapType::iterator LocalDepEntry = LocalDeps.find(RemInst);
   if (LocalDepEntry != LocalDeps.end()) {
     // Remove us from DepInst's reverse set now that the local dep info is gone.
@@ -1541,6 +1531,7 @@ void MemoryDependenceResults::removeInstruction(Instruction *RemInst) {
   }
 
   // Loop over all of the things that depend on the instruction we're removing.
+  //
   SmallVector<std::pair<Instruction *, Instruction *>, 8> ReverseDepsToAdd;
 
   // If we find RemInst as a clobber or Def in any of the maps for other values,
@@ -1735,7 +1726,7 @@ MemoryDependenceWrapperPass::MemoryDependenceWrapperPass() : FunctionPass(ID) {
   initializeMemoryDependenceWrapperPassPass(*PassRegistry::getPassRegistry());
 }
 
-MemoryDependenceWrapperPass::~MemoryDependenceWrapperPass() = default;
+MemoryDependenceWrapperPass::~MemoryDependenceWrapperPass() {}
 
 void MemoryDependenceWrapperPass::releaseMemory() {
   MemDep.reset();

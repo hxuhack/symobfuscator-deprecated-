@@ -6,7 +6,7 @@
 	.align	2
 	.type	barf,%function
 barf:                                   @ @barf
-@ %bb.0:                                @ %entry
+@ BB#0:                                 @ %entry
         b foo
 
 @@@ make sure the EF_ARM_EABIMASK comes out OK

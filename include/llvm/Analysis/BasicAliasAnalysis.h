@@ -14,36 +14,22 @@
 #ifndef LLVM_ANALYSIS_BASICALIASANALYSIS_H
 #define LLVM_ANALYSIS_BASICALIASANALYSIS_H
 
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
-#include "llvm/Analysis/MemoryLocation.h"
-#include "llvm/IR/CallSite.h"
+#include "llvm/Analysis/TargetLibraryInfo.h"
+#include "llvm/IR/Function.h"
+#include "llvm/IR/GetElementPtrTypeIterator.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Pass.h"
-#include <algorithm>
-#include <cstdint>
-#include <memory>
-#include <utility>
+#include "llvm/Support/ErrorHandling.h"
 
 namespace llvm {
-
-struct AAMDNodes;
-class APInt;
 class AssumptionCache;
-class BasicBlock;
-class DataLayout;
 class DominatorTree;
-class Function;
-class GEPOperator;
 class LoopInfo;
-class PHINode;
-class SelectInst;
-class TargetLibraryInfo;
-class Value;
 
 /// This is the AA result object for the basic, local, and stateless alias
 /// analysis. It implements the AA query interface in an entirely stateless
@@ -100,6 +86,7 @@ private:
   // A linear transformation of a Value; this class represents ZExt(SExt(V,
   // SExtBits), ZExtBits) * Scale + Offset.
   struct VariableGEPIndex {
+
     // An opaque Value - we can't decompose this further.
     const Value *V;
 
@@ -137,8 +124,8 @@ private:
   };
 
   /// Track alias queries to guard against recursion.
-  using LocPair = std::pair<MemoryLocation, MemoryLocation>;
-  using AliasCacheTy = SmallDenseMap<LocPair, AliasResult, 8>;
+  typedef std::pair<MemoryLocation, MemoryLocation> LocPair;
+  typedef SmallDenseMap<LocPair, AliasResult, 8> AliasCacheTy;
   AliasCacheTy AliasCache;
 
   /// Tracks phi nodes we have visited.
@@ -214,11 +201,10 @@ private:
 /// Analysis pass providing a never-invalidated alias analysis result.
 class BasicAA : public AnalysisInfoMixin<BasicAA> {
   friend AnalysisInfoMixin<BasicAA>;
-
   static AnalysisKey Key;
 
 public:
-  using Result = BasicAAResult;
+  typedef BasicAAResult Result;
 
   BasicAAResult run(Function &F, FunctionAnalysisManager &AM);
 };
@@ -265,6 +251,6 @@ public:
   }
 };
 
-} // end namespace llvm
+}
 
-#endif // LLVM_ANALYSIS_BASICALIASANALYSIS_H
+#endif

@@ -15,7 +15,7 @@ DOCKER_TAG=""
 BUILDSCRIPT_ARGS=""
 
 function show_usage() {
-  cat << EOF
+  usage=$(cat << EOF
 Usage: build_docker_image.sh [options] [-- [cmake_args]...]
 
 Available options:
@@ -30,10 +30,6 @@ Available options:
                         'branches/release_40'
                         (default: 'trunk')
     -r|--revision       svn revision to checkout
-    -c|--cherrypick     revision to cherry-pick. Can be specified multiple times.
-                        Cherry-picks are performed in the sorted order using the
-                        following command:
-                        'svn patch <(svn diff -c \$rev)'.
     -p|--llvm-project   name of an svn project to checkout. Will also add the
                         project to a list LLVM_ENABLE_PROJECTS, passed to CMake.
                         For clang, please use 'clang', not 'cfe'.
@@ -42,9 +38,6 @@ Available options:
                         Can be specified multiple times.
     -i|--install-target name of a cmake install target to build and include in
                         the resulting archive. Can be specified multiple times.
-    -c|--checksums      name of a file, containing checksums of llvm checkout.
-                        Script will fail if checksums of the checkout do not
-                        match.
 
 Required options: --source and --docker-repository, at least one
   --install-target.
@@ -71,9 +64,10 @@ $ ./build_docker_image.sh -s debian8 -d mydocker/clang-debian8 -t "latest" \
     -DCLANG_ENABLE_BOOTSTRAP=ON \ 
     -DCLANG_BOOTSTRAP_TARGETS="install-clang;install-clang-headers"
 EOF
+)
+  echo "$usage"
 }
 
-CHECKSUMS_FILE=""
 SEEN_INSTALL_TARGET=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -96,17 +90,12 @@ while [[ $# -gt 0 ]]; do
       DOCKER_TAG="$1"
       shift
       ;;
-    -i|--install-target|-r|--revision|-c|-cherrypick|-b|--branch|-p|--llvm-project)
+    -i|--install-target|-r|--revision|-b|--branch|-p|--llvm-project)
       if [ "$1" == "-i" ] || [ "$1" == "--install-target" ]; then
         SEEN_INSTALL_TARGET=1
       fi
       BUILDSCRIPT_ARGS="$BUILDSCRIPT_ARGS $1 $2"
       shift 2
-      ;;
-    -c|--checksums)
-      shift
-      CHECKSUMS_FILE="$1"
-      shift
       ;;
     --)
       shift
@@ -141,41 +130,30 @@ if [ $SEEN_INSTALL_TARGET -eq 0 ]; then
   exit 1
 fi
 
-SOURCE_DIR=$(dirname $0)
-if [ ! -d "$SOURCE_DIR/$IMAGE_SOURCE" ]; then
-  echo "No sources for '$IMAGE_SOURCE' were found in $SOURCE_DIR"
+cd $(dirname $0)
+if [ ! -d $IMAGE_SOURCE ]; then
+  echo "No sources for '$IMAGE_SOURCE' were found in $PWD"
   exit 1
 fi
 
-BUILD_DIR=$(mktemp -d)
-trap "rm -rf $BUILD_DIR" EXIT
-echo "Using a temporary directory for the build: $BUILD_DIR"
-
-cp -r "$SOURCE_DIR/$IMAGE_SOURCE" "$BUILD_DIR/$IMAGE_SOURCE"
-cp -r "$SOURCE_DIR/scripts" "$BUILD_DIR/scripts"
-
-mkdir "$BUILD_DIR/checksums"
-if [ "$CHECKSUMS_FILE" != "" ]; then
-  cp "$CHECKSUMS_FILE" "$BUILD_DIR/checksums/checksums.txt"
-fi
+echo "Building from $IMAGE_SOURCE"
 
 if [ "$DOCKER_TAG" != "" ]; then
   DOCKER_TAG=":$DOCKER_TAG"
 fi
 
-echo "Building from $IMAGE_SOURCE"
 echo "Building $DOCKER_REPOSITORY-build$DOCKER_TAG"
 docker build -t "$DOCKER_REPOSITORY-build$DOCKER_TAG" \
   --build-arg "buildscript_args=$BUILDSCRIPT_ARGS" \
-  -f "$BUILD_DIR/$IMAGE_SOURCE/build/Dockerfile" \
-  "$BUILD_DIR"
+  -f "$IMAGE_SOURCE/build/Dockerfile" .
 
 echo "Copying clang installation to release image sources"
-docker run -v "$BUILD_DIR/$IMAGE_SOURCE:/workspace" "$DOCKER_REPOSITORY-build$DOCKER_TAG" \
+docker run -v "$PWD/$IMAGE_SOURCE:/workspace" "$DOCKER_REPOSITORY-build$DOCKER_TAG" \
   cp /tmp/clang.tar.gz /workspace/release
+trap "rm -f $PWD/$IMAGE_SOURCE/release/clang.tar.gz" EXIT
 
 echo "Building release image"
 docker build -t "${DOCKER_REPOSITORY}${DOCKER_TAG}" \
-  "$BUILD_DIR/$IMAGE_SOURCE/release"
+  "$IMAGE_SOURCE/release"
 
 echo "Done"

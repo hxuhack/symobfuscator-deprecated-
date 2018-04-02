@@ -176,8 +176,7 @@ public:
       : DirectiveLoc(DirectiveLoc), DiagnosticLoc(DiagnosticLoc),
         Text(Text), Min(Min), Max(Max), MatchAnyLine(MatchAnyLine) {
     assert(!DirectiveLoc.isInvalid() && "DirectiveLoc is invalid!");
-    assert((!DiagnosticLoc.isInvalid() || MatchAnyLine) &&
-           "DiagnosticLoc is invalid!");
+    assert(!DiagnosticLoc.isInvalid() && "DiagnosticLoc is invalid!");
     }
 
   private:

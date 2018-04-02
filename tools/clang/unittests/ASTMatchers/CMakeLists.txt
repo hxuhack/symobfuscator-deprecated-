@@ -18,7 +18,6 @@ add_clang_unittest(ASTMatchersTests
   ASTMatchersTraversalTest.cpp)
 
 target_link_libraries(ASTMatchersTests
-  PRIVATE
   clangAST
   clangASTMatchers
   clangBasic

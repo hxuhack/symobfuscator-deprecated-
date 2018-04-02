@@ -285,9 +285,9 @@ Value *AMDGPUPromoteAlloca::getWorkitemID(IRBuilder<> &Builder, unsigned N) {
   return CI;
 }
 
-static VectorType *arrayTypeToVecType(ArrayType *ArrayTy) {
-  return VectorType::get(ArrayTy->getElementType(),
-                         ArrayTy->getNumElements());
+static VectorType *arrayTypeToVecType(Type *ArrayTy) {
+  return VectorType::get(ArrayTy->getArrayElementType(),
+                         ArrayTy->getArrayNumElements());
 }
 
 static Value *
@@ -346,9 +346,10 @@ static bool tryPromoteAllocaToVector(AllocaInst *Alloca, AMDGPUAS AS) {
   // FIXME: We also reject alloca's of the form [ 2 x [ 2 x i32 ]] or equivalent. Potentially these
   // could also be promoted but we don't currently handle this case
   if (!AllocaTy ||
+      AllocaTy->getElementType()->isVectorTy() ||
+      AllocaTy->getElementType()->isArrayTy() ||
       AllocaTy->getNumElements() > 4 ||
-      AllocaTy->getNumElements() < 2 ||
-      !VectorType::isValidElementType(AllocaTy->getElementType())) {
+      AllocaTy->getNumElements() < 2) {
     DEBUG(dbgs() << "  Cannot convert type to vector\n");
     return false;
   }

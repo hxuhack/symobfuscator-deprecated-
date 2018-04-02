@@ -12,11 +12,7 @@ entry:
 
 ; CHECK:        - Type:            IMPORT
 ; CHECK-NEXT:     Imports:         
-; CHECK:            - Module:          env
-; CHECK-NEXT:         Field:           __linear_memory
-; CHECK:            - Module:          env
-; CHECK-NEXT:         Field:           __indirect_function_table
-; CHECK:            - Module:          env
+; CHECK-NEXT:       - Module:          env
 ; CHECK-NEXT:         Field:           weak_external_data
 ; CHECK-NEXT:         Kind:            GLOBAL
 ; CHECK-NEXT:         GlobalType:      I32
@@ -31,9 +27,10 @@ entry:
 ; CHECK-NEXT:   - Type:            CUSTOM
 ; CHECK-NEXT:     Name:            linking
 ; CHECK-NEXT:     DataSize:        0
+; CHECK-NEXT:     DataAlignment:   0
 ; CHECK-NEXT:     SymbolInfo:      
 ; CHECK-NEXT:       - Name:            weak_external_data
-; CHECK-NEXT:         Flags:           [ BINDING_WEAK ]
+; CHECK-NEXT:         Flags:           1
 ; CHECK-NEXT:       - Name:            weak_function
-; CHECK-NEXT:         Flags:           [ BINDING_WEAK, VISIBILITY_HIDDEN ]
+; CHECK-NEXT:         Flags:           1
 ; CHECK-NEXT: ...

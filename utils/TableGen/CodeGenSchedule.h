@@ -27,11 +27,11 @@ class CodeGenTarget;
 class CodeGenSchedModels;
 class CodeGenInstruction;
 
-using RecVec = std::vector<Record*>;
-using RecIter = std::vector<Record*>::const_iterator;
+typedef std::vector<Record*> RecVec;
+typedef std::vector<Record*>::const_iterator RecIter;
 
-using IdxVec = std::vector<unsigned>;
-using IdxIter = std::vector<unsigned>::const_iterator;
+typedef std::vector<unsigned> IdxVec;
+typedef std::vector<unsigned>::const_iterator IdxIter;
 
 void splitSchedReadWrites(const RecVec &RWDefs,
                           RecVec &WriteDefs, RecVec &ReadDefs);
@@ -234,7 +234,7 @@ class CodeGenSchedModels {
   std::vector<CodeGenProcModel> ProcModels;
 
   // Map Processor's MachineModel or ProcItin to a CodeGenProcModel index.
-  using ProcModelMapTy = DenseMap<Record*, unsigned>;
+  typedef DenseMap<Record*, unsigned> ProcModelMapTy;
   ProcModelMapTy ProcModelMap;
 
   // Per-operand SchedReadWrite types.
@@ -252,15 +252,15 @@ class CodeGenSchedModels {
 
   // Map each instruction to its unique SchedClass index considering the
   // combination of it's itinerary class, SchedRW list, and InstRW records.
-  using InstClassMapTy = DenseMap<Record*, unsigned>;
+  typedef DenseMap<Record*, unsigned> InstClassMapTy;
   InstClassMapTy InstrClassMap;
 
 public:
   CodeGenSchedModels(RecordKeeper& RK, const CodeGenTarget &TGT);
 
   // iterator access to the scheduling classes.
-  using class_iterator = std::vector<CodeGenSchedClass>::iterator;
-  using const_class_iterator = std::vector<CodeGenSchedClass>::const_iterator;
+  typedef std::vector<CodeGenSchedClass>::iterator class_iterator;
+  typedef std::vector<CodeGenSchedClass>::const_iterator const_class_iterator;
   class_iterator classes_begin() { return SchedClasses.begin(); }
   const_class_iterator classes_begin() const { return SchedClasses.begin(); }
   class_iterator classes_end() { return SchedClasses.end(); }
@@ -306,7 +306,7 @@ public:
   }
 
   // Iterate over the unique processor models.
-  using ProcIter = std::vector<CodeGenProcModel>::const_iterator;
+  typedef std::vector<CodeGenProcModel>::const_iterator ProcIter;
   ProcIter procModelBegin() const { return ProcModels.begin(); }
   ProcIter procModelEnd() const { return ProcModels.end(); }
   ArrayRef<CodeGenProcModel> procModels() const { return ProcModels; }
@@ -360,7 +360,7 @@ public:
   // for NoItinerary.
   unsigned getSchedClassIdx(const CodeGenInstruction &Inst) const;
 
-  using SchedClassIter = std::vector<CodeGenSchedClass>::const_iterator;
+  typedef std::vector<CodeGenSchedClass>::const_iterator SchedClassIter;
   SchedClassIter schedClassBegin() const { return SchedClasses.begin(); }
   SchedClassIter schedClassEnd() const { return SchedClasses.end(); }
   ArrayRef<CodeGenSchedClass> schedClasses() const { return SchedClasses; }
@@ -382,8 +382,8 @@ public:
   unsigned findSchedClassIdx(Record *ItinClassDef, ArrayRef<unsigned> Writes,
                              ArrayRef<unsigned> Reads) const;
 
-  Record *findProcResUnits(Record *ProcResKind, const CodeGenProcModel &PM,
-                           ArrayRef<SMLoc> Loc) const;
+  Record *findProcResUnits(Record *ProcResKind,
+                           const CodeGenProcModel &PM) const;
 
 private:
   void collectProcModels();
@@ -432,8 +432,7 @@ private:
   void collectRWResources(ArrayRef<unsigned> Writes, ArrayRef<unsigned> Reads,
                           ArrayRef<unsigned> ProcIndices);
 
-  void addProcResource(Record *ProcResourceKind, CodeGenProcModel &PM,
-                       ArrayRef<SMLoc> Loc);
+  void addProcResource(Record *ProcResourceKind, CodeGenProcModel &PM);
 
   void addWriteRes(Record *ProcWriteResDef, unsigned PIdx);
 

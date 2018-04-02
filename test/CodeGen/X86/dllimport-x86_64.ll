@@ -1,8 +1,7 @@
 ; RUN: llc -mtriple x86_64-pc-win32 < %s | FileCheck %s
 ; RUN: llc -mtriple x86_64-pc-mingw32 < %s | FileCheck %s
 ;
-; RUN: llc -mtriple x86_64-pc-mingw32 -O0 < %s | FileCheck %s
-; RUN: llc -mtriple x86_64-pc-windows-msvc -O0 < %s | FileCheck %s
+; RUN: llc -mtriple x86_64-pc-mingw32 -O0 < %s | FileCheck %s -check-prefix=FAST
 ; PR6275
 ;
 ; RUN: opt -mtriple x86_64-pc-win32 -O3 -S < %s | FileCheck %s -check-prefix=OPT
@@ -24,6 +23,8 @@ declare void @dummy(...)
 
 define void @use() nounwind {
 ; CHECK:     callq *__imp_fun(%rip)
+; FAST:      movq  __imp_fun(%rip), [[R:%[a-z]{3}]]
+; FAST-NEXT: callq *[[R]]
   call void @fun()
 
 ; CHECK: callq *__imp_inline1(%rip)

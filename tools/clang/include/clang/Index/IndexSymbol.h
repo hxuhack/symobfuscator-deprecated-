@@ -53,10 +53,9 @@ enum class SymbolKind : uint8_t {
   ConversionFunction,
 
   Parameter,
-  Using,
 };
 
-enum class SymbolLanguage : uint8_t {
+enum class SymbolLanguage {
   C,
   ObjC,
   CXX,
@@ -64,19 +63,16 @@ enum class SymbolLanguage : uint8_t {
 };
 
 /// Language specific sub-kinds.
-enum class SymbolSubKind : uint8_t {
+enum class SymbolSubKind {
   None,
   CXXCopyConstructor,
   CXXMoveConstructor,
   AccessorGetter,
   AccessorSetter,
-  UsingTypename,
-  UsingValue,
 };
 
-typedef uint8_t SymbolPropertySet;
 /// Set of properties that provide additional info about a symbol.
-enum class SymbolProperty : SymbolPropertySet {
+enum class SymbolProperty : uint8_t {
   Generic                       = 1 << 0,
   TemplatePartialSpecialization = 1 << 1,
   TemplateSpecialization        = 1 << 2,
@@ -87,6 +83,7 @@ enum class SymbolProperty : SymbolPropertySet {
   Local                         = 1 << 7,
 };
 static const unsigned SymbolPropertyBitNum = 8;
+typedef unsigned SymbolPropertySet;
 
 /// Set of roles that are attributed to symbol occurrences.
 enum class SymbolRole : uint32_t {
@@ -127,8 +124,8 @@ struct SymbolRelation {
 struct SymbolInfo {
   SymbolKind Kind;
   SymbolSubKind SubKind;
-  SymbolLanguage Lang;
   SymbolPropertySet Properties;
+  SymbolLanguage Lang;
 };
 
 SymbolInfo getSymbolInfo(const Decl *D);

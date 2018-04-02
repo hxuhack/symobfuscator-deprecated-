@@ -13,6 +13,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "AArch64MCExpr.h"
+#include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbolELF.h"

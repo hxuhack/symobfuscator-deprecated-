@@ -30,7 +30,7 @@ using namespace clang;
 
 void UnqualifiedId::setTemplateId(TemplateIdAnnotation *TemplateId) {
   assert(TemplateId && "NULL template-id annotation?");
-  Kind = UnqualifiedIdKind::IK_TemplateId;
+  Kind = IK_TemplateId;
   this->TemplateId = TemplateId;
   StartLocation = TemplateId->TemplateNameLoc;
   EndLocation = TemplateId->RAngleLoc;
@@ -38,7 +38,7 @@ void UnqualifiedId::setTemplateId(TemplateIdAnnotation *TemplateId) {
 
 void UnqualifiedId::setConstructorTemplateId(TemplateIdAnnotation *TemplateId) {
   assert(TemplateId && "NULL template-id annotation?");
-  Kind = UnqualifiedIdKind::IK_ConstructorTemplateId;
+  Kind = IK_ConstructorTemplateId;
   this->TemplateId = TemplateId;
   StartLocation = TemplateId->TemplateNameLoc;
   EndLocation = TemplateId->RAngleLoc;
@@ -336,7 +336,6 @@ bool Declarator::isDeclarationOfFunction() const {
     case TST_decimal32:
     case TST_decimal64:
     case TST_double:
-    case TST_Float16:
     case TST_float128:
     case TST_enum:
     case TST_error:
@@ -387,16 +386,16 @@ bool Declarator::isDeclarationOfFunction() const {
 }
 
 bool Declarator::isStaticMember() {
-  assert(getContext() == DeclaratorContext::MemberContext);
+  assert(getContext() == MemberContext);
   return getDeclSpec().getStorageClassSpec() == DeclSpec::SCS_static ||
-         (getName().Kind == UnqualifiedIdKind::IK_OperatorFunctionId &&
+         (getName().Kind == UnqualifiedId::IK_OperatorFunctionId &&
           CXXMethodDecl::isStaticOverloadedOperator(
               getName().OperatorFunctionId.Operator));
 }
 
 bool Declarator::isCtorOrDtor() {
-  return (getName().getKind() == UnqualifiedIdKind::IK_ConstructorName) ||
-         (getName().getKind() == UnqualifiedIdKind::IK_DestructorName);
+  return (getName().getKind() == UnqualifiedId::IK_ConstructorName) ||
+         (getName().getKind() == UnqualifiedId::IK_DestructorName);
 }
 
 bool DeclSpec::hasTagDefinition() const {
@@ -506,7 +505,6 @@ const char *DeclSpec::getSpecifierName(DeclSpec::TST T,
   case DeclSpec::TST_half:        return "half";
   case DeclSpec::TST_float:       return "float";
   case DeclSpec::TST_double:      return "double";
-  case DeclSpec::TST_float16:     return "_Float16";
   case DeclSpec::TST_float128:    return "__float128";
   case DeclSpec::TST_bool:        return Policy.Bool ? "bool" : "_Bool";
   case DeclSpec::TST_decimal32:   return "_Decimal32";
@@ -969,6 +967,18 @@ bool DeclSpec::SetConstexprSpec(SourceLocation Loc, const char *&PrevSpec,
   return false;
 }
 
+bool DeclSpec::SetConceptSpec(SourceLocation Loc, const char *&PrevSpec,
+                              unsigned &DiagID) {
+  if (Concept_specified) {
+    DiagID = diag::ext_duplicate_declspec;
+    PrevSpec = "concept";
+    return true;
+  }
+  Concept_specified = true;
+  ConceptLoc = Loc;
+  return false;
+}
+
 void DeclSpec::SaveWrittenBuiltinSpecs() {
   writtenBS.Sign = getTypeSpecSign();
   writtenBS.Width = getTypeSpecWidth();
@@ -1281,7 +1291,7 @@ bool DeclSpec::isMissingDeclaratorOk() {
 void UnqualifiedId::setOperatorFunctionId(SourceLocation OperatorLoc, 
                                           OverloadedOperatorKind Op,
                                           SourceLocation SymbolLocations[3]) {
-  Kind = UnqualifiedIdKind::IK_OperatorFunctionId;
+  Kind = IK_OperatorFunctionId;
   StartLocation = OperatorLoc;
   EndLocation = OperatorLoc;
   OperatorFunctionId.Operator = Op;

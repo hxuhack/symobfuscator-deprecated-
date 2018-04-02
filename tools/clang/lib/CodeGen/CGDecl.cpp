@@ -19,7 +19,6 @@
 #include "CGOpenMPRuntime.h"
 #include "CodeGenFunction.h"
 #include "CodeGenModule.h"
-#include "ConstantEmitter.h"
 #include "TargetInfo.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/CharUnits.h"
@@ -162,10 +161,6 @@ void CodeGenFunction::EmitVarDecl(const VarDecl &D) {
   // needs to be emitted like a static variable, e.g. a function-scope
   // variable in constant address space in OpenCL.
   if (D.getStorageDuration() != SD_Automatic) {
-    // Static sampler variables translated to function calls.
-    if (D.getType()->isSamplerT())
-      return;
-
     llvm::GlobalValue::LinkageTypes Linkage =
         CGM.getLLVMLinkageVarDefinition(&D, /*isConstant=*/false);
 
@@ -226,7 +221,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
     Name = getStaticDeclName(*this, D);
 
   llvm::Type *LTy = getTypes().ConvertTypeForMem(Ty);
-  LangAS AS = GetGlobalVarAddressSpace(&D);
+  unsigned AS = GetGlobalVarAddressSpace(&D);
   unsigned TargetAS = getContext().getTargetAddressSpace(AS);
 
   // Local address space cannot have an initializer.
@@ -240,7 +235,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
       getModule(), LTy, Ty.isConstant(getContext()), Linkage, Init, Name,
       nullptr, llvm::GlobalVariable::NotThreadLocal, TargetAS);
   GV->setAlignment(getContext().getDeclAlign(&D).getQuantity());
-  setGlobalVisibility(GV, &D, ForDefinition);
+  setGlobalVisibility(GV, &D);
 
   if (supportsCOMDAT() && GV->isWeakForLinker())
     GV->setComdat(TheModule.getOrInsertComdat(GV->getName()));
@@ -256,7 +251,7 @@ llvm::Constant *CodeGenModule::getOrCreateStaticVarDecl(
   }
 
   // Make sure the result is of the correct type.
-  LangAS ExpectedAS = Ty.getAddressSpace();
+  unsigned ExpectedAS = Ty.getAddressSpace();
   llvm::Constant *Addr = GV;
   if (AS != ExpectedAS) {
     Addr = getTargetCodeGenInfo().performAddrSpaceCast(
@@ -312,8 +307,7 @@ static bool hasNontrivialDestruction(QualType T) {
 llvm::GlobalVariable *
 CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
                                                llvm::GlobalVariable *GV) {
-  ConstantEmitter emitter(*this);
-  llvm::Constant *Init = emitter.tryEmitForInitializer(D);
+  llvm::Constant *Init = CGM.EmitConstantInit(D, this);
 
   // If constant emission failed, then this should be a C++ static
   // initializer.
@@ -360,8 +354,6 @@ CodeGenFunction::AddInitializerToStaticVarDecl(const VarDecl &D,
 
   GV->setConstant(CGM.isTypeConstant(D.getType(), true));
   GV->setInitializer(Init);
-
-  emitter.finalize(GV);
 
   if (hasNontrivialDestruction(D.getType()) && HaveInsertPoint()) {
     // We have a constant initializer, but a nontrivial destructor. We still
@@ -960,9 +952,7 @@ void CodeGenFunction::EmitLifetimeEnd(llvm::Value *Size, llvm::Value *Addr) {
 CodeGenFunction::AutoVarEmission
 CodeGenFunction::EmitAutoVarAlloca(const VarDecl &D) {
   QualType Ty = D.getType();
-  assert(
-      Ty.getAddressSpace() == LangAS::Default ||
-      (Ty.getAddressSpace() == LangAS::opencl_private && getLangOpts().OpenCL));
+  assert(Ty.getAddressSpace() == LangAS::Default);
 
   AutoVarEmission emission(D);
 
@@ -1246,7 +1236,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
   llvm::Constant *constant = nullptr;
   if (emission.IsConstantAggregate || D.isConstexpr()) {
     assert(!capturedByInit && "constant init contains a capturing block?");
-    constant = ConstantEmitter(*this).tryEmitAbstractForInitializer(D);
+    constant = CGM.EmitConstantInit(D, this);
   }
 
   if (!constant) {
@@ -1270,7 +1260,7 @@ void CodeGenFunction::EmitAutoVarInit(const AutoVarEmission &emission) {
     llvm::ConstantInt::get(IntPtrTy,
                            getContext().getTypeSizeInChars(type).getQuantity());
 
-  llvm::Type *BP = AllocaInt8PtrTy;
+  llvm::Type *BP = Int8PtrTy;
   if (Loc.getType() != BP)
     Loc = Builder.CreateBitCast(Loc, BP);
 
@@ -1795,6 +1785,24 @@ void CodeGenFunction::EmitParmDecl(const VarDecl &D, ParamValue Arg,
     if (BlockInfo) {
       setBlockContextParameter(IPD, ArgNo, Arg.getDirectValue());
       return;
+    }
+
+    // Apply any prologue 'this' adjustments required by the ABI. Be careful to
+    // handle the case where 'this' is passed indirectly as part of an inalloca
+    // struct.
+    if (const CXXMethodDecl *MD =
+            dyn_cast_or_null<CXXMethodDecl>(CurCodeDecl)) {
+      if (MD->isVirtual() && IPD == CXXABIThisDecl) {
+        llvm::Value *This = Arg.isIndirect()
+                                ? Builder.CreateLoad(Arg.getIndirectAddress())
+                                : Arg.getDirectValue();
+        This = CGM.getCXXABI().adjustThisParameterInVirtualFunctionPrologue(
+            *this, CurGD, This);
+        if (Arg.isIndirect())
+          Builder.CreateStore(This, Arg.getIndirectAddress());
+        else
+          Arg = ParamValue::forDirect(This);
+      }
     }
   }
 

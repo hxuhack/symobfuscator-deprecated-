@@ -1,4 +1,4 @@
-//==- CFLAndersAliasAnalysis.h - Unification-based Alias Analysis -*- C++-*-==//
+//=- CFLAndersAliasAnalysis.h - Unification-based Alias Analysis ---*- C++-*-=//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,31 +19,25 @@
 #include "llvm/ADT/Optional.h"
 #include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/CFLAliasAnalysisUtils.h"
-#include "llvm/IR/PassManager.h"
+#include "llvm/IR/Function.h"
 #include "llvm/Pass.h"
 #include <forward_list>
-#include <memory>
 
 namespace llvm {
 
-class Function;
-class MemoryLocation;
 class TargetLibraryInfo;
 
 namespace cflaa {
-
 struct AliasSummary;
-
-} // end namespace cflaa
+}
 
 class CFLAndersAAResult : public AAResultBase<CFLAndersAAResult> {
   friend AAResultBase<CFLAndersAAResult>;
-
   class FunctionInfo;
 
 public:
-  explicit CFLAndersAAResult(const TargetLibraryInfo &TLI);
-  CFLAndersAAResult(CFLAndersAAResult &&RHS);
+  explicit CFLAndersAAResult(const TargetLibraryInfo &);
+  CFLAndersAAResult(CFLAndersAAResult &&);
   ~CFLAndersAAResult();
 
   /// Handle invalidation events from the new pass manager.
@@ -52,7 +46,6 @@ public:
                   FunctionAnalysisManager::Invalidator &) {
     return false;
   }
-
   /// Evict the given function from cache
   void evict(const Function *Fn);
 
@@ -92,11 +85,10 @@ private:
 /// in particular to leverage invalidation to trigger re-computation.
 class CFLAndersAA : public AnalysisInfoMixin<CFLAndersAA> {
   friend AnalysisInfoMixin<CFLAndersAA>;
-
   static AnalysisKey Key;
 
 public:
-  using Result = CFLAndersAAResult;
+  typedef CFLAndersAAResult Result;
 
   CFLAndersAAResult run(Function &F, FunctionAnalysisManager &AM);
 };
@@ -117,10 +109,12 @@ public:
   void getAnalysisUsage(AnalysisUsage &AU) const override;
 };
 
+//===--------------------------------------------------------------------===//
+//
 // createCFLAndersAAWrapperPass - This pass implements a set-based approach to
 // alias analysis.
+//
 ImmutablePass *createCFLAndersAAWrapperPass();
+}
 
-} // end namespace llvm
-
-#endif // LLVM_ANALYSIS_CFLANDERSALIASANALYSIS_H
+#endif

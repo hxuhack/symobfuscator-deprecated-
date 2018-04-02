@@ -16,12 +16,12 @@
 #include "llvm/ADT/BitVector.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/TargetFrameLowering.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetFrameLowering.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include <cassert>
 
 #define DEBUG_TYPE "codegen"
@@ -47,13 +47,11 @@ static inline unsigned clampStackAlignment(bool ShouldClamp, unsigned Align,
 }
 
 int MachineFrameInfo::CreateStackObject(uint64_t Size, unsigned Alignment,
-                                        bool IsSpillSlot,
-                                        const AllocaInst *Alloca,
-                                        uint8_t StackID) {
+                      bool isSS, const AllocaInst *Alloca) {
   assert(Size != 0 && "Cannot allocate zero size stack objects!");
   Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  Objects.push_back(StackObject(Size, Alignment, 0, false, IsSpillSlot, Alloca,
-                                !IsSpillSlot, StackID));
+  Objects.push_back(StackObject(Size, Alignment, 0, false, isSS, Alloca,
+                                !isSS));
   int Index = (int)Objects.size() - NumFixedObjects - 1;
   assert(Index >= 0 && "Bad frame index!");
   ensureMaxAlignment(Alignment);
@@ -79,7 +77,7 @@ int MachineFrameInfo::CreateVariableSizedObject(unsigned Alignment,
 }
 
 int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
-                                        bool IsImmutable, bool IsAliased) {
+                                        bool Immutable, bool isAliased) {
   assert(Size != 0 && "Cannot allocate zero size fixed stack objects!");
   // The alignment of the frame index can be determined from its offset from
   // the incoming frame position.  If the frame object is at offset 32 and
@@ -87,24 +85,23 @@ int MachineFrameInfo::CreateFixedObject(uint64_t Size, int64_t SPOffset,
   // object is 16-byte aligned. Note that unlike the non-fixed case, if the
   // stack needs realignment, we can't assume that the stack will in fact be
   // aligned.
-  unsigned Alignment = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
-  Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  Objects.insert(Objects.begin(),
-                 StackObject(Size, Alignment, SPOffset, IsImmutable,
-                             /*isSpillSlot=*/false, /*Alloca=*/nullptr,
-                             IsAliased));
+  unsigned Align = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
+  Align = clampStackAlignment(!StackRealignable, Align, StackAlignment);
+  Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
+                                              /*isSS*/   false,
+                                              /*Alloca*/ nullptr, isAliased));
   return -++NumFixedObjects;
 }
 
 int MachineFrameInfo::CreateFixedSpillStackObject(uint64_t Size,
                                                   int64_t SPOffset,
-                                                  bool IsImmutable) {
-  unsigned Alignment = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
-  Alignment = clampStackAlignment(!StackRealignable, Alignment, StackAlignment);
-  Objects.insert(Objects.begin(),
-                 StackObject(Size, Alignment, SPOffset, IsImmutable,
-                             /*IsSpillSlot=*/true, /*Alloca=*/nullptr,
-                             /*IsAliased=*/false));
+                                                  bool Immutable) {
+  unsigned Align = MinAlign(SPOffset, ForcedRealign ? 1 : StackAlignment);
+  Align = clampStackAlignment(!StackRealignable, Align, StackAlignment);
+  Objects.insert(Objects.begin(), StackObject(Size, Align, SPOffset, Immutable,
+                                              /*isSS*/ true,
+                                              /*Alloca*/ nullptr,
+                                              /*isAliased*/ false));
   return -++NumFixedObjects;
 }
 
@@ -215,10 +212,6 @@ void MachineFrameInfo::print(const MachineFunction &MF, raw_ostream &OS) const{
   for (unsigned i = 0, e = Objects.size(); i != e; ++i) {
     const StackObject &SO = Objects[i];
     OS << "  fi#" << (int)(i-NumFixedObjects) << ": ";
-
-    if (SO.StackID != 0)
-      OS << "id=" << SO.StackID << ' ';
-
     if (SO.Size == ~0ULL) {
       OS << "dead\n";
       continue;

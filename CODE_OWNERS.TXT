@@ -41,12 +41,8 @@ E: andrey.churbanov@intel.com
 D: OpenMP runtime library
 
 N: Greg Clayton
-E: clayborg@gmail.com
+E: gclayton@apple.com
 D: LLDB
-
-N: Pete Couperus
-E: petecoup@synopsys.com
-D: ARC backend (lib/Target/ARC/*)
 
 N: Sanjoy Das
 E: sanjoy@playingwithpointers.com
@@ -65,7 +61,7 @@ E: qcolombet@apple.com
 D: Loop Strength Reduction, Register allocators
 
 N: Simon Dardis
-E: simon.dardis@mips.com
+E: simon.dardis@imgtec.com
 D: MIPS Backend (lib/Target/Mips/*)
 
 N: Duncan P. N. Exon Smith

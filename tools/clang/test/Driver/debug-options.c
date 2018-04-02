@@ -76,8 +76,6 @@
 // RUN:             | FileCheck -check-prefix=NOCI %s
 // RUN: %clang -### -c %s -g -gcolumn-info -target x86_64-scei-ps4 2>&1 \
 // RUN:             | FileCheck -check-prefix=CI %s
-// RUN: %clang -### -c %s -gsce -target x86_64-unknown-linux 2>&1 \
-// RUN:             | FileCheck -check-prefix=NOCI %s
 
 // RUN: %clang -### -c -gdwarf-2 %s 2>&1 \
 // RUN:             | FileCheck -check-prefix=G_ONLY_DWARF2 %s
@@ -221,7 +219,7 @@
 //
 // GIGNORE-NOT: "argument unused during compilation"
 //
-// GOPT: -ggnu-pubnames
+// GOPT: -generate-gnu-dwarf-pub-sections
 //
 // GARANGE: -generate-arange-section
 //

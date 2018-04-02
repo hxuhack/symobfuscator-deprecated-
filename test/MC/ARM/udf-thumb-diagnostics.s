@@ -13,7 +13,7 @@ undefined:
 
 	udf #256
 
-@ CHECK: error: operand must be an immediate in the range [0,255]
+@ CHECK: error: instruction requires: arm-mode
 @ CHECK: 	udf #256
-@ CHECK: 	    ^
+@ CHECK: 	^
 

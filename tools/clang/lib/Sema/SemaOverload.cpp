@@ -837,13 +837,12 @@ void OverloadCandidateSet::destroyCandidates() {
   }
 }
 
-void OverloadCandidateSet::clear(CandidateSetKind CSK) {
+void OverloadCandidateSet::clear() {
   destroyCandidates();
   SlabAllocator.Reset();
   NumInlineBytesUsed = 0;
   Candidates.clear();
   Functions.clear();
-  Kind = CSK;
 }
 
 namespace {
@@ -1480,23 +1479,6 @@ bool Sema::IsFunctionConversion(QualType FromType, QualType ToType,
                                   FromFPT->getExtProtoInfo().withExceptionSpec(
                                       FunctionProtoType::ExceptionSpecInfo()))
                  .getTypePtr());
-      Changed = true;
-    }
-
-    // Convert FromFPT's ExtParameterInfo if necessary. The conversion is valid
-    // only if the ExtParameterInfo lists of the two function prototypes can be
-    // merged and the merged list is identical to ToFPT's ExtParameterInfo list.
-    SmallVector<FunctionProtoType::ExtParameterInfo, 4> NewParamInfos;
-    bool CanUseToFPT, CanUseFromFPT;
-    if (Context.mergeExtParameterInfo(ToFPT, FromFPT, CanUseToFPT,
-                                      CanUseFromFPT, NewParamInfos) &&
-        CanUseToFPT && !CanUseFromFPT) {
-      FunctionProtoType::ExtProtoInfo ExtInfo = FromFPT->getExtProtoInfo();
-      ExtInfo.ExtParameterInfos =
-          NewParamInfos.empty() ? nullptr : NewParamInfos.data();
-      QualType QT = Context.getFunctionType(FromFPT->getReturnType(),
-                                            FromFPT->getParamTypes(), ExtInfo);
-      FromFn = QT->getAs<FunctionType>();
       Changed = true;
     }
   }
@@ -2681,12 +2663,8 @@ bool Sema::IsBlockPointerConversion(QualType FromType, QualType ToType,
        // Argument types are too different. Abort.
        return false;
    }
-
-   SmallVector<FunctionProtoType::ExtParameterInfo, 4> NewParamInfos;
-   bool CanUseToFPT, CanUseFromFPT;
-   if (!Context.mergeExtParameterInfo(ToFunctionType, FromFunctionType,
-                                      CanUseToFPT, CanUseFromFPT,
-                                      NewParamInfos))
+   if (!Context.doFunctionTypesMatchOnExtParameterInfos(FromFunctionType,
+                                                        ToFunctionType))
      return false;
 
    ConvertedType = ToType;
@@ -3176,7 +3154,6 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
                                        UserDefinedConversionSequence &User,
                                        OverloadCandidateSet &CandidateSet,
                                        bool AllowExplicit) {
-  CandidateSet.clear(OverloadCandidateSet::CSK_InitByUserDefinedConversion);
   for (auto *D : S.LookupConstructors(To)) {
     auto Info = getConstructorInfo(D);
     if (!Info)
@@ -3205,7 +3182,7 @@ IsInitializerListConstructorConversion(Sema &S, Expr *From, QualType ToType,
   OverloadCandidateSet::iterator Best;
   switch (auto Result =
             CandidateSet.BestViableFunction(S, From->getLocStart(),
-                                            Best)) {
+                                            Best, true)) {
   case OR_Deleted:
   case OR_Success: {
     // Record the standard conversion we used and the conversion function.
@@ -3252,7 +3229,6 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
                         bool AllowExplicit,
                         bool AllowObjCConversionOnExplicit) {
   assert(AllowExplicit || !AllowObjCConversionOnExplicit);
-  CandidateSet.clear(OverloadCandidateSet::CSK_InitByUserDefinedConversion);
 
   // Whether we will only visit constructors.
   bool ConstructorsOnly = false;
@@ -3288,8 +3264,7 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
         if (Result != OR_No_Viable_Function)
           return Result;
         // Never mind.
-        CandidateSet.clear(
-            OverloadCandidateSet::CSK_InitByUserDefinedConversion);
+        CandidateSet.clear();
 
         // If we're list-initializing, we pass the individual elements as
         // arguments, not the entire list.
@@ -3379,7 +3354,7 @@ IsUserDefinedConversion(Sema &S, Expr *From, QualType ToType,
 
   OverloadCandidateSet::iterator Best;
   switch (auto Result = CandidateSet.BestViableFunction(S, From->getLocStart(),
-                                                        Best)) {
+                                                        Best, true)) {
   case OR_Success:
   case OR_Deleted:
     // Record the standard conversion we used and the conversion function.
@@ -4313,8 +4288,7 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
   CXXRecordDecl *T2RecordDecl
     = dyn_cast<CXXRecordDecl>(T2->getAs<RecordType>()->getDecl());
 
-  OverloadCandidateSet CandidateSet(
-      DeclLoc, OverloadCandidateSet::CSK_InitByUserDefinedConversion);
+  OverloadCandidateSet CandidateSet(DeclLoc, OverloadCandidateSet::CSK_Normal);
   const auto &Conversions = T2RecordDecl->getVisibleConversionFunctions();
   for (auto I = Conversions.begin(), E = Conversions.end(); I != E; ++I) {
     NamedDecl *D = *I;
@@ -4384,7 +4358,7 @@ FindConversionForRefInit(Sema &S, ImplicitConversionSequence &ICS,
   bool HadMultipleCandidates = (CandidateSet.size() > 1);
 
   OverloadCandidateSet::iterator Best;
-  switch (CandidateSet.BestViableFunction(S, DeclLoc, Best)) {
+  switch (CandidateSet.BestViableFunction(S, DeclLoc, Best, true)) {
   case OR_Success:
     // C++ [over.ics.ref]p1:
     //
@@ -5145,8 +5119,7 @@ Sema::PerformObjectArgumentInitialization(Expr *From,
       *this, From->getLocStart(), From->getType(), FromClassification, Method,
       Method->getParent());
   if (ICS.isBad()) {
-    switch (ICS.Bad.Kind) {
-    case BadConversionSequence::bad_qualifiers: {
+    if (ICS.Bad.Kind == BadConversionSequence::bad_qualifiers) {
       Qualifiers FromQs = FromRecordType.getQualifiers();
       Qualifiers ToQs = DestType.getQualifiers();
       unsigned CVR = FromQs.getCVRQualifiers() & ~ToQs.getCVRQualifiers();
@@ -5159,28 +5132,10 @@ Sema::PerformObjectArgumentInitialization(Expr *From,
           << Method->getDeclName();
         return ExprError();
       }
-      break;
-    }
-
-    case BadConversionSequence::lvalue_ref_to_rvalue:
-    case BadConversionSequence::rvalue_ref_to_lvalue: {
-      bool IsRValueQualified =
-        Method->getRefQualifier() == RefQualifierKind::RQ_RValue;
-      Diag(From->getLocStart(), diag::err_member_function_call_bad_ref)
-        << Method->getDeclName() << FromClassification.isRValue()
-        << IsRValueQualified;
-      Diag(Method->getLocation(), diag::note_previous_decl)
-        << Method->getDeclName();
-      return ExprError();
-    }
-
-    case BadConversionSequence::no_conversion:
-    case BadConversionSequence::unrelated_class:
-      break;
     }
 
     return Diag(From->getLocStart(),
-                diag::err_member_function_call_bad_type)
+                diag::err_implicit_object_parameter_init)
        << ImplicitParamRecordType << FromRecordType << From->getSourceRange();
   }
 
@@ -5809,7 +5764,7 @@ ExprResult Sema::PerformContextualImplicitConversion(
                                      HadMultipleCandidates,
                                      ExplicitConversions))
         return ExprError();
-      LLVM_FALLTHROUGH;
+    // fall through 'OR_Deleted' case.
     case OR_Deleted:
       // We'll complain below about a non-integral condition type.
       break;
@@ -6362,36 +6317,24 @@ void Sema::AddFunctionCandidates(const UnresolvedSetImpl &Fns,
                                  OverloadCandidateSet& CandidateSet,
                                  TemplateArgumentListInfo *ExplicitTemplateArgs,
                                  bool SuppressUserConversions,
-                                 bool PartialOverloading,
-                                 bool FirstArgumentIsBase) {
+                                 bool PartialOverloading) {
   for (UnresolvedSetIterator F = Fns.begin(), E = Fns.end(); F != E; ++F) {
     NamedDecl *D = F.getDecl()->getUnderlyingDecl();
     if (FunctionDecl *FD = dyn_cast<FunctionDecl>(D)) {
-      ArrayRef<Expr *> FunctionArgs = Args;
       if (isa<CXXMethodDecl>(FD) && !cast<CXXMethodDecl>(FD)->isStatic()) {
         QualType ObjectType;
         Expr::Classification ObjectClassification;
-        if (Args.size() > 0) {
-          if (Expr *E = Args[0]) {
-            // Use the explit base to restrict the lookup:
-            ObjectType = E->getType();
-            ObjectClassification = E->Classify(Context);
-          } // .. else there is an implit base.
-          FunctionArgs = Args.slice(1);
-        }
+        if (Expr *E = Args[0]) {
+          // Use the explit base to restrict the lookup:
+          ObjectType = E->getType();
+          ObjectClassification = E->Classify(Context);
+        } // .. else there is an implit base.
         AddMethodCandidate(cast<CXXMethodDecl>(FD), F.getPair(),
                            cast<CXXMethodDecl>(FD)->getParent(), ObjectType,
-                           ObjectClassification, FunctionArgs, CandidateSet,
+                           ObjectClassification, Args.slice(1), CandidateSet,
                            SuppressUserConversions, PartialOverloading);
       } else {
-        // Slice the first argument (which is the base) when we access
-        // static method as non-static
-        if (Args.size() > 0 && (!Args[0] || (FirstArgumentIsBase && isa<CXXMethodDecl>(FD) &&
-                                             !isa<CXXConstructorDecl>(FD)))) {
-          assert(cast<CXXMethodDecl>(FD)->isStatic());
-          FunctionArgs = Args.slice(1);
-        }
-        AddOverloadCandidate(FD, F.getPair(), FunctionArgs, CandidateSet,
+        AddOverloadCandidate(FD, F.getPair(), Args, CandidateSet,
                              SuppressUserConversions, PartialOverloading);
       }
     } else {
@@ -6824,8 +6767,7 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
                              CXXRecordDecl *ActingContext,
                              Expr *From, QualType ToType,
                              OverloadCandidateSet& CandidateSet,
-                             bool AllowObjCConversionOnExplicit,
-                             bool AllowResultConversion) {
+                             bool AllowObjCConversionOnExplicit) {
   assert(!Conversion->getDescribedFunctionTemplate() &&
          "Conversion function templates use AddTemplateConversionCandidate");
   QualType ConvType = Conversion->getConversionType().getNonReferenceType();
@@ -6839,12 +6781,6 @@ Sema::AddConversionCandidate(CXXConversionDecl *Conversion,
       return;
     ConvType = Conversion->getConversionType().getNonReferenceType();
   }
-
-  // If we don't allow any conversion of the result type, ignore conversion
-  // functions that don't convert to exactly (possibly cv-qualified) T.
-  if (!AllowResultConversion &&
-      !Context.hasSameUnqualifiedType(Conversion->getConversionType(), ToType))
-    return;
 
   // Per C++ [over.match.conv]p1, [over.match.ref]p1, an explicit conversion
   // operator is only a candidate if its return type is the target type or
@@ -6999,8 +6935,7 @@ Sema::AddTemplateConversionCandidate(FunctionTemplateDecl *FunctionTemplate,
                                      CXXRecordDecl *ActingDC,
                                      Expr *From, QualType ToType,
                                      OverloadCandidateSet &CandidateSet,
-                                     bool AllowObjCConversionOnExplicit,
-                                     bool AllowResultConversion) {
+                                     bool AllowObjCConversionOnExplicit) {
   assert(isa<CXXConversionDecl>(FunctionTemplate->getTemplatedDecl()) &&
          "Only conversion function templates permitted here");
 
@@ -7029,8 +6964,7 @@ Sema::AddTemplateConversionCandidate(FunctionTemplateDecl *FunctionTemplate,
   // template argument deduction as a candidate.
   assert(Specialization && "Missing function template specialization?");
   AddConversionCandidate(Specialization, FoundDecl, ActingDC, From, ToType,
-                         CandidateSet, AllowObjCConversionOnExplicit,
-                         AllowResultConversion);
+                         CandidateSet, AllowObjCConversionOnExplicit);
 }
 
 /// AddSurrogateCandidate - Adds a "surrogate" candidate function that
@@ -7634,62 +7568,53 @@ class BuiltinOperatorOverloadBuilder {
   SmallVectorImpl<BuiltinCandidateTypeSet> &CandidateTypes;
   OverloadCandidateSet &CandidateSet;
 
-  static constexpr int ArithmeticTypesCap = 24;
-  SmallVector<CanQualType, ArithmeticTypesCap> ArithmeticTypes;
-
-  // Define some indices used to iterate over the arithemetic types in
-  // ArithmeticTypes.  The "promoted arithmetic types" are the arithmetic
+  // Define some constants used to index and iterate over the arithemetic types
+  // provided via the getArithmeticType() method below.
+  // The "promoted arithmetic types" are the arithmetic
   // types are that preserved by promotion (C++ [over.built]p2).
-  unsigned FirstIntegralType,
-           LastIntegralType;
-  unsigned FirstPromotedIntegralType,
-           LastPromotedIntegralType;
-  unsigned FirstPromotedArithmeticType,
-           LastPromotedArithmeticType;
-  unsigned NumArithmeticTypes;
+  static const unsigned FirstIntegralType = 4;
+  static const unsigned LastIntegralType = 21;
+  static const unsigned FirstPromotedIntegralType = 4,
+                        LastPromotedIntegralType = 12;
+  static const unsigned FirstPromotedArithmeticType = 0,
+                        LastPromotedArithmeticType = 12;
+  static const unsigned NumArithmeticTypes = 21;
 
-  void InitArithmeticTypes() {
-    // Start of promoted types.
-    FirstPromotedArithmeticType = 0;
-    ArithmeticTypes.push_back(S.Context.FloatTy);
-    ArithmeticTypes.push_back(S.Context.DoubleTy);
-    ArithmeticTypes.push_back(S.Context.LongDoubleTy);
-    if (S.Context.getTargetInfo().hasFloat128Type())
-      ArithmeticTypes.push_back(S.Context.Float128Ty);
+  /// \brief Get the canonical type for a given arithmetic type index.
+  CanQualType getArithmeticType(unsigned index) {
+    assert(index < NumArithmeticTypes);
+    static CanQualType ASTContext::* const
+      ArithmeticTypes[NumArithmeticTypes] = {
+      // Start of promoted types.
+      &ASTContext::FloatTy,
+      &ASTContext::DoubleTy,
+      &ASTContext::LongDoubleTy,
+      &ASTContext::Float128Ty,
 
-    // Start of integral types.
-    FirstIntegralType = ArithmeticTypes.size();
-    FirstPromotedIntegralType = ArithmeticTypes.size();
-    ArithmeticTypes.push_back(S.Context.IntTy);
-    ArithmeticTypes.push_back(S.Context.LongTy);
-    ArithmeticTypes.push_back(S.Context.LongLongTy);
-    if (S.Context.getTargetInfo().hasInt128Type())
-      ArithmeticTypes.push_back(S.Context.Int128Ty);
-    ArithmeticTypes.push_back(S.Context.UnsignedIntTy);
-    ArithmeticTypes.push_back(S.Context.UnsignedLongTy);
-    ArithmeticTypes.push_back(S.Context.UnsignedLongLongTy);
-    if (S.Context.getTargetInfo().hasInt128Type())
-      ArithmeticTypes.push_back(S.Context.UnsignedInt128Ty);
-    LastPromotedIntegralType = ArithmeticTypes.size();
-    LastPromotedArithmeticType = ArithmeticTypes.size();
-    // End of promoted types.
+      // Start of integral types.
+      &ASTContext::IntTy,
+      &ASTContext::LongTy,
+      &ASTContext::LongLongTy,
+      &ASTContext::Int128Ty,
+      &ASTContext::UnsignedIntTy,
+      &ASTContext::UnsignedLongTy,
+      &ASTContext::UnsignedLongLongTy,
+      &ASTContext::UnsignedInt128Ty,
+      // End of promoted types.
 
-    ArithmeticTypes.push_back(S.Context.BoolTy);
-    ArithmeticTypes.push_back(S.Context.CharTy);
-    ArithmeticTypes.push_back(S.Context.WCharTy);
-    ArithmeticTypes.push_back(S.Context.Char16Ty);
-    ArithmeticTypes.push_back(S.Context.Char32Ty);
-    ArithmeticTypes.push_back(S.Context.SignedCharTy);
-    ArithmeticTypes.push_back(S.Context.ShortTy);
-    ArithmeticTypes.push_back(S.Context.UnsignedCharTy);
-    ArithmeticTypes.push_back(S.Context.UnsignedShortTy);
-    LastIntegralType = ArithmeticTypes.size();
-    NumArithmeticTypes = ArithmeticTypes.size();
-    // End of integral types.
-    // FIXME: What about complex? What about half?
-
-    assert(ArithmeticTypes.size() <= ArithmeticTypesCap &&
-           "Enough inline storage for all arithmetic types.");
+      &ASTContext::BoolTy,
+      &ASTContext::CharTy,
+      &ASTContext::WCharTy,
+      &ASTContext::Char16Ty,
+      &ASTContext::Char32Ty,
+      &ASTContext::SignedCharTy,
+      &ASTContext::ShortTy,
+      &ASTContext::UnsignedCharTy,
+      &ASTContext::UnsignedShortTy,
+      // End of integral types.
+      // FIXME: What about complex? What about half?
+    };
+    return S.Context.*ArithmeticTypes[index];
   }
 
   /// \brief Helper method to factor out the common pattern of adding overloads
@@ -7748,8 +7673,18 @@ public:
         HasArithmeticOrEnumeralCandidateType),
       CandidateTypes(CandidateTypes),
       CandidateSet(CandidateSet) {
-
-    InitArithmeticTypes();
+    // Validate some of our static helper constants in debug builds.
+    assert(getArithmeticType(FirstPromotedIntegralType) == S.Context.IntTy &&
+           "Invalid first promoted integral type");
+    assert(getArithmeticType(LastPromotedIntegralType - 1)
+             == S.Context.UnsignedInt128Ty &&
+           "Invalid last promoted integral type");
+    assert(getArithmeticType(FirstPromotedArithmeticType)
+             == S.Context.FloatTy &&
+           "Invalid first promoted arithmetic type");
+    assert(getArithmeticType(LastPromotedArithmeticType - 1)
+             == S.Context.UnsignedInt128Ty &&
+           "Invalid last promoted arithmetic type");
   }
 
   // C++ [over.built]p3:
@@ -7776,7 +7711,7 @@ public:
     for (unsigned Arith = (Op == OO_PlusPlus? 0 : 1);
          Arith < NumArithmeticTypes; ++Arith) {
       addPlusPlusMinusMinusStyleOverloads(
-        ArithmeticTypes[Arith],
+        getArithmeticType(Arith),
         VisibleTypeConversionsQuals.hasVolatile(),
         VisibleTypeConversionsQuals.hasRestrict());
     }
@@ -7849,7 +7784,7 @@ public:
 
     for (unsigned Arith = FirstPromotedArithmeticType;
          Arith < LastPromotedArithmeticType; ++Arith) {
-      QualType ArithTy = ArithmeticTypes[Arith];
+      QualType ArithTy = getArithmeticType(Arith);
       S.AddBuiltinCandidate(&ArithTy, Args, CandidateSet);
     }
 
@@ -7889,7 +7824,7 @@ public:
 
     for (unsigned Int = FirstPromotedIntegralType;
          Int < LastPromotedIntegralType; ++Int) {
-      QualType IntTy = ArithmeticTypes[Int];
+      QualType IntTy = getArithmeticType(Int);
       S.AddBuiltinCandidate(&IntTy, Args, CandidateSet);
     }
 
@@ -8117,8 +8052,8 @@ public:
          Left < LastPromotedArithmeticType; ++Left) {
       for (unsigned Right = FirstPromotedArithmeticType;
            Right < LastPromotedArithmeticType; ++Right) {
-        QualType LandR[2] = { ArithmeticTypes[Left],
-                              ArithmeticTypes[Right] };
+        QualType LandR[2] = { getArithmeticType(Left),
+                              getArithmeticType(Right) };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
       }
     }
@@ -8161,8 +8096,8 @@ public:
          Left < LastPromotedIntegralType; ++Left) {
       for (unsigned Right = FirstPromotedIntegralType;
            Right < LastPromotedIntegralType; ++Right) {
-        QualType LandR[2] = { ArithmeticTypes[Left],
-                              ArithmeticTypes[Right] };
+        QualType LandR[2] = { getArithmeticType(Left),
+                              getArithmeticType(Right) };
         S.AddBuiltinCandidate(LandR, Args, CandidateSet);
       }
     }
@@ -8342,18 +8277,18 @@ public:
       for (unsigned Right = FirstPromotedArithmeticType;
            Right < LastPromotedArithmeticType; ++Right) {
         QualType ParamTypes[2];
-        ParamTypes[1] = ArithmeticTypes[Right];
+        ParamTypes[1] = getArithmeticType(Right);
 
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] =
-          S.Context.getLValueReferenceType(ArithmeticTypes[Left]);
+          S.Context.getLValueReferenceType(getArithmeticType(Left));
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                               /*IsAssigmentOperator=*/isEqualOp);
 
         // Add this built-in operator as a candidate (VQ is 'volatile').
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           ParamTypes[0] =
-            S.Context.getVolatileType(ArithmeticTypes[Left]);
+            S.Context.getVolatileType(getArithmeticType(Left));
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet,
                                 /*IsAssigmentOperator=*/isEqualOp);
@@ -8408,15 +8343,15 @@ public:
       for (unsigned Right = FirstPromotedIntegralType;
            Right < LastPromotedIntegralType; ++Right) {
         QualType ParamTypes[2];
-        ParamTypes[1] = ArithmeticTypes[Right];
+        ParamTypes[1] = getArithmeticType(Right);
 
         // Add this built-in operator as a candidate (VQ is empty).
         ParamTypes[0] =
-          S.Context.getLValueReferenceType(ArithmeticTypes[Left]);
+          S.Context.getLValueReferenceType(getArithmeticType(Left));
         S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
         if (VisibleTypeConversionsQuals.hasVolatile()) {
           // Add this built-in operator as a candidate (VQ is 'volatile').
-          ParamTypes[0] = ArithmeticTypes[Left];
+          ParamTypes[0] = getArithmeticType(Left);
           ParamTypes[0] = S.Context.getVolatileType(ParamTypes[0]);
           ParamTypes[0] = S.Context.getLValueReferenceType(ParamTypes[0]);
           S.AddBuiltinCandidate(ParamTypes, Args, CandidateSet);
@@ -8670,7 +8605,7 @@ void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
   case OO_Plus: // '+' is either unary or binary
     if (Args.size() == 1)
       OpBuilder.addUnaryPlusPointerOverloads();
-    LLVM_FALLTHROUGH;
+    // Fall through.
 
   case OO_Minus: // '-' is either unary or binary
     if (Args.size() == 1) {
@@ -8701,7 +8636,7 @@ void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
   case OO_EqualEqual:
   case OO_ExclaimEqual:
     OpBuilder.addEqualEqualOrNotEqualMemberPointerOrNullptrOverloads();
-    LLVM_FALLTHROUGH;
+    // Fall through.
 
   case OO_Less:
   case OO_Greater:
@@ -8710,9 +8645,6 @@ void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
     OpBuilder.addRelationalPointerOrEnumeralOverloads();
     OpBuilder.addGenericBinaryArithmeticOverloads();
     break;
-
-  case OO_Spaceship:
-    llvm_unreachable("<=> expressions not supported yet");
 
   case OO_Percent:
   case OO_Caret:
@@ -8738,12 +8670,12 @@ void Sema::AddBuiltinOperatorCandidates(OverloadedOperatorKind Op,
 
   case OO_Equal:
     OpBuilder.addAssignmentMemberPointerOrEnumeralOverloads();
-    LLVM_FALLTHROUGH;
+    // Fall through.
 
   case OO_PlusEqual:
   case OO_MinusEqual:
     OpBuilder.addAssignmentPointerOverloads(Op == OO_Equal);
-    LLVM_FALLTHROUGH;
+    // Fall through.
 
   case OO_StarEqual:
   case OO_SlashEqual:
@@ -8891,9 +8823,10 @@ static Comparison compareEnableIfAttrs(const Sema &S, const FunctionDecl *Cand1,
 
 /// isBetterOverloadCandidate - Determines whether the first overload
 /// candidate is a better candidate than the second (C++ 13.3.3p1).
-bool clang::isBetterOverloadCandidate(
-    Sema &S, const OverloadCandidate &Cand1, const OverloadCandidate &Cand2,
-    SourceLocation Loc, OverloadCandidateSet::CandidateSetKind Kind) {
+bool clang::isBetterOverloadCandidate(Sema &S, const OverloadCandidate &Cand1,
+                                      const OverloadCandidate &Cand2,
+                                      SourceLocation Loc,
+                                      bool UserDefinedConversion) {
   // Define viable functions to be better candidates than non-viable
   // functions.
   if (!Cand2.Viable)
@@ -8975,8 +8908,7 @@ bool clang::isBetterOverloadCandidate(
   //      the type of the entity being initialized) is a better
   //      conversion sequence than the standard conversion sequence
   //      from the return type of F2 to the destination type.
-  if (Kind == OverloadCandidateSet::CSK_InitByUserDefinedConversion &&
-      Cand1.Function && Cand2.Function &&
+  if (UserDefinedConversion && Cand1.Function && Cand2.Function &&
       isa<CXXConversionDecl>(Cand1.Function) &&
       isa<CXXConversionDecl>(Cand2.Function)) {
     // First check whether we prefer one of the conversion functions over the
@@ -8998,17 +8930,11 @@ bool clang::isBetterOverloadCandidate(
     // C++14 [over.match.best]p1 section 2 bullet 3.
   }
 
-  // FIXME: Work around a defect in the C++17 guaranteed copy elision wording,
-  // as combined with the resolution to CWG issue 243.
-  //
-  // When the context is initialization by constructor ([over.match.ctor] or
-  // either phase of [over.match.list]), a constructor is preferred over
-  // a conversion function.
-  if (Kind == OverloadCandidateSet::CSK_InitByConstructor && NumArgs == 1 &&
-      Cand1.Function && Cand2.Function &&
-      isa<CXXConstructorDecl>(Cand1.Function) !=
-          isa<CXXConstructorDecl>(Cand2.Function))
-    return isa<CXXConstructorDecl>(Cand1.Function);
+  //    -- F1 is generated from a deduction-guide and F2 is not
+  auto *Guide1 = dyn_cast_or_null<CXXDeductionGuideDecl>(Cand1.Function);
+  auto *Guide2 = dyn_cast_or_null<CXXDeductionGuideDecl>(Cand2.Function);
+  if (Guide1 && Guide2 && Guide1->isImplicit() != Guide2->isImplicit())
+    return Guide2->isImplicit();
 
   //    -- F1 is a non-template function and F2 is a function template
   //       specialization, or, if not that,
@@ -9052,21 +8978,6 @@ bool clang::isBetterOverloadCandidate(
     if (Cand2Class->isDerivedFrom(Cand1Class))
       return false;
     // Inherited from sibling base classes: still ambiguous.
-  }
-
-  // Check C++17 tie-breakers for deduction guides.
-  {
-    auto *Guide1 = dyn_cast_or_null<CXXDeductionGuideDecl>(Cand1.Function);
-    auto *Guide2 = dyn_cast_or_null<CXXDeductionGuideDecl>(Cand2.Function);
-    if (Guide1 && Guide2) {
-      //  -- F1 is generated from a deduction-guide and F2 is not
-      if (Guide1->isImplicit() != Guide2->isImplicit())
-        return Guide2->isImplicit();
-
-      //  -- F1 is the copy deduction candidate(16.3.1.8) and F2 is not
-      if (Guide1->isCopyDeductionCandidate())
-        return true;
-    }
   }
 
   // Check for enable_if value-based overload resolution.
@@ -9168,7 +9079,8 @@ void Sema::diagnoseEquivalentInternalLinkageDeclarations(
 /// \returns The result of overload resolution.
 OverloadingResult
 OverloadCandidateSet::BestViableFunction(Sema &S, SourceLocation Loc,
-                                         iterator &Best) {
+                                         iterator &Best,
+                                         bool UserDefinedConversion) {
   llvm::SmallVector<OverloadCandidate *, 16> Candidates;
   std::transform(begin(), end(), std::back_inserter(Candidates),
                  [](OverloadCandidate &Cand) { return &Cand; });
@@ -9202,8 +9114,8 @@ OverloadCandidateSet::BestViableFunction(Sema &S, SourceLocation Loc,
   Best = end();
   for (auto *Cand : Candidates)
     if (Cand->Viable)
-      if (Best == end() ||
-          isBetterOverloadCandidate(S, *Cand, *Best, Loc, Kind))
+      if (Best == end() || isBetterOverloadCandidate(S, *Cand, *Best, Loc,
+                                                     UserDefinedConversion))
         Best = Cand;
 
   // If we didn't find any viable functions, abort.
@@ -9215,8 +9127,10 @@ OverloadCandidateSet::BestViableFunction(Sema &S, SourceLocation Loc,
   // Make sure that this function is better than every other viable
   // function. If not, we have an ambiguity.
   for (auto *Cand : Candidates) {
-    if (Cand->Viable && Cand != Best &&
-        !isBetterOverloadCandidate(S, *Best, *Cand, Loc, Kind)) {
+    if (Cand->Viable &&
+        Cand != Best &&
+        !isBetterOverloadCandidate(S, *Best, *Cand, Loc,
+                                   UserDefinedConversion)) {
       if (S.isEquivalentInternalLinkageDeclaration(Best->Function,
                                                    Cand->Function)) {
         EquivalentCands.push_back(Cand->Function);
@@ -10308,12 +10222,9 @@ struct CompareOverloadCandidatesForDisplay {
   Sema &S;
   SourceLocation Loc;
   size_t NumArgs;
-  OverloadCandidateSet::CandidateSetKind CSK;
 
-  CompareOverloadCandidatesForDisplay(
-      Sema &S, SourceLocation Loc, size_t NArgs,
-      OverloadCandidateSet::CandidateSetKind CSK)
-      : S(S), NumArgs(NArgs), CSK(CSK) {}
+  CompareOverloadCandidatesForDisplay(Sema &S, SourceLocation Loc, size_t nArgs)
+      : S(S), NumArgs(nArgs) {}
 
   bool operator()(const OverloadCandidate *L,
                   const OverloadCandidate *R) {
@@ -10327,10 +10238,8 @@ struct CompareOverloadCandidatesForDisplay {
       // TODO: introduce a tri-valued comparison for overload
       // candidates.  Would be more worthwhile if we had a sort
       // that could exploit it.
-      if (isBetterOverloadCandidate(S, *L, *R, SourceLocation(), CSK))
-        return true;
-      if (isBetterOverloadCandidate(S, *R, *L, SourceLocation(), CSK))
-        return false;
+      if (isBetterOverloadCandidate(S, *L, *R, SourceLocation())) return true;
+      if (isBetterOverloadCandidate(S, *R, *L, SourceLocation())) return false;
     } else if (R->Viable)
       return false;
 
@@ -10537,8 +10446,8 @@ void OverloadCandidateSet::NoteCandidates(
     }
   }
 
-  std::stable_sort(Cands.begin(), Cands.end(),
-            CompareOverloadCandidatesForDisplay(S, OpLoc, Args.size(), Kind));
+  std::sort(Cands.begin(), Cands.end(),
+            CompareOverloadCandidatesForDisplay(S, OpLoc, Args.size()));
 
   bool ReportedAmbiguousConversions = false;
 
@@ -10718,7 +10627,7 @@ static bool completeFunctionType(Sema &S, FunctionDecl *FD, SourceLocation Loc,
     return true;
 
   auto *FPT = FD->getType()->castAs<FunctionProtoType>();
-  if (S.getLangOpts().CPlusPlus17 &&
+  if (S.getLangOpts().CPlusPlus1z &&
       isUnresolvedExceptionSpec(FPT->getExceptionSpecType()) &&
       !S.ResolveExceptionSpec(Loc, FPT))
     return true;
@@ -11327,6 +11236,9 @@ Sema::ResolveSingleFunctionTemplateSpecialization(OverloadExpr *ovl,
 
   return Matched;
 }
+
+
+
 
 // Resolve and fix an overloaded expression that can be resolved
 // because it identifies a single function template specialization.
@@ -11966,7 +11878,7 @@ static bool IsOverloaded(const UnresolvedSetImpl &Functions) {
 ExprResult
 Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
                               const UnresolvedSetImpl &Fns,
-                              Expr *Input, bool PerformADL) {
+                              Expr *Input) {
   OverloadedOperatorKind Op = UnaryOperator::getOverloadedOperator(Opc);
   assert(Op != OO_None && "Invalid opcode for overloaded unary operator");
   DeclarationName OpName = Context.DeclarationNames.getCXXOperatorName(Op);
@@ -12017,11 +11929,9 @@ Sema::CreateOverloadedUnaryOp(SourceLocation OpLoc, UnaryOperatorKind Opc,
   AddMemberOperatorCandidates(Op, OpLoc, ArgsArray, CandidateSet);
 
   // Add candidates from ADL.
-  if (PerformADL) {
-    AddArgumentDependentLookupCandidates(OpName, OpLoc, ArgsArray,
-                                         /*ExplicitTemplateArgs*/nullptr,
-                                         CandidateSet);
-  }
+  AddArgumentDependentLookupCandidates(OpName, OpLoc, ArgsArray,
+                                       /*ExplicitTemplateArgs*/nullptr,
+                                       CandidateSet);
 
   // Add builtin operator candidates.
   AddBuiltinOperatorCandidates(Op, OpLoc, ArgsArray, CandidateSet);
@@ -12159,7 +12069,7 @@ ExprResult
 Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
                             BinaryOperatorKind Opc,
                             const UnresolvedSetImpl &Fns,
-                            Expr *LHS, Expr *RHS, bool PerformADL) {
+                            Expr *LHS, Expr *RHS) {
   Expr *Args[2] = { LHS, RHS };
   LHS=RHS=nullptr; // Please use only Args instead of LHS/RHS couple
 
@@ -12190,7 +12100,7 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
     UnresolvedLookupExpr *Fn
       = UnresolvedLookupExpr::Create(Context, NamingClass,
                                      NestedNameSpecifierLoc(), OpNameInfo,
-                                     /*ADL*/PerformADL, IsOverloaded(Fns),
+                                     /*ADL*/ true, IsOverloaded(Fns),
                                      Fns.begin(), Fns.end());
     return new (Context)
         CXXOperatorCallExpr(Context, Op, Fn, Args, Context.DependentTy,
@@ -12233,7 +12143,7 @@ Sema::CreateOverloadedBinOp(SourceLocation OpLoc,
   // Add candidates from ADL. Per [over.match.oper]p2, this lookup is not
   // performed for an assignment operator (nor for operator[] nor operator->,
   // which don't get here).
-  if (Opc != BO_Assign && PerformADL)
+  if (Opc != BO_Assign)
     AddArgumentDependentLookupCandidates(OpName, OpLoc, Args,
                                          /*ExplicitTemplateArgs*/ nullptr,
                                          CandidateSet);
@@ -12986,7 +12896,7 @@ Sema::BuildCallToObjectOfClassType(Scope *S, Expr *Obj,
   // Perform overload resolution.
   OverloadCandidateSet::iterator Best;
   switch (CandidateSet.BestViableFunction(*this, Object.get()->getLocStart(),
-                                          Best)) {
+                             Best)) {
   case OR_Success:
     // Overload resolution succeeded; we'll build the appropriate call
     // below.
@@ -13380,7 +13290,7 @@ Sema::BuildForRangeBeginEndCall(SourceLocation Loc,
                                 Expr *Range, ExprResult *CallExpr) {
   Scope *S = nullptr;
 
-  CandidateSet->clear(OverloadCandidateSet::CSK_Normal);
+  CandidateSet->clear();
   if (!MemberLookup.empty()) {
     ExprResult MemberRef =
         BuildMemberReferenceExpr(Range, Range->getType(), Loc,

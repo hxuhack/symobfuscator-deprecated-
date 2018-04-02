@@ -40,10 +40,6 @@ set(LIBCXX_INSTALL_HEADERS ON CACHE BOOL "")
 set(LIBCXX_INCLUDE_TESTS OFF CACHE BOOL "")
 set(LLVM_LTO_VERSION_OFFSET 3000 CACHE STRING "")
 
-# Generating Xcode toolchains is useful for developers wanting to build and use
-# clang without installing over existing tools.
-set(LLVM_CREATE_XCODE_TOOLCHAIN ON CACHE BOOL "")
-
 # setup toolchain
 set(LLVM_INSTALL_TOOLCHAIN_ONLY ON CACHE BOOL "")
 set(LLVM_TOOLCHAIN_TOOLS
@@ -61,7 +57,7 @@ set(LLVM_DISTRIBUTION_COMPONENTS
   LTO
   clang-format
   clang-headers
-  cxx-headers
+  libcxx-headers
   ${LLVM_TOOLCHAIN_TOOLS}
   CACHE STRING "")
 

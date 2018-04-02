@@ -1,4 +1,5 @@
-//===-- CodeViewTypes.def - All CodeView leaf types -------------*- C++ -*-===//
+
+//===-- CVLeafTypes.def - All CodeView leaf types ---------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //

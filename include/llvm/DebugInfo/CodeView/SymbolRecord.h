@@ -363,12 +363,12 @@ public:
       : SymbolRecord(SymbolRecordKind::PublicSym32),
         RecordOffset(RecordOffset) {}
 
-  PublicSymFlags Flags = PublicSymFlags::None;
-  uint32_t Offset = 0;
-  uint16_t Segment = 0;
+  PublicSymFlags Flags;
+  uint32_t Offset;
+  uint16_t Segment;
   StringRef Name;
 
-  uint32_t RecordOffset = 0;
+  uint32_t RecordOffset;
 };
 
 // S_REGISTER
@@ -942,13 +942,8 @@ public:
   uint32_t RecordOffset;
 };
 
-// S_ANNOTATION
-
 using CVSymbol = CVRecord<SymbolKind>;
 using CVSymbolArray = VarStreamArray<CVSymbol>;
-
-Expected<CVSymbol> readSymbolFromStream(BinaryStreamRef Stream,
-                                        uint32_t Offset);
 
 } // end namespace codeview
 } // end namespace llvm

@@ -7,7 +7,9 @@
 //
 //===----------------------------------------------------------------------===//
 
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCSectionMachO.h"
 #include "llvm/MC/MCStreamer.h"
 #include "llvm/MC/MCSymbol.h"
 

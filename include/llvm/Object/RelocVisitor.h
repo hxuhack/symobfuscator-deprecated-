@@ -25,6 +25,7 @@
 #include "llvm/Object/ObjectFile.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/ErrorOr.h"
 #include <cstdint>
 #include <system_error>
 
@@ -114,10 +115,9 @@ private:
   }
 
   int64_t getELFAddend(RelocationRef R) {
-    Expected<int64_t> AddendOrErr = ELFRelocationRef(R).getAddend();
-    handleAllErrors(AddendOrErr.takeError(), [](const ErrorInfoBase &EI) {
-      report_fatal_error(EI.message());
-    });
+    ErrorOr<int64_t> AddendOrErr = ELFRelocationRef(R).getAddend();
+    if (std::error_code EC = AddendOrErr.getError())
+      report_fatal_error(EC.message());
     return *AddendOrErr;
   }
 
@@ -169,8 +169,6 @@ private:
       return (Value + getELFAddend(R)) & 0xFFFFFFFF;
     case ELF::R_MIPS_64:
       return Value + getELFAddend(R);
-    case ELF::R_MIPS_TLS_DTPREL64:
-      return Value + getELFAddend(R) - 0x8000;
     }
     HasError = true;
     return 0;
@@ -262,10 +260,7 @@ private:
   }
 
   uint64_t visitMips32(uint32_t Rel, RelocationRef R, uint64_t Value) {
-    // FIXME: Take in account implicit addends to get correct results.
     if (Rel == ELF::R_MIPS_32)
-      return Value & 0xFFFFFFFF;
-    if (Rel == ELF::R_MIPS_TLS_DTPREL32)
       return Value & 0xFFFFFFFF;
     HasError = true;
     return 0;
@@ -301,8 +296,6 @@ private:
       case COFF::IMAGE_REL_AMD64_ADDR64:
         return Value;
       }
-      break;
-    default:
       break;
     }
     HasError = true;

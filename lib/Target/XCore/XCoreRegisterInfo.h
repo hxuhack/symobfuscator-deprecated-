@@ -14,7 +14,7 @@
 #ifndef LLVM_LIB_TARGET_XCORE_XCOREREGISTERINFO_H
 #define LLVM_LIB_TARGET_XCORE_XCOREREGISTERINFO_H
 
-#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 
 #define GET_REGINFO_HEADER
 #include "XCoreGenRegisterInfo.inc"

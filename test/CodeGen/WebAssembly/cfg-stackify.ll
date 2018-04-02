@@ -892,20 +892,19 @@ end:
 ; CHECK:       .LBB19_4:
 ; CHECK-NEXT:  loop    {{$}}
 ; CHECK-NOT:   block
-; CHECK:       br_if    0, {{[^,]+}}{{$}}
+; CHECK:       br_if    3, {{[^,]+}}{{$}}
+; CHECK:       block   {{$}}
+; CHECK:       br_table  {{[^,]+}}, 1, 0, 4, 2, 3, 1{{$}}
+; CHECK-NEXT:  .LBB19_6:
+; CHECK-NEXT:  end_block{{$}}
 ; CHECK-NEXT:  end_loop{{$}}
-; CHECK:       br_if    1, {{[^,]+}}{{$}}
-; CHECK-NOT:   block
-; CHECK:       br_if    0, {{[^,]+}}{{$}}
 ; CHECK-NEXT:  end_loop{{$}}
-; CHECK-NOT:   block
-; CHECK:       br_if    1, {{[^,]+}}{{$}}
 ; CHECK-NEXT:  return{{$}}
-; CHECK-NEXT:  .LBB19_9:
+; CHECK-NEXT:  .LBB19_7:
 ; CHECK-NEXT:  end_block{{$}}
 ; CHECK-NOT:   block
 ; CHECK:       br       0{{$}}
-; CHECK-NEXT:  .LBB19_10:
+; CHECK-NEXT:  .LBB19_8:
 ; OPT-LABEL: test10:
 ; OPT:       .LBB19_1:
 ; OPT-NEXT:  loop    {{$}}
@@ -918,20 +917,19 @@ end:
 ; OPT:       .LBB19_4:
 ; OPT-NEXT:  loop    {{$}}
 ; OPT-NOT:   block
-; OPT:       br_if    0, {{[^,]+}}{{$}}
+; OPT:       br_if    3, {{[^,]+}}{{$}}
+; OPT:       block
+; OPT:       br_table  {{[^,]+}}, 1, 0, 4, 2, 3, 1{{$}}
+; OPT-NEXT:  .LBB19_6:
+; OPT-NEXT:  end_block{{$}}
 ; OPT-NEXT:  end_loop{{$}}
-; OPT:       br_if    1, {{[^,]+}}{{$}}
-; OPT-NOT:   block
-; OPT:       br_if    0, {{[^,]+}}{{$}}
 ; OPT-NEXT:  end_loop{{$}}
-; OPT-NOT:   block
-; OPT:       br_if    1, {{[^,]+}}{{$}}
 ; OPT-NEXT:  return{{$}}
-; OPT-NEXT:  .LBB19_9:
+; OPT-NEXT:  .LBB19_7:
 ; OPT-NEXT:  end_block{{$}}
 ; OPT-NOT:   block
 ; OPT:       br       0{{$}}
-; OPT-NEXT:  .LBB19_10:
+; OPT-NEXT:  .LBB19_8:
 define void @test10() {
 bb0:
   br label %bb1

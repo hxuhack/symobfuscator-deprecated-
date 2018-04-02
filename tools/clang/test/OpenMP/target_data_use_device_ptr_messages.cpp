@@ -1,6 +1,4 @@
 // RUN: %clang_cc1 -std=c++11 -verify -fopenmp -ferror-limit 200 %s
-
-// RUN: %clang_cc1 -std=c++11 -verify -fopenmp-simd -ferror-limit 200 %s
 struct ST {
   int *a;
 };

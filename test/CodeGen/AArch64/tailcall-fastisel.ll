@@ -1,4 +1,4 @@
-; RUN: llc < %s -mtriple=arm64-apple-darwin -O0 -fast-isel | FileCheck %s
+; RUN: llc < %s -mtriple=arm64-apple-darwin -O0 | FileCheck %s
 
 ; CHECK: b _foo0
 

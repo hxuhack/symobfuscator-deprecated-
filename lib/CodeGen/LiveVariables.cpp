@@ -37,6 +37,7 @@
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
 #include <algorithm>
 using namespace llvm;
 
@@ -234,7 +235,7 @@ void LiveVariables::HandlePhysRegUse(unsigned Reg, MachineInstr &MI) {
     // Otherwise, the last sub-register def implicitly defines this register.
     // e.g.
     // AH =
-    // AL = ... implicit-def EAX, implicit killed AH
+    // AL = ... <imp-def EAX>, <imp-kill AH>
     //    = AH
     // ...
     //    = EAX
@@ -320,17 +321,17 @@ bool LiveVariables::HandlePhysRegKill(unsigned Reg, MachineInstr *MI) {
   // AH =
   //
   //    = AX
-  //    = AL, implicit killed AX
+  //    = AL, AX<imp-use, kill>
   // AX =
   //
   // Or whole register is defined, but not used at all.
-  // dead AX =
+  // AX<dead> =
   // ...
   // AX =
   //
   // Or whole register is defined, but only partly used.
-  // dead AX = implicit-def AL
-  //    = killed AL
+  // AX<dead> = AL<imp-def>
+  //    = AL<kill>
   // AX =
   MachineInstr *LastPartDef = nullptr;
   unsigned LastPartDefDist = 0;
@@ -363,7 +364,7 @@ bool LiveVariables::HandlePhysRegKill(unsigned Reg, MachineInstr *MI) {
   if (!PhysRegUse[Reg]) {
     // Partial uses. Mark register def dead and add implicit def of
     // sub-registers which are used.
-    // dead EAX  = op  implicit-def AL
+    // EAX<dead>  = op  AL<imp-def>
     // That is, EAX def is dead but AL def extends pass it.
     PhysRegDef[Reg]->addRegisterDead(Reg, TRI, true);
     for (MCSubRegIterator SubRegs(Reg, TRI); SubRegs.isValid(); ++SubRegs) {

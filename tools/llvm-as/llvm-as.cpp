@@ -72,8 +72,8 @@ static void WriteOutputFile(const Module *M) {
   }
 
   std::error_code EC;
-  std::unique_ptr<ToolOutputFile> Out(
-      new ToolOutputFile(OutputFilename, EC, sys::fs::F_None));
+  std::unique_ptr<tool_output_file> Out(
+      new tool_output_file(OutputFilename, EC, sys::fs::F_None));
   if (EC) {
     errs() << EC.message() << '\n';
     exit(1);
@@ -97,8 +97,7 @@ int main(int argc, char **argv) {
 
   // Parse the file now...
   SMDiagnostic Err;
-  std::unique_ptr<Module> M =
-      parseAssemblyFile(InputFilename, Err, Context, nullptr, !DisableVerify);
+  std::unique_ptr<Module> M = parseAssemblyFile(InputFilename, Err, Context);
   if (!M.get()) {
     Err.print(argv[0], errs());
     return 1;

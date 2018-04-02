@@ -12,11 +12,13 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/PostDominators.h"
-#include "llvm/IR/Function.h"
+#include "llvm/ADT/DepthFirstIterator.h"
+#include "llvm/ADT/SetOperations.h"
+#include "llvm/IR/CFG.h"
+#include "llvm/IR/Instructions.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/raw_ostream.h"
-
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/GenericDomTreeConstruction.h"
 using namespace llvm;
 
 #define DEBUG_TYPE "postdomtree"
@@ -26,7 +28,6 @@ using namespace llvm;
 //===----------------------------------------------------------------------===//
 
 char PostDominatorTreeWrapperPass::ID = 0;
-
 INITIALIZE_PASS(PostDominatorTreeWrapperPass, "postdomtree",
                 "Post-Dominator Tree Construction", true, true)
 

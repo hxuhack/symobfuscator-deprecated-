@@ -6,8 +6,9 @@
 ; Function Attrs: noinline nounwind
 define void @_Z1av() {
 ; CHECK-LABEL: _Z1av:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # BB#0: # %entry
 ; CHECK-NEXT:    subl $2, %esp
+; CHECK-NEXT:  .Lcfi0:
 ; CHECK-NEXT:    .cfi_def_cfa_offset 6
 ; CHECK-NEXT:    xorl %eax, %eax
 ; CHECK-NEXT:    movb %al, %cl

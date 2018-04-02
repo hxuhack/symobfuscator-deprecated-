@@ -55,10 +55,11 @@ class MCELFObjectTargetWriter {
   const uint16_t EMachine;
   const unsigned HasRelocationAddend : 1;
   const unsigned Is64Bit : 1;
+  const unsigned IsN64 : 1;
 
 protected:
   MCELFObjectTargetWriter(bool Is64Bit_, uint8_t OSABI_, uint16_t EMachine_,
-                          bool HasRelocationAddend);
+                          bool HasRelocationAddend, bool IsN64 = false);
 
 public:
   virtual ~MCELFObjectTargetWriter() = default;
@@ -90,6 +91,7 @@ public:
   uint16_t getEMachine() const { return EMachine; }
   bool hasRelocationAddend() const { return HasRelocationAddend; }
   bool is64Bit() const { return Is64Bit; }
+  bool isN64() const { return IsN64; }
   /// @}
 
   // Instead of changing everyone's API we pack the N64 Type fields
@@ -137,9 +139,9 @@ public:
 /// \param MOTW - The target specific ELF writer subclass.
 /// \param OS - The stream to write to.
 /// \returns The constructed object writer.
-std::unique_ptr<MCObjectWriter>
-createELFObjectWriter(std::unique_ptr<MCELFObjectTargetWriter> MOTW,
-                      raw_pwrite_stream &OS, bool IsLittleEndian);
+MCObjectWriter *createELFObjectWriter(MCELFObjectTargetWriter *MOTW,
+                                      raw_pwrite_stream &OS,
+                                      bool IsLittleEndian);
 
 } // end namespace llvm
 

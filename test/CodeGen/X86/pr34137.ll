@@ -7,9 +7,9 @@
 
 define void @pr34127() {
 ; CHECK-LABEL: pr34127:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # BB#0: # %entry
 ; CHECK-NEXT:    movzwl {{.*}}(%rip), %eax
-; CHECK-NEXT:    movzwl {{.*}}(%rip), %ecx
+; CHECK-NEXT:    movw {{.*}}(%rip), %cx
 ; CHECK-NEXT:    andw %ax, %cx
 ; CHECK-NEXT:    andl %eax, %ecx
 ; CHECK-NEXT:    movl %ecx, -{{[0-9]+}}(%rsp)

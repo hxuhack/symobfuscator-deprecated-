@@ -31,7 +31,7 @@
 # CHECK: movq %rax, (%rdx)
 swap:                                   # @swap
 	.cfi_startproc
-# %bb.0:
+# BB#0:
 	push	rbx
 .Ltmp0:
 	.cfi_def_cfa_offset 16

@@ -16,7 +16,7 @@
 
 define void @addindirect() {
 ; CHECK-LABEL: addindirect:
-; CHECK:       # %bb.0: # %entry
+; CHECK:       # BB#0: # %entry
 ; CHECK-NEXT:    movl idxb, %ecx
 ; CHECK-NEXT:    movl idxa, %eax
 ; CHECK-NEXT:    movl ptrs(,%ecx,4), %ecx

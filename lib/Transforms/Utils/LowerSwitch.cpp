@@ -13,65 +13,46 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/ADT/DenseMap.h"
 #include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/SmallPtrSet.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/CFG.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/Function.h"
-#include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Instructions.h"
-#include "llvm/IR/Value.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
 #include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
 #include "llvm/Transforms/Scalar.h"
 #include "llvm/Transforms/Utils/BasicBlockUtils.h"
+#include "llvm/Transforms/Utils/UnifyFunctionExitNodes.h"
 #include <algorithm>
-#include <cassert>
-#include <cstdint>
-#include <iterator>
-#include <limits>
-#include <vector>
-
 using namespace llvm;
 
 #define DEBUG_TYPE "lower-switch"
 
 namespace {
-
   struct IntRange {
     int64_t Low, High;
   };
+  // Return true iff R is covered by Ranges.
+  static bool IsInRanges(const IntRange &R,
+                         const std::vector<IntRange> &Ranges) {
+    // Note: Ranges must be sorted, non-overlapping and non-adjacent.
 
-} // end anonymous namespace
-
-// Return true iff R is covered by Ranges.
-static bool IsInRanges(const IntRange &R,
-                       const std::vector<IntRange> &Ranges) {
-  // Note: Ranges must be sorted, non-overlapping and non-adjacent.
-
-  // Find the first range whose High field is >= R.High,
-  // then check if the Low field is <= R.Low. If so, we
-  // have a Range that covers R.
-  auto I = std::lower_bound(
-      Ranges.begin(), Ranges.end(), R,
-      [](const IntRange &A, const IntRange &B) { return A.High < B.High; });
-  return I != Ranges.end() && I->Low <= R.Low;
-}
-
-namespace {
+    // Find the first range whose High field is >= R.High,
+    // then check if the Low field is <= R.Low. If so, we
+    // have a Range that covers R.
+    auto I = std::lower_bound(
+        Ranges.begin(), Ranges.end(), R,
+        [](const IntRange &A, const IntRange &B) { return A.High < B.High; });
+    return I != Ranges.end() && I->Low <= R.Low;
+  }
 
   /// Replace all SwitchInst instructions with chained branch instructions.
   class LowerSwitch : public FunctionPass {
   public:
-    // Pass identification, replacement for typeid
-    static char ID;
-
+    static char ID; // Pass identification, replacement for typeid
     LowerSwitch() : FunctionPass(ID) {
       initializeLowerSwitchPass(*PassRegistry::getPassRegistry());
     } 
@@ -87,9 +68,8 @@ namespace {
           : Low(low), High(high), BB(bb) {}
     };
 
-    using CaseVector = std::vector<CaseRange>;
-    using CaseItr = std::vector<CaseRange>::iterator;
-
+    typedef std::vector<CaseRange> CaseVector;
+    typedef std::vector<CaseRange>::iterator CaseItr;
   private:
     void processSwitchInst(SwitchInst *SI, SmallPtrSetImpl<BasicBlock*> &DeleteList);
 
@@ -106,24 +86,22 @@ namespace {
   /// The comparison function for sorting the switch case values in the vector.
   /// WARNING: Case ranges should be disjoint!
   struct CaseCmp {
-    bool operator()(const LowerSwitch::CaseRange& C1,
-                    const LowerSwitch::CaseRange& C2) {
+    bool operator () (const LowerSwitch::CaseRange& C1,
+                      const LowerSwitch::CaseRange& C2) {
+
       const ConstantInt* CI1 = cast<const ConstantInt>(C1.Low);
       const ConstantInt* CI2 = cast<const ConstantInt>(C2.High);
       return CI1->getValue().slt(CI2->getValue());
     }
   };
-
-} // end anonymous namespace
+}
 
 char LowerSwitch::ID = 0;
-
-// Publicly exposed interface to pass...
-char &llvm::LowerSwitchID = LowerSwitch::ID;
-
 INITIALIZE_PASS(LowerSwitch, "lowerswitch",
                 "Lower SwitchInst's to branches", false, false)
 
+// Publicly exposed interface to pass...
+char &llvm::LowerSwitchID = LowerSwitch::ID;
 // createLowerSwitchPass - Interface to this file...
 FunctionPass *llvm::createLowerSwitchPass() {
   return new LowerSwitch();
@@ -158,7 +136,6 @@ bool LowerSwitch::runOnFunction(Function &F) {
 static raw_ostream& operator<<(raw_ostream &O,
                                const LowerSwitch::CaseVector &C)
     LLVM_ATTRIBUTE_USED;
-
 static raw_ostream& operator<<(raw_ostream &O,
                                const LowerSwitch::CaseVector &C) {
   O << "[";
@@ -209,7 +186,7 @@ static void fixPhis(BasicBlock *SuccBB, BasicBlock *OrigBB, BasicBlock *NewBB,
       }
     // Remove incoming values in the reverse order to prevent invalidating
     // *successive* index.
-    for (unsigned III : llvm::reverse(Indices))
+    for (unsigned III : reverse(Indices))
       PN->removeIncomingValue(III);
   }
 }
@@ -317,7 +294,8 @@ LowerSwitch::switchConvert(CaseItr Begin, CaseItr End, ConstantInt *LowerBound,
 /// value, so the jump to the "default" branch is warranted.
 BasicBlock* LowerSwitch::newLeafBlock(CaseRange& Leaf, Value* Val,
                                       BasicBlock* OrigBlock,
-                                      BasicBlock* Default) {
+                                      BasicBlock* Default)
+{
   Function* F = OrigBlock->getParent();
   BasicBlock* NewLeaf = BasicBlock::Create(Val->getContext(), "LeafBlock");
   F->getBasicBlockList().insert(++OrigBlock->getIterator(), NewLeaf);
@@ -464,8 +442,7 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI,
     unsigned MaxPop = 0;
     BasicBlock *PopSucc = nullptr;
 
-    IntRange R = {std::numeric_limits<int64_t>::min(),
-                  std::numeric_limits<int64_t>::max()};
+    IntRange R = { INT64_MIN, INT64_MAX };
     UnreachableRanges.push_back(R);
     for (const auto &I : Cases) {
       int64_t Low = I.Low->getSExtValue();
@@ -480,8 +457,8 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI,
         assert(Low > LastRange.Low);
         LastRange.High = Low - 1;
       }
-      if (High != std::numeric_limits<int64_t>::max()) {
-        IntRange R = { High + 1, std::numeric_limits<int64_t>::max() };
+      if (High != INT64_MAX) {
+        IntRange R = { High + 1, INT64_MAX };
         UnreachableRanges.push_back(R);
       }
 
@@ -510,8 +487,8 @@ void LowerSwitch::processSwitchInst(SwitchInst *SI,
     assert(MaxPop > 0 && PopSucc);
     Default = PopSucc;
     Cases.erase(
-        llvm::remove_if(
-            Cases, [PopSucc](const CaseRange &R) { return R.BB == PopSucc; }),
+        remove_if(Cases,
+                  [PopSucc](const CaseRange &R) { return R.BB == PopSucc; }),
         Cases.end());
 
     // If there are no cases left, just branch.

@@ -14,7 +14,6 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/IR/CallingConv.h"
-#include "llvm/MC/MCSymbol.h"
 #include "llvm/Support/Debug.h"
 #include <algorithm>
 #include <cassert>
@@ -26,6 +25,7 @@ namespace llvm {
 class AsmPrinter;
 class MCExpr;
 class MCStreamer;
+class MCSymbol;
 class raw_ostream;
 class TargetRegisterInfo;
 

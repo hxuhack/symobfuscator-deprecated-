@@ -1026,7 +1026,6 @@ Parser::isExpressionOrTypeSpecifierSimple(tok::TokenKind Kind) {
   case tok::kw_char:
   case tok::kw_const:
   case tok::kw_double:
-  case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_enum:
   case tok::kw_half:
@@ -1299,9 +1298,11 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
     //   'friend'
     //   'typedef'
     //   'constexpr'
+    //   'concept'
   case tok::kw_friend:
   case tok::kw_typedef:
   case tok::kw_constexpr:
+  case tok::kw_concept:
     // storage-class-specifier
   case tok::kw_register:
   case tok::kw_static:
@@ -1509,7 +1510,6 @@ Parser::isCXXDeclarationSpecifier(Parser::TPResult BracedCastResult,
   case tok::kw_half:
   case tok::kw_float:
   case tok::kw_double:
-  case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_void:
   case tok::annot_decltype:
@@ -1600,7 +1600,6 @@ bool Parser::isCXXDeclarationSpecifierAType() {
   case tok::kw_half:
   case tok::kw_float:
   case tok::kw_double:
-  case tok::kw__Float16:
   case tok::kw___float128:
   case tok::kw_void:
   case tok::kw___unknown_anytype:

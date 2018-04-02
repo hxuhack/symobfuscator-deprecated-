@@ -15,13 +15,16 @@
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/MC/MCAsmBackend.h"
+#include "llvm/MC/MCAsmInfo.h"
 #include "llvm/MC/MCAsmLayout.h"
 #include "llvm/MC/MCAssembler.h"
 #include "llvm/MC/MCCodeEmitter.h"
 #include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
+#include "llvm/MC/MCObjectFileInfo.h"
 #include "llvm/MC/MCObjectStreamer.h"
+#include "llvm/MC/MCObjectWriter.h"
 #include "llvm/MC/MCSection.h"
 #include "llvm/MC/MCSectionWasm.h"
 #include "llvm/MC/MCSymbol.h"
@@ -95,12 +98,8 @@ bool MCWasmStreamer::EmitSymbolAttribute(MCSymbol *S, MCSymbolAttr Attribute) {
   case MCSA_WeakDefAutoPrivate:
   case MCSA_Invalid:
   case MCSA_IndirectSymbol:
-  case MCSA_Protected:
-    return false;
-
   case MCSA_Hidden:
-    Symbol->setHidden(true);
-    break;
+    return false;
 
   case MCSA_Weak:
   case MCSA_WeakReference:
@@ -157,7 +156,7 @@ void MCWasmStreamer::EmitValueToAlignment(unsigned ByteAlignment, int64_t Value,
 
 void MCWasmStreamer::EmitIdent(StringRef IdentString) {
   MCSection *Comment = getAssembler().getContext().getWasmSection(
-      ".comment", SectionKind::getMetadata());
+      ".comment", 0, 0);
   PushSection();
   SwitchSection(Comment);
   if (!SeenIdent) {
@@ -201,13 +200,10 @@ void MCWasmStreamer::FinishImpl() {
   this->MCObjectStreamer::FinishImpl();
 }
 
-MCStreamer *llvm::createWasmStreamer(MCContext &Context,
-                                     std::unique_ptr<MCAsmBackend> &&MAB,
-                                     raw_pwrite_stream &OS,
-                                     std::unique_ptr<MCCodeEmitter> &&CE,
+MCStreamer *llvm::createWasmStreamer(MCContext &Context, MCAsmBackend &MAB,
+                                     raw_pwrite_stream &OS, MCCodeEmitter *CE,
                                      bool RelaxAll) {
-  MCWasmStreamer *S =
-      new MCWasmStreamer(Context, std::move(MAB), OS, std::move(CE));
+  MCWasmStreamer *S = new MCWasmStreamer(Context, MAB, OS, CE);
   if (RelaxAll)
     S->getAssembler().setRelaxAll(true);
   return S;

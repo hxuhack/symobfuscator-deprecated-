@@ -6,7 +6,6 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
-//
 /// \file
 /// This file provides a collection of visitors which walk the (instruction)
 /// uses of a pointer. These visitors all provide the same essential behavior
@@ -17,36 +16,23 @@
 /// global variable, or function argument.
 ///
 /// FIXME: Provide a variant which doesn't track offsets and is cheaper.
-//
+///
 //===----------------------------------------------------------------------===//
 
 #ifndef LLVM_ANALYSIS_PTRUSEVISITOR_H
 #define LLVM_ANALYSIS_PTRUSEVISITOR_H
 
 #include "llvm/ADT/APInt.h"
-#include "llvm/ADT/PointerIntPair.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/DataLayout.h"
-#include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/InstVisitor.h"
-#include "llvm/IR/Instruction.h"
-#include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/Use.h"
-#include "llvm/IR/User.h"
-#include "llvm/Support/Casting.h"
-#include <algorithm>
-#include <cassert>
-#include <type_traits>
+#include "llvm/Support/Compiler.h"
 
 namespace llvm {
 
 namespace detail {
-
 /// \brief Implementation of non-dependent functionality for \c PtrUseVisitor.
 ///
 /// See \c PtrUseVisitor for the public interface and detailed comments about
@@ -129,8 +115,7 @@ protected:
   /// This is used to maintain a worklist fo to-visit uses. This is used to
   /// make the visit be iterative rather than recursive.
   struct UseToVisit {
-    using UseAndIsOffsetKnownPair = PointerIntPair<Use *, 1, bool>;
-
+    typedef PointerIntPair<Use *, 1, bool> UseAndIsOffsetKnownPair;
     UseAndIsOffsetKnownPair UseAndIsOffsetKnown;
     APInt Offset;
   };
@@ -142,6 +127,7 @@ protected:
   SmallPtrSet<Use *, 8> VisitedUses;
 
   /// @}
+
 
   /// \name Per-visit state
   /// This state is reset for each instruction visited.
@@ -159,6 +145,7 @@ protected:
 
   /// @}
 
+
   /// Note that the constructor is protected because this class must be a base
   /// class, we can't create instances directly of this class.
   PtrUseVisitorBase(const DataLayout &DL) : DL(DL) {}
@@ -175,7 +162,6 @@ protected:
   /// offsets and looking through GEPs.
   bool adjustOffsetForGEP(GetElementPtrInst &GEPI);
 };
-
 } // end namespace detail
 
 /// \brief A base class for visitors over the uses of a pointer value.
@@ -207,8 +193,7 @@ template <typename DerivedT>
 class PtrUseVisitor : protected InstVisitor<DerivedT>,
                       public detail::PtrUseVisitorBase {
   friend class InstVisitor<DerivedT>;
-
-  using Base = InstVisitor<DerivedT>;
+  typedef InstVisitor<DerivedT> Base;
 
 public:
   PtrUseVisitor(const DataLayout &DL) : PtrUseVisitorBase(DL) {
@@ -298,6 +283,6 @@ protected:
   }
 };
 
-} // end namespace llvm
+}
 
-#endif // LLVM_ANALYSIS_PTRUSEVISITOR_H
+#endif

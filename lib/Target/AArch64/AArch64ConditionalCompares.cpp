@@ -31,12 +31,12 @@
 #include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/MachineTraceMetrics.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
@@ -369,7 +369,7 @@ MachineInstr *SSACCmpConv::findConvertibleCompare(MachineBasicBlock *MBB) {
       return nullptr;
     }
   }
-  DEBUG(dbgs() << "Flags not defined in " << printMBBReference(*MBB) << '\n');
+  DEBUG(dbgs() << "Flags not defined in BB#" << MBB->getNumber() << '\n');
   return nullptr;
 }
 
@@ -383,7 +383,7 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
   // Reject any live-in physregs. It's probably NZCV/EFLAGS, and very hard to
   // get right.
   if (!MBB->livein_empty()) {
-    DEBUG(dbgs() << printMBBReference(*MBB) << " has live-ins.\n");
+    DEBUG(dbgs() << "BB#" << MBB->getNumber() << " has live-ins.\n");
     return false;
   }
 
@@ -396,7 +396,7 @@ bool SSACCmpConv::canSpeculateInstrs(MachineBasicBlock *MBB,
       continue;
 
     if (++InstrCount > BlockInstrLimit && !Stress) {
-      DEBUG(dbgs() << printMBBReference(*MBB) << " has more than "
+      DEBUG(dbgs() << "BB#" << MBB->getNumber() << " has more than "
                    << BlockInstrLimit << " instructions.\n");
       return false;
     }
@@ -458,9 +458,8 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
     return false;
 
   // The CFG topology checks out.
-  DEBUG(dbgs() << "\nTriangle: " << printMBBReference(*Head) << " -> "
-               << printMBBReference(*CmpBB) << " -> "
-               << printMBBReference(*Tail) << '\n');
+  DEBUG(dbgs() << "\nTriangle: BB#" << Head->getNumber() << " -> BB#"
+               << CmpBB->getNumber() << " -> BB#" << Tail->getNumber() << '\n');
   ++NumConsidered;
 
   // Tail is allowed to have many predecessors, but we can't handle PHIs yet.
@@ -563,9 +562,8 @@ bool SSACCmpConv::canConvert(MachineBasicBlock *MBB) {
 }
 
 void SSACCmpConv::convert(SmallVectorImpl<MachineBasicBlock *> &RemovedBlocks) {
-  DEBUG(dbgs() << "Merging " << printMBBReference(*CmpBB) << " into "
-               << printMBBReference(*Head) << ":\n"
-               << *CmpBB);
+  DEBUG(dbgs() << "Merging BB#" << CmpBB->getNumber() << " into BB#"
+               << Head->getNumber() << ":\n" << *CmpBB);
 
   // All CmpBB instructions are moved into Head, and CmpBB is deleted.
   // Update the CFG first.
@@ -924,7 +922,7 @@ bool AArch64ConditionalCompares::tryConvert(MachineBasicBlock *MBB) {
 bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
   DEBUG(dbgs() << "********** AArch64 Conditional Compares **********\n"
                << "********** Function: " << MF.getName() << '\n');
-  if (skipFunction(MF.getFunction()))
+  if (skipFunction(*MF.getFunction()))
     return false;
 
   TII = MF.getSubtarget().getInstrInfo();
@@ -936,7 +934,7 @@ bool AArch64ConditionalCompares::runOnMachineFunction(MachineFunction &MF) {
   MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
   Traces = &getAnalysis<MachineTraceMetrics>();
   MinInstr = nullptr;
-  MinSize = MF.getFunction().optForMinSize();
+  MinSize = MF.getFunction()->optForMinSize();
 
   bool Changed = false;
   CmpConv.runOnMachineFunction(MF, MBPI);

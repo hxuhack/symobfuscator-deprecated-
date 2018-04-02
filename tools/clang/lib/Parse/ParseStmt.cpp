@@ -211,7 +211,7 @@ Retry:
          Allowed == ACK_Any) &&
         isDeclarationStatement()) {
       SourceLocation DeclStart = Tok.getLocation(), DeclEnd;
-      DeclGroupPtrTy Decl = ParseDeclaration(DeclaratorContext::BlockContext,
+      DeclGroupPtrTy Decl = ParseDeclaration(Declarator::BlockContext,
                                              DeclEnd, Attrs);
       return Actions.ActOnDeclStmt(Decl, DeclStart, DeclEnd);
     }
@@ -453,10 +453,9 @@ StmtResult Parser::ParseSEHTryBlock() {
   if (Tok.isNot(tok::l_brace))
     return StmtError(Diag(Tok, diag::err_expected) << tok::l_brace);
 
-  StmtResult TryBlock(ParseCompoundStatement(
-      /*isStmtExpr=*/false,
-      Scope::DeclScope | Scope::CompoundStmtScope | Scope::SEHTryScope));
-  if (TryBlock.isInvalid())
+  StmtResult TryBlock(ParseCompoundStatement(/*isStmtExpr=*/false,
+                      Scope::DeclScope | Scope::SEHTryScope));
+  if(TryBlock.isInvalid())
     return TryBlock;
 
   StmtResult Handler;
@@ -841,8 +840,7 @@ StmtResult Parser::ParseDefaultStatement() {
 }
 
 StmtResult Parser::ParseCompoundStatement(bool isStmtExpr) {
-  return ParseCompoundStatement(isStmtExpr,
-                                Scope::DeclScope | Scope::CompoundStmtScope);
+  return ParseCompoundStatement(isStmtExpr, Scope::DeclScope);
 }
 
 /// ParseCompoundStatement - Parse a "{}" block.
@@ -1021,8 +1019,8 @@ StmtResult Parser::ParseCompoundStatementBody(bool isStmtExpr) {
         ExtensionRAIIObject O(Diags);
 
         SourceLocation DeclStart = Tok.getLocation(), DeclEnd;
-        DeclGroupPtrTy Res =
-            ParseDeclaration(DeclaratorContext::BlockContext, DeclEnd, attrs);
+        DeclGroupPtrTy Res = ParseDeclaration(Declarator::BlockContext, DeclEnd,
+                                              attrs);
         R = Actions.ActOnDeclStmt(Res, DeclStart, DeclEnd);
       } else {
         // Otherwise this was a unary __extension__ marker.
@@ -1128,7 +1126,7 @@ StmtResult Parser::ParseIfStatement(SourceLocation *TrailingElseLoc) {
 
   bool IsConstexpr = false;
   if (Tok.is(tok::kw_constexpr)) {
-    Diag(Tok, getLangOpts().CPlusPlus17 ? diag::warn_cxx14_compat_constexpr_if
+    Diag(Tok, getLangOpts().CPlusPlus1z ? diag::warn_cxx14_compat_constexpr_if
                                         : diag::ext_constexpr_if);
     IsConstexpr = true;
     ConsumeToken();
@@ -1479,9 +1477,6 @@ StmtResult Parser::ParseDoStatement() {
   DiagnoseAndSkipCXX11Attributes();
 
   ExprResult Cond = ParseExpression();
-  // Correct the typos in condition before closing the scope.
-  if (Cond.isUsable())
-    Cond = Actions.CorrectDelayedTyposInExpr(Cond);
   T.consumeClose();
   DoScope.Exit();
 
@@ -1613,7 +1608,7 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
       ForRangeInit.RangeExpr = ParseExpression();
 
     Diag(Loc, diag::err_for_range_identifier)
-      << ((getLangOpts().CPlusPlus11 && !getLangOpts().CPlusPlus17)
+      << ((getLangOpts().CPlusPlus11 && !getLangOpts().CPlusPlus1z)
               ? FixItHint::CreateInsertion(Loc, "auto &&")
               : FixItHint());
 
@@ -1631,7 +1626,7 @@ StmtResult Parser::ParseForStatement(SourceLocation *TrailingElseLoc) {
 
     SourceLocation DeclStart = Tok.getLocation(), DeclEnd;
     DeclGroupPtrTy DG = ParseSimpleDeclaration(
-        DeclaratorContext::ForContext, DeclEnd, attrs, false,
+        Declarator::ForContext, DeclEnd, attrs, false,
         MightBeForRangeStmt ? &ForRangeInit : nullptr);
     FirstPart = Actions.ActOnDeclStmt(DG, DeclStart, Tok.getLocation());
     if (ForRangeInit.ParsedForRangeDecl()) {
@@ -2090,10 +2085,9 @@ StmtResult Parser::ParseCXXTryBlockCommon(SourceLocation TryLoc, bool FnTry) {
   if (Tok.isNot(tok::l_brace))
     return StmtError(Diag(Tok, diag::err_expected) << tok::l_brace);
 
-  StmtResult TryBlock(ParseCompoundStatement(
-      /*isStmtExpr=*/false, Scope::DeclScope | Scope::TryScope |
-                                Scope::CompoundStmtScope |
-                                (FnTry ? Scope::FnTryCatchScope : 0)));
+  StmtResult TryBlock(ParseCompoundStatement(/*isStmtExpr=*/false,
+                      Scope::DeclScope | Scope::TryScope |
+                        (FnTry ? Scope::FnTryCatchScope : 0)));
   if (TryBlock.isInvalid())
     return TryBlock;
 
@@ -2181,7 +2175,7 @@ StmtResult Parser::ParseCXXCatchBlock(bool FnCatch) {
     if (ParseCXXTypeSpecifierSeq(DS))
       return StmtError();
 
-    Declarator ExDecl(DS, DeclaratorContext::CXXCatchContext);
+    Declarator ExDecl(DS, Declarator::CXXCatchContext);
     ParseDeclarator(ExDecl);
     ExceptionDecl = Actions.ActOnExceptionDeclarator(getCurScope(), ExDecl);
   } else

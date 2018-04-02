@@ -81,8 +81,6 @@ CXTranslationUnit cxtu::MakeCXTranslationUnit(CIndexer *CIdx,
   D->Diagnostics = nullptr;
   D->OverridenCursorsPool = createOverridenCXCursorsPool();
   D->CommentToXML = nullptr;
-  D->ParsingOptions = 0;
-  D->Arguments = {};
   return D;
 }
 
@@ -785,16 +783,6 @@ bool CursorVisitor::VisitDeclaratorDecl(DeclaratorDecl *DD) {
   return false;
 }
 
-static bool HasTrailingReturnType(FunctionDecl *ND) {
-  const QualType Ty = ND->getType();
-  if (const FunctionType *AFT = Ty->getAs<FunctionType>()) {
-    if (const FunctionProtoType *FT = dyn_cast<FunctionProtoType>(AFT))
-      return FT->hasTrailingReturn();
-  }
-
-  return false;
-}
-
 /// \brief Compare two base or member initializers based on their source order.
 static int CompareCXXCtorInitializers(CXXCtorInitializer *const *X,
                                       CXXCtorInitializer *const *Y) {
@@ -814,16 +802,14 @@ bool CursorVisitor::VisitFunctionDecl(FunctionDecl *ND) {
     // written. This requires a bit of work.
     TypeLoc TL = TSInfo->getTypeLoc().IgnoreParens();
     FunctionTypeLoc FTL = TL.getAs<FunctionTypeLoc>();
-    const bool HasTrailingRT = HasTrailingReturnType(ND);
     
     // If we have a function declared directly (without the use of a typedef),
     // visit just the return type. Otherwise, just visit the function's type
     // now.
-    if ((FTL && !isa<CXXConversionDecl>(ND) && !HasTrailingRT &&
-         Visit(FTL.getReturnLoc())) ||
+    if ((FTL && !isa<CXXConversionDecl>(ND) && Visit(FTL.getReturnLoc())) ||
         (!FTL && Visit(TL)))
       return true;
-
+    
     // Visit the nested-name-specifier, if present.
     if (NestedNameSpecifierLoc QualifierLoc = ND->getQualifierLoc())
       if (VisitNestedNameSpecifierLoc(QualifierLoc))
@@ -839,11 +825,7 @@ bool CursorVisitor::VisitFunctionDecl(FunctionDecl *ND) {
     // Visit the function parameters, if we have a function type.
     if (FTL && VisitFunctionTypeLoc(FTL, true))
       return true;
-
-    // Visit the function's trailing return type.
-    if (FTL && HasTrailingRT && Visit(FTL.getReturnLoc()))
-      return true;
-
+    
     // FIXME: Attributes?
   }
   
@@ -895,9 +877,6 @@ bool CursorVisitor::VisitFieldDecl(FieldDecl *D) {
   if (Expr *BitWidth = D->getBitWidth())
     return Visit(MakeCXCursor(BitWidth, StmtParent, TU, RegionOfInterest));
 
-  if (Expr *Init = D->getInClassInitializer())
-    return Visit(MakeCXCursor(Init, StmtParent, TU, RegionOfInterest));
-
   return false;
 }
 
@@ -928,8 +907,7 @@ bool CursorVisitor::VisitFunctionTemplateDecl(FunctionTemplateDecl *D) {
   if (VisitTemplateParameters(D->getTemplateParameters()))
     return true;
   
-  auto* FD = D->getTemplatedDecl();
-  return VisitAttributes(FD) || VisitFunctionDecl(FD);
+  return VisitFunctionDecl(D->getTemplatedDecl());
 }
 
 bool CursorVisitor::VisitClassTemplateDecl(ClassTemplateDecl *D) {
@@ -938,8 +916,7 @@ bool CursorVisitor::VisitClassTemplateDecl(ClassTemplateDecl *D) {
   if (VisitTemplateParameters(D->getTemplateParameters()))
     return true;
   
-  auto* CD = D->getTemplatedDecl();
-  return VisitAttributes(CD) || VisitCXXRecordDecl(CD);
+  return VisitCXXRecordDecl(D->getTemplatedDecl());
 }
 
 bool CursorVisitor::VisitTemplateTemplateParmDecl(TemplateTemplateParmDecl *D) {
@@ -1043,9 +1020,8 @@ bool CursorVisitor::VisitObjCContainerDecl(ObjCContainerDecl *D) {
             [&SM](Decl *A, Decl *B) {
     SourceLocation L_A = A->getLocStart();
     SourceLocation L_B = B->getLocStart();
-    return L_A != L_B ?
-           SM.isBeforeInTranslationUnit(L_A, L_B) :
-           SM.isBeforeInTranslationUnit(A->getLocEnd(), B->getLocEnd());
+    assert(L_A.isValid() && L_B.isValid());
+    return SM.isBeforeInTranslationUnit(L_A, L_B);
   });
 
   // Now visit the decls.
@@ -1766,7 +1742,6 @@ DEFAULT_TYPELOC_IMPL(ConstantArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(IncompleteArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(VariableArray, ArrayType)
 DEFAULT_TYPELOC_IMPL(DependentSizedArray, ArrayType)
-DEFAULT_TYPELOC_IMPL(DependentAddressSpace, Type)
 DEFAULT_TYPELOC_IMPL(DependentSizedExtVector, Type)
 DEFAULT_TYPELOC_IMPL(Vector, Type)
 DEFAULT_TYPELOC_IMPL(ExtVector, VectorType)
@@ -2306,25 +2281,6 @@ void OMPClauseEnqueue::VisitOMPTaskReductionClause(
     Visitor->AddStmt(E);
   }
 }
-void OMPClauseEnqueue::VisitOMPInReductionClause(
-    const OMPInReductionClause *C) {
-  VisitOMPClauseList(C);
-  VisitOMPClauseWithPostUpdate(C);
-  for (auto *E : C->privates()) {
-    Visitor->AddStmt(E);
-  }
-  for (auto *E : C->lhs_exprs()) {
-    Visitor->AddStmt(E);
-  }
-  for (auto *E : C->rhs_exprs()) {
-    Visitor->AddStmt(E);
-  }
-  for (auto *E : C->reduction_ops()) {
-    Visitor->AddStmt(E);
-  }
-  for (auto *E : C->taskgroup_descriptors())
-    Visitor->AddStmt(E);
-}
 void OMPClauseEnqueue::VisitOMPLinearClause(const OMPLinearClause *C) {
   VisitOMPClauseList(C);
   VisitOMPClauseWithPostUpdate(C);
@@ -2782,8 +2738,6 @@ void EnqueueVisitor::VisitOMPTaskwaitDirective(const OMPTaskwaitDirective *D) {
 void EnqueueVisitor::VisitOMPTaskgroupDirective(
     const OMPTaskgroupDirective *D) {
   VisitOMPExecutableDirective(D);
-  if (const Expr *E = D->getReductionRef())
-    VisitStmt(E);
 }
 
 void EnqueueVisitor::VisitOMPFlushDirective(const OMPFlushDirective *D) {
@@ -3273,12 +3227,6 @@ unsigned clang_CXIndex_getGlobalOptions(CXIndex CIdx) {
   return 0;
 }
 
-void clang_CXIndex_setInvocationEmissionPathOption(CXIndex CIdx,
-                                                   const char *Path) {
-  if (CIdx)
-    static_cast<CIndexer *>(CIdx)->setInvocationEmissionPath(Path ? Path : "");
-}
-
 void clang_toggleCrashRecovery(unsigned isEnabled) {
   if (isEnabled)
     llvm::CrashRecoveryContext::Enable();
@@ -3455,11 +3403,6 @@ clang_parseTranslationUnit_Impl(CXIndex CIdx, const char *source_filename,
   // faster, trading for a slower (first) reparse.
   unsigned PrecompilePreambleAfterNParses =
       !PrecompilePreamble ? 0 : 2 - CreatePreambleOnFirstParse;
-
-  LibclangInvocationReporter InvocationReporter(
-      *CXXIdx, LibclangInvocationReporter::OperationKind::ParseOperation,
-      options, llvm::makeArrayRef(*Args), /*InvocationArgs=*/None,
-      unsaved_files);
   std::unique_ptr<ASTUnit> Unit(ASTUnit::LoadFromCommandLine(
       Args->data(), Args->data() + Args->size(),
       CXXIdx->getPCHContainerOperations(), Diags,
@@ -3486,14 +3429,7 @@ clang_parseTranslationUnit_Impl(CXIndex CIdx, const char *source_filename,
     return CXError_ASTReadError;
 
   *out_TU = MakeCXTranslationUnit(CXXIdx, std::move(Unit));
-  if (CXTranslationUnitImpl *TU = *out_TU) {
-    TU->ParsingOptions = options;
-    TU->Arguments.reserve(Args->size());
-    for (const char *Arg : *Args)
-      TU->Arguments.push_back(Arg);
-    return CXError_Success;
-  }
-  return CXError_Failure;
+  return *out_TU ? CXError_Success : CXError_Failure;
 }
 
 CXTranslationUnit
@@ -3547,7 +3483,6 @@ enum CXErrorCode clang_parseTranslationUnit2FullArgv(
         CIdx, source_filename, command_line_args, num_command_line_args,
         llvm::makeArrayRef(unsaved_files, num_unsaved_files), options, out_TU);
   };
-
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, ParseTranslationUnitImpl)) {
@@ -3956,7 +3891,8 @@ int clang_saveTranslationUnit(CXTranslationUnit TU, const char *FileName,
     result = clang_saveTranslationUnit_Impl(TU, FileName, options);
   };
 
-  if (!CXXUnit->getDiagnostics().hasUnrecoverableErrorOccurred()) {
+  if (!CXXUnit->getDiagnostics().hasUnrecoverableErrorOccurred() ||
+      getenv("LIBCLANG_NOTHREADS")) {
     SaveTranslationUnitImpl();
 
     if (getenv("LIBCLANG_RESOURCE_USAGE"))
@@ -4079,6 +4015,11 @@ int clang_reparseTranslationUnit(CXTranslationUnit TU,
         TU, llvm::makeArrayRef(unsaved_files, num_unsaved_files), options);
   };
 
+  if (getenv("LIBCLANG_NOTHREADS")) {
+    ReparseTranslationUnitImpl();
+    return result;
+  }
+
   llvm::CrashRecoveryContext CRC;
 
   if (!RunSafely(CRC, ReparseTranslationUnitImpl)) {
@@ -4186,27 +4127,6 @@ CXFile clang_getFile(CXTranslationUnit TU, const char *file_name) {
 
   FileManager &FMgr = CXXUnit->getFileManager();
   return const_cast<FileEntry *>(FMgr.getFile(file_name));
-}
-
-const char *clang_getFileContents(CXTranslationUnit TU, CXFile file,
-                                  size_t *size) {
-  if (isNotUsableTU(TU)) {
-    LOG_BAD_TU(TU);
-    return nullptr;
-  }
-
-  const SourceManager &SM = cxtu::getASTUnit(TU)->getSourceManager();
-  FileID fid = SM.translateFile(static_cast<FileEntry *>(file));
-  bool Invalid = true;
-  llvm::MemoryBuffer *buf = SM.getBuffer(fid, &Invalid);
-  if (Invalid) {
-    if (size)
-      *size = 0;
-    return nullptr;
-  }
-  if (size)
-    *size = buf->getBufferSize();
-  return buf->getBufferStart();
 }
 
 unsigned clang_isFileMultipleIncludeGuarded(CXTranslationUnit TU,
@@ -4692,20 +4612,6 @@ CXStringSet *clang_Cursor_getCXXManglings(CXCursor C) {
   return cxstring::createSet(Manglings);
 }
 
-CXStringSet *clang_Cursor_getObjCManglings(CXCursor C) {
-  if (clang_isInvalid(C.kind) || !clang_isDeclaration(C.kind))
-    return nullptr;
-
-  const Decl *D = getCursorDecl(C);
-  if (!(isa<ObjCInterfaceDecl>(D) || isa<ObjCImplementationDecl>(D)))
-    return nullptr;
-
-  ASTContext &Ctx = D->getASTContext();
-  index::CodegenNameGenerator CGNameGen(Ctx);
-  std::vector<std::string> Manglings = CGNameGen.getAllManglings(D);
-  return cxstring::createSet(Manglings);
-}
-
 CXString clang_getCursorDisplayName(CXCursor C) {
   if (!clang_isDeclaration(C.kind))
     return clang_getCursorSpelling(C);
@@ -4776,12 +4682,12 @@ CXString clang_getCursorDisplayName(CXCursor C) {
     // If the type was explicitly written, use that.
     if (TypeSourceInfo *TSInfo = ClassSpec->getTypeAsWritten())
       return cxstring::createDup(TSInfo->getType().getAsString(Policy));
-
+    
     SmallString<128> Str;
     llvm::raw_svector_ostream OS(Str);
     OS << *ClassSpec;
-    printTemplateArgumentList(OS, ClassSpec->getTemplateArgs().asArray(),
-                              Policy);
+    TemplateSpecializationType::PrintTemplateArgumentList(
+        OS, ClassSpec->getTemplateArgs().asArray(), Policy);
     return cxstring::createDup(OS.str());
   }
   
@@ -7376,8 +7282,7 @@ static void getCursorPlatformAvailabilityForDecl(
 
   std::sort(AvailabilityAttrs.begin(), AvailabilityAttrs.end(),
             [](AvailabilityAttr *LHS, AvailabilityAttr *RHS) {
-              return LHS->getPlatform()->getName() <
-                     RHS->getPlatform()->getName();
+              return LHS->getPlatform() > RHS->getPlatform();
             });
   ASTContext &Ctx = D->getASTContext();
   auto It = std::unique(
@@ -7477,22 +7382,6 @@ CXLanguageKind clang_getCursorLanguage(CXCursor cursor) {
     return getDeclLanguage(cxcursor::getCursorDecl(cursor));
 
   return CXLanguage_Invalid;
-}
-
-CXTLSKind clang_getCursorTLSKind(CXCursor cursor) {
-  const Decl *D = cxcursor::getCursorDecl(cursor);
-  if (const VarDecl *VD = dyn_cast<VarDecl>(D)) {
-    switch (VD->getTLSKind()) {
-    case VarDecl::TLS_None:
-      return CXTLS_None;
-    case VarDecl::TLS_Dynamic:
-      return CXTLS_Dynamic;
-    case VarDecl::TLS_Static:
-      return CXTLS_Static;
-    }
-  }
-
-  return CXTLS_None;
 }
 
  /// \brief If the given cursor is the "templated" declaration
@@ -7935,17 +7824,6 @@ unsigned clang_CXXMethod_isVirtual(CXCursor C) {
   return (Method && Method->isVirtual()) ? 1 : 0;
 }
 
-unsigned clang_CXXRecord_isAbstract(CXCursor C) {
-  if (!clang_isDeclaration(C.kind))
-    return 0;
-
-  const auto *D = cxcursor::getCursorDecl(C);
-  const auto *RD = dyn_cast_or_null<CXXRecordDecl>(D);
-  if (RD)
-    RD = RD->getDefinition();
-  return (RD && RD->isAbstract()) ? 1 : 0;
-}
-
 unsigned clang_EnumDecl_isScoped(CXCursor C) {
   if (!clang_isDeclaration(C.kind))
     return 0;
@@ -8225,7 +8103,7 @@ bool RunSafely(llvm::CrashRecoveryContext &CRC, llvm::function_ref<void()> Fn,
                unsigned Size) {
   if (!Size)
     Size = GetSafetyThreadStackSize();
-  if (Size && !getenv("LIBCLANG_NOTHREADS"))
+  if (Size)
     return CRC.RunSafelyOnThread(Fn, Size);
   return CRC.RunSafely(Fn);
 }

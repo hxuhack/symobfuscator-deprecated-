@@ -26,6 +26,18 @@ using namespace llvm;
 using namespace llvm::codeview;
 using namespace llvm::pdb;
 
+static StringRef getLeafTypeName(TypeLeafKind K) {
+  switch (K) {
+#define TYPE_RECORD(EnumName, value, name)                                     \
+  case EnumName:                                                               \
+    return #EnumName;
+#include "llvm/DebugInfo/CodeView/CodeViewTypes.def"
+  default:
+    llvm_unreachable("Unknown type leaf kind!");
+  }
+  return "";
+}
+
 static std::string formatClassOptions(uint32_t IndentLevel,
                                       ClassOptions Options) {
   std::vector<std::string> Opts;
@@ -200,7 +212,7 @@ Error MinimalTypeDumpVisitor::visitTypeBegin(CVType &Record, TypeIndex Index) {
   if (!Hashes) {
     P.formatLine("{0} | {1} [size = {2}]",
                  fmt_align(Index, AlignStyle::Right, Width),
-                 formatTypeLeafKind(Record.Type), Record.length());
+                 getLeafTypeName(Record.Type), Record.length());
   } else {
     std::string H;
     if (Index.toArrayIndex() >= HashValues.size()) {
@@ -219,7 +231,7 @@ Error MinimalTypeDumpVisitor::visitTypeBegin(CVType &Record, TypeIndex Index) {
     }
     P.formatLine("{0} | {1} [size = {2}, hash = {3}]",
                  fmt_align(Index, AlignStyle::Right, Width),
-                 formatTypeLeafKind(Record.Type), Record.length(), H);
+                 getLeafTypeName(Record.Type), Record.length(), H);
   }
   P.Indent(Width + 3);
   return Error::success();
@@ -234,7 +246,7 @@ Error MinimalTypeDumpVisitor::visitTypeEnd(CVType &Record) {
 }
 
 Error MinimalTypeDumpVisitor::visitMemberBegin(CVMemberRecord &Record) {
-  P.formatLine("- {0}", formatTypeLeafKind(Record.Kind));
+  P.formatLine("- {0}", getLeafTypeName(Record.Kind));
   return Error::success();
 }
 

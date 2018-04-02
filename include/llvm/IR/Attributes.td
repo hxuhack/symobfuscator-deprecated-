@@ -149,9 +149,6 @@ def StackProtectReq : EnumAttr<"sspreq">;
 /// Strong Stack protection.
 def StackProtectStrong : EnumAttr<"sspstrong">;
 
-/// Function was called in a scope requiring strict floating point semantics.
-def StrictFP : EnumAttr<"strictfp">;
-
 /// Hidden pointer to structure to return.
 def StructRet : EnumAttr<"sret">;
 
@@ -163,9 +160,6 @@ def SanitizeThread : EnumAttr<"sanitize_thread">;
 
 /// MemorySanitizer is on.
 def SanitizeMemory : EnumAttr<"sanitize_memory">;
-
-/// HWAddressSanitizer is on.
-def SanitizeHWAddress : EnumAttr<"sanitize_hwaddress">;
 
 /// Argument is swift error.
 def SwiftError : EnumAttr<"swifterror">;
@@ -188,7 +182,6 @@ def NoInfsFPMath : StrBoolAttr<"no-infs-fp-math">;
 def NoNansFPMath : StrBoolAttr<"no-nans-fp-math">;
 def UnsafeFPMath : StrBoolAttr<"unsafe-fp-math">;
 def NoJumpTables : StrBoolAttr<"no-jump-tables">;
-def ProfileSampleAccurate : StrBoolAttr<"profile-sample-accurate">;
 
 class CompatRule<string F> {
   // The name of the function called to check the attribute of the caller and
@@ -203,7 +196,6 @@ class CompatRule<string F> {
 def : CompatRule<"isEqual<SanitizeAddressAttr>">;
 def : CompatRule<"isEqual<SanitizeThreadAttr>">;
 def : CompatRule<"isEqual<SanitizeMemoryAttr>">;
-def : CompatRule<"isEqual<SanitizeHWAddressAttr>">;
 def : CompatRule<"isEqual<SafeStackAttr>">;
 
 class MergeRule<string F> {
@@ -221,7 +213,6 @@ def : MergeRule<"setAND<NoNansFPMathAttr>">;
 def : MergeRule<"setAND<UnsafeFPMathAttr>">;
 def : MergeRule<"setOR<NoImplicitFloatAttr>">;
 def : MergeRule<"setOR<NoJumpTablesAttr>">;
-def : MergeRule<"setOR<ProfileSampleAccurateAttr>">;
 def : MergeRule<"adjustCallerSSPLevel">;
 def : MergeRule<"adjustCallerStackProbes">;
 def : MergeRule<"adjustCallerStackProbeSize">;

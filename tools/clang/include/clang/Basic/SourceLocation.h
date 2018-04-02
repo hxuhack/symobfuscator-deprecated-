@@ -39,9 +39,10 @@ class SourceManager;
 class FileID {
   /// \brief A mostly-opaque identifier, where 0 is "invalid", >0 is 
   /// this module, and <-1 is something loaded from another module.
-  int ID = 0;
-
+  int ID;
 public:
+  FileID() : ID(0) {}
+
   bool isValid() const { return ID != 0; }
   bool isInvalid() const { return ID == 0; }
 
@@ -85,15 +86,17 @@ private:
 ///
 /// It is important that this type remains small. It is currently 32 bits wide.
 class SourceLocation {
-  unsigned ID = 0;
+  unsigned ID;
   friend class SourceManager;
   friend class ASTReader;
   friend class ASTWriter;
   enum : unsigned {
     MacroIDBit = 1U << 31
   };
-
 public:
+
+  SourceLocation() : ID(0) {}
+
   bool isFileID() const  { return (ID & MacroIDBit) == 0; }
   bool isMacroID() const { return (ID & MacroIDBit) != 0; }
 
@@ -169,11 +172,6 @@ public:
     return getFromRawEncoding((unsigned)(uintptr_t)Encoding);
   }
 
-  static bool isPairOfFileLocations(SourceLocation Start, SourceLocation End) {
-    return Start.isValid() && Start.isFileID() && End.isValid() &&
-           End.isFileID();
-  }
-
   void print(raw_ostream &OS, const SourceManager &SM) const;
   std::string printToString(const SourceManager &SM) const;
   void dump(const SourceManager &SM) const;
@@ -195,9 +193,8 @@ inline bool operator<(const SourceLocation &LHS, const SourceLocation &RHS) {
 class SourceRange {
   SourceLocation B;
   SourceLocation E;
-
 public:
-  SourceRange() = default;
+  SourceRange(): B(SourceLocation()), E(SourceLocation()) {}
   SourceRange(SourceLocation loc) : B(loc), E(loc) {}
   SourceRange(SourceLocation begin, SourceLocation end) : B(begin), E(end) {}
 
@@ -228,10 +225,9 @@ public:
 /// range.
 class CharSourceRange { 
   SourceRange Range;
-  bool IsTokenRange = false;
-
+  bool IsTokenRange;
 public:
-  CharSourceRange() = default;
+  CharSourceRange() : IsTokenRange(false) {}
   CharSourceRange(SourceRange R, bool ITR) : Range(R), IsTokenRange(ITR) {}
 
   static CharSourceRange getTokenRange(SourceRange R) {
@@ -329,11 +325,10 @@ class FileEntry;
 ///
 /// This is useful for argument passing to functions that expect both objects.
 class FullSourceLoc : public SourceLocation {
-  const SourceManager *SrcMgr = nullptr;
-
+  const SourceManager *SrcMgr;
 public:
   /// \brief Creates a FullSourceLoc where isValid() returns \c false.
-  FullSourceLoc() = default;
+  explicit FullSourceLoc() : SrcMgr(nullptr) {}
 
   explicit FullSourceLoc(SourceLocation Loc, const SourceManager &SM)
     : SourceLocation(Loc), SrcMgr(&SM) {}
@@ -460,7 +455,8 @@ namespace llvm {
 
   // Teach SmallPtrSet how to handle SourceLocation.
   template<>
-  struct PointerLikeTypeTraits<clang::SourceLocation> {
+  class PointerLikeTypeTraits<clang::SourceLocation> {
+  public:
     static inline void *getAsVoidPointer(clang::SourceLocation L) {
       return L.getPtrEncoding();
     }

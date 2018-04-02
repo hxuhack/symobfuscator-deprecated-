@@ -1,4 +1,4 @@
-//===- PtrState.h - ARC State for a Ptr -------------------------*- C++ -*-===//
+//===--- PtrState.h - ARC State for a Ptr -------------------*- C++ -*-----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -19,16 +19,12 @@
 
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/Analysis/ObjCARCInstKind.h"
-#include "llvm/Support/Compiler.h"
+#include "llvm/IR/Instruction.h"
+#include "llvm/IR/Value.h"
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/raw_ostream.h"
 
 namespace llvm {
-
-class BasicBlock;
-class Instruction;
-class MDNode;
-class raw_ostream;
-class Value;
-
 namespace objcarc {
 
 class ARCMDKindCache;
@@ -67,14 +63,14 @@ struct RRInfo {
   /// of any intervening side effects.
   ///
   /// KnownSafe is true when either of these conditions is satisfied.
-  bool KnownSafe = false;
+  bool KnownSafe;
 
   /// True of the objc_release calls are all marked with the "tail" keyword.
-  bool IsTailCallRelease = false;
+  bool IsTailCallRelease;
 
   /// If the Calls are objc_release calls and they all have a
   /// clang.imprecise_release tag, this is the metadata tag.
-  MDNode *ReleaseMetadata = nullptr;
+  MDNode *ReleaseMetadata;
 
   /// For a top-down sequence, the set of objc_retains or
   /// objc_retainBlocks. For bottom-up, the set of objc_releases.
@@ -86,9 +82,11 @@ struct RRInfo {
 
   /// If this is true, we cannot perform code motion but can still remove
   /// retain/release pairs.
-  bool CFGHazardAfflicted = false;
+  bool CFGHazardAfflicted;
 
-  RRInfo() = default;
+  RRInfo()
+      : KnownSafe(false), IsTailCallRelease(false), ReleaseMetadata(nullptr),
+        CFGHazardAfflicted(false) {}
 
   void clear();
 
@@ -102,11 +100,11 @@ struct RRInfo {
 class PtrState {
 protected:
   /// True if the reference count is known to be incremented.
-  bool KnownPositiveRefCount = false;
+  bool KnownPositiveRefCount;
 
   /// True if we've seen an opportunity for partial RR elimination, such as
   /// pushing calls into a CFG triangle or into one side of a CFG diamond.
-  bool Partial = false;
+  bool Partial;
 
   /// The current position in the sequence.
   unsigned char Seq : 8;
@@ -114,7 +112,7 @@ protected:
   /// Unidirectional information about the current sequence.
   RRInfo RRI;
 
-  PtrState() : Seq(S_None) {}
+  PtrState() : KnownPositiveRefCount(false), Partial(false), Seq(S_None) {}
 
 public:
   bool IsKnownSafe() const { return RRI.KnownSafe; }
@@ -167,7 +165,7 @@ public:
 };
 
 struct BottomUpPtrState : PtrState {
-  BottomUpPtrState() = default;
+  BottomUpPtrState() : PtrState() {}
 
   /// (Re-)Initialize this bottom up pointer returning true if we detected a
   /// pointer with nested releases.
@@ -188,7 +186,7 @@ struct BottomUpPtrState : PtrState {
 };
 
 struct TopDownPtrState : PtrState {
-  TopDownPtrState() = default;
+  TopDownPtrState() : PtrState() {}
 
   /// (Re-)Initialize this bottom up pointer returning true if we detected a
   /// pointer with nested releases.
@@ -207,7 +205,6 @@ struct TopDownPtrState : PtrState {
 };
 
 } // end namespace objcarc
-
 } // end namespace llvm
 
-#endif // LLVM_LIB_TRANSFORMS_OBJCARC_PTRSTATE_H
+#endif

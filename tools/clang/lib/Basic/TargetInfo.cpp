@@ -18,11 +18,10 @@
 #include "llvm/ADT/APFloat.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/TargetParser.h"
 #include <cstdlib>
 using namespace clang;
 
-static const LangASMap DefaultAddrSpaceMap = {0};
+static const LangAS::Map DefaultAddrSpaceMap = { 0 };
 
 // TargetInfo Constructor.
 TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
@@ -30,7 +29,6 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // SPARC.  These should be overridden by concrete targets as needed.
   BigEndian = !T.isLittleEndian();
   TLSSupported = true;
-  VLASupported = true;
   NoAsmVariants = false;
   HasFloat128 = false;
   PointerWidth = PointerAlign = 32;
@@ -44,7 +42,7 @@ TargetInfo::TargetInfo(const llvm::Triple &T) : TargetOpts(), Triple(T) {
   // From the glibc documentation, on GNU systems, malloc guarantees 16-byte
   // alignment on 64-bit systems and 8-byte alignment on 32-bit systems. See
   // https://www.gnu.org/software/libc/manual/html_node/Malloc-Examples.html
-  if (T.isGNUEnvironment() || T.isWindowsMSVCEnvironment())
+  if (T.isGNUEnvironment())
     NewAlign = Triple.isArch64Bit() ? 128 : Triple.isArch32Bit() ? 64 : 0;
   else
     NewAlign = 0; // Infer from basic type alignment.
@@ -291,15 +289,8 @@ bool TargetInfo::isTypeSigned(IntType T) {
 void TargetInfo::adjust(LangOptions &Opts) {
   if (Opts.NoBitFieldTypeAlign)
     UseBitFieldTypeAlignment = false;
-
-  switch (Opts.WCharSize) {
-  default: llvm_unreachable("invalid wchar_t width");
-  case 0: break;
-  case 1: WCharType = Opts.WCharIsSigned ? SignedChar : UnsignedChar; break;
-  case 2: WCharType = Opts.WCharIsSigned ? SignedShort : UnsignedShort; break;
-  case 4: WCharType = Opts.WCharIsSigned ? SignedInt : UnsignedInt; break;
-  }
-
+  if (Opts.ShortWChar)
+    WCharType = UnsignedShort;
   if (Opts.AlignDouble) {
     DoubleAlign = LongLongAlign = 64;
     LongDoubleAlign = 64;
@@ -354,20 +345,6 @@ bool TargetInfo::initFeatureMap(
     setFeatureEnabled(Features, Name.substr(1), Enabled);
   }
   return true;
-}
-
-LangAS TargetInfo::getOpenCLTypeAddrSpace(OpenCLTypeKind TK) const {
-  switch (TK) {
-  case OCLTK_Image:
-  case OCLTK_Pipe:
-    return LangAS::opencl_global;
-
-  case OCLTK_Sampler:
-    return LangAS::opencl_constant;
-
-  default:
-    return LangAS::Default;
-  }
 }
 
 //===----------------------------------------------------------------------===//

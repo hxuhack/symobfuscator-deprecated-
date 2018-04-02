@@ -16,7 +16,7 @@
 #ifndef LLVM_LIB_TARGET_WEBASSEMBLY_WEBASSEMBLYFRAMELOWERING_H
 #define LLVM_LIB_TARGET_WEBASSEMBLY_WEBASSEMBLYFRAMELOWERING_H
 
-#include "llvm/CodeGen/TargetFrameLowering.h"
+#include "llvm/Target/TargetFrameLowering.h"
 
 namespace llvm {
 class MachineFrameInfo;

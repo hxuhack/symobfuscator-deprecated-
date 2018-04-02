@@ -3,11 +3,11 @@
 
 define void @foo() {
 ; CHECK-LABEL: foo:
-; CHECK:       # %bb.0:
-; CHECK-NEXT:    # implicit-def: %rax
+; CHECK:       # BB#0:
+; CHECK-NEXT:    # implicit-def: %RAX
 ; CHECK-NEXT:    jmpq *%rax
 ; CHECK-NEXT:  .LBB0_1:
-; CHECK-NEXT:    # implicit-def: %rax
+; CHECK-NEXT:    # implicit-def: %RAX
 ; CHECK-NEXT:    xorps %xmm0, %xmm0
 ; CHECK-NEXT:    pcmpeqd %xmm1, %xmm1
 ; CHECK-NEXT:    movdqu %xmm1, (%rax)

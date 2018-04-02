@@ -1,7 +1,6 @@
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,SI,FUNC %s
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,VI,FUNC %s
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=amdgcn -mcpu=gfx900 -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,GFX9,FUNC %s
-; RUN: llc -amdgpu-scalarize-global-loads=false -march=r600 -mcpu=cypress -verify-machineinstrs < %s | FileCheck -check-prefixes=EG,FUNC %s
+; RUN:  llc -amdgpu-scalarize-global-loads=false  -march=amdgcn -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,SI,FUNC %s
+; RUN:  llc -amdgpu-scalarize-global-loads=false  -march=amdgcn -mcpu=tonga -verify-machineinstrs < %s | FileCheck -check-prefixes=GCN,VI,FUNC %s
+; RUN:  llc -amdgpu-scalarize-global-loads=false  -march=r600 -mcpu=cypress -verify-machineinstrs < %s | FileCheck -check-prefixes=EG,FUNC %s
 
 ; FUNC-LABEL: {{^}}s_uaddo_i64_zext:
 ; GCN: s_add_u32
@@ -23,10 +22,7 @@ define amdgpu_kernel void @s_uaddo_i64_zext(i64 addrspace(1)* %out, i64 %a, i64 
 ; FIXME: Could do scalar
 
 ; FUNC-LABEL: {{^}}s_uaddo_i32:
-; SI: v_add_i32_e32 v{{[0-9]+}}, vcc, s{{[0-9]+}}, v{{[0-9]+}}
-; VI: v_add_u32_e32 v{{[0-9]+}}, vcc, s{{[0-9]+}}, v{{[0-9]+}}
-; GFX9: v_add_co_u32_e32 v{{[0-9]+}}, vcc, s{{[0-9]+}}, v{{[0-9]+}}
-
+; GCN: v_add_i32_e32 v{{[0-9]+}}, vcc, s{{[0-9]+}}, v{{[0-9]+}}
 ; GCN: v_cndmask_b32_e64 v{{[0-9]+}}, 0, 1, vcc
 
 ; EG: ADDC_UINT
@@ -41,10 +37,7 @@ define amdgpu_kernel void @s_uaddo_i32(i32 addrspace(1)* %out, i1 addrspace(1)* 
 }
 
 ; FUNC-LABEL: {{^}}v_uaddo_i32:
-; SI: v_add_i32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; VI: v_add_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; GFX9: v_add_co_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-
+; GCN: v_add_i32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
 ; GCN: v_cndmask_b32_e64 v{{[0-9]+}}, 0, 1, vcc
 
 ; EG: ADDC_UINT
@@ -65,10 +58,7 @@ define amdgpu_kernel void @v_uaddo_i32(i32 addrspace(1)* %out, i1 addrspace(1)* 
 }
 
 ; FUNC-LABEL: {{^}}v_uaddo_i32_novcc:
-; SI: v_add_i32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; VI: v_add_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; GFX9: v_add_co_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-
+; GCN: v_add_i32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
 ; GCN: v_cndmask_b32_e64 v{{[0-9]+}}, 0, 1, vcc
 
 ; EG: ADDC_UINT
@@ -105,14 +95,8 @@ define amdgpu_kernel void @s_uaddo_i64(i64 addrspace(1)* %out, i1 addrspace(1)* 
 }
 
 ; FUNC-LABEL: {{^}}v_uaddo_i64:
-; SI: v_add_i32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; SI: v_addc_u32_e32 v{{[0-9]+}}, vcc,
-
-; VI: v_add_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; VI: v_addc_u32_e32 v{{[0-9]+}}, vcc,
-
-; GFX9: v_add_co_u32_e32 v{{[0-9]+}}, vcc, v{{[0-9]+}}, v{{[0-9]+}}
-; GFX9: v_addc_co_u32_e32 v{{[0-9]+}}, vcc,
+; GCN: v_add_i32
+; GCN: v_addc_u32
 
 ; EG: ADDC_UINT
 ; EG: ADD_INT
@@ -134,9 +118,6 @@ define amdgpu_kernel void @v_uaddo_i64(i64 addrspace(1)* %out, i1 addrspace(1)* 
 ; FUNC-LABEL: {{^}}v_uaddo_i16:
 ; VI: v_add_u16_e32
 ; VI: v_cmp_lt_u16_e32
-
-; GFX9: v_add_u16_e32
-; GFX9: v_cmp_lt_u16_e32
 define amdgpu_kernel void @v_uaddo_i16(i16 addrspace(1)* %out, i1 addrspace(1)* %carryout, i16 addrspace(1)* %a.ptr, i16 addrspace(1)* %b.ptr) #0 {
   %tid = call i32 @llvm.amdgcn.workitem.id.x()
   %tid.ext = sext i32 %tid to i64

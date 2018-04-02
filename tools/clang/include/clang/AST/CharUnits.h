@@ -40,14 +40,14 @@ namespace clang {
       typedef int64_t QuantityType;
 
     private:
-      QuantityType Quantity = 0;
+      QuantityType Quantity;
 
       explicit CharUnits(QuantityType C) : Quantity(C) {}
 
     public:
 
       /// CharUnits - A default constructor.
-      CharUnits() = default;
+      CharUnits() : Quantity(0) {}
 
       /// Zero - Construct a CharUnits quantity of zero.
       static CharUnits Zero() {

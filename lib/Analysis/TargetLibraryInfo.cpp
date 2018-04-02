@@ -50,9 +50,9 @@ static bool hasSinCosPiStret(const Triple &T) {
   return true;
 }
 
-/// Initialize the set of available library functions based on the specified
-/// target triple. This should be carefully written so that a missing target
-/// triple gets a sane set of defaults.
+/// initialize - Initialize the set of available library functions based on the
+/// specified target triple.  This should be carefully written so that a missing
+/// target triple gets a sane set of defaults.
 static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
                        ArrayRef<StringRef> StandardNames) {
   // Verify that the StandardNames array is in alphabetical order.
@@ -182,9 +182,6 @@ static void initialize(TargetLibraryInfoImpl &TLI, const Triple &T,
     TLI.setUnavailable(LibFunc_atanh);
     TLI.setUnavailable(LibFunc_atanhf);
     TLI.setUnavailable(LibFunc_atanhl);
-    TLI.setUnavailable(LibFunc_cabs);
-    TLI.setUnavailable(LibFunc_cabsf);
-    TLI.setUnavailable(LibFunc_cabsl);
     TLI.setUnavailable(LibFunc_cbrt);
     TLI.setUnavailable(LibFunc_cbrtf);
     TLI.setUnavailable(LibFunc_cbrtl);
@@ -608,7 +605,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType()->isPointerTy() &&
             FTy.getParamType(0) == FTy.getReturnType() &&
             FTy.getParamType(1) == FTy.getReturnType() &&
-            IsSizeTTy(FTy.getParamType(2)));
+            FTy.getParamType(2)->isIntegerTy());
 
   case LibFunc_strcpy_chk:
   case LibFunc_stpcpy_chk:
@@ -633,7 +630,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType() == FTy.getParamType(0) &&
             FTy.getParamType(0) == FTy.getParamType(1) &&
             FTy.getParamType(0) == PCharTy &&
-            IsSizeTTy(FTy.getParamType(2)));
+            FTy.getParamType(2)->isIntegerTy());
 
   case LibFunc_strxfrm:
     return (NumParams == 3 && FTy.getParamType(0)->isPointerTy() &&
@@ -648,7 +645,7 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 3 && FTy.getReturnType()->isIntegerTy(32) &&
             FTy.getParamType(0)->isPointerTy() &&
             FTy.getParamType(0) == FTy.getParamType(1) &&
-            IsSizeTTy(FTy.getParamType(2)));
+            FTy.getParamType(2)->isIntegerTy());
 
   case LibFunc_strspn:
   case LibFunc_strcspn:
@@ -1270,25 +1267,6 @@ bool TargetLibraryInfoImpl::isValidProtoForLibFunc(const FunctionType &FTy,
     return (NumParams == 1 && FTy.getParamType(0)->isPointerTy() &&
             FTy.getReturnType()->isIntegerTy());
 
-  case LibFunc_cabs:
-  case LibFunc_cabsf:
-  case LibFunc_cabsl: {
-    Type* RetTy = FTy.getReturnType();
-    if (!RetTy->isFloatingPointTy())
-      return false;
-
-    // NOTE: These prototypes are target specific and currently support
-    // "complex" passed as an array or discrete real & imaginary parameters.
-    // Add other calling conventions to enable libcall optimizations.
-    if (NumParams == 1)
-      return (FTy.getParamType(0)->isArrayTy() &&
-              FTy.getParamType(0)->getArrayNumElements() == 2 &&
-              FTy.getParamType(0)->getArrayElementType() == RetTy);
-    else if (NumParams == 2)
-      return (FTy.getParamType(0) == RetTy && FTy.getParamType(1) == RetTy);
-    else
-      return false;
-  }
   case LibFunc::NumLibFuncs:
     break;
   }
@@ -1541,11 +1519,20 @@ TargetLibraryInfoImpl &TargetLibraryAnalysis::lookupInfoImpl(const Triple &T) {
   return *Impl;
 }
 
+unsigned TargetLibraryInfoImpl::getTargetWCharSize(const Triple &T) {
+  // See also clang/lib/Basic/Targets.cpp.
+  if (T.isPS4() || T.isOSWindows() || T.isArch16Bit())
+    return 2;
+  if (T.getArch() == Triple::xcore)
+    return 1;
+  return 4;
+}
+
 unsigned TargetLibraryInfoImpl::getWCharSize(const Module &M) const {
   if (auto *ShortWChar = cast_or_null<ConstantAsMetadata>(
       M.getModuleFlag("wchar_size")))
     return cast<ConstantInt>(ShortWChar->getValue())->getZExtValue();
-  return 0;
+  return getTargetWCharSize(Triple(M.getTargetTriple()));
 }
 
 TargetLibraryInfoWrapperPass::TargetLibraryInfoWrapperPass()

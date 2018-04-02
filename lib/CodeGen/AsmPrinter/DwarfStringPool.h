@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/DwarfStringPool.h - Dwarf Debug Framework ---*- C++ -*-===//
+//===-- llvm/CodeGen/DwarfStringPool.h - Dwarf Debug Framework -*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,28 +11,29 @@
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DWARFSTRINGPOOL_H
 
 #include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/CodeGen/DwarfStringPoolEntry.h"
 #include "llvm/Support/Allocator.h"
+#include <utility>
 
 namespace llvm {
 
 class AsmPrinter;
+class MCSymbol;
 class MCSection;
+class StringRef;
 
 // Collection of strings for this unit and assorted symbols.
 // A String->Symbol mapping of strings used by indirect
 // references.
 class DwarfStringPool {
-  using EntryTy = DwarfStringPoolEntry;
-
+  typedef DwarfStringPoolEntry EntryTy;
   StringMap<EntryTy, BumpPtrAllocator &> Pool;
   StringRef Prefix;
   unsigned NumBytes = 0;
   bool ShouldCreateSymbols;
 
 public:
-  using EntryRef = DwarfStringPoolEntryRef;
+  typedef DwarfStringPoolEntryRef EntryRef;
 
   DwarfStringPool(BumpPtrAllocator &A, AsmPrinter &Asm, StringRef Prefix);
 
@@ -44,7 +45,5 @@ public:
   /// Get a reference to an entry in the string pool.
   EntryRef getEntry(AsmPrinter &Asm, StringRef Str);
 };
-
-} // end namespace llvm
-
-#endif // LLVM_LIB_CODEGEN_ASMPRINTER_DWARFSTRINGPOOL_H
+}
+#endif

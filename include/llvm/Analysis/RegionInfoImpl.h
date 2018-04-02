@@ -178,29 +178,6 @@ typename RegionBase<Tr>::BlockT *RegionBase<Tr>::getEnteringBlock() const {
 }
 
 template <class Tr>
-bool RegionBase<Tr>::getExitingBlocks(
-    SmallVectorImpl<BlockT *> &Exitings) const {
-  bool CoverAll = true;
-
-  if (!exit)
-    return CoverAll;
-
-  for (PredIterTy PI = InvBlockTraits::child_begin(exit),
-                  PE = InvBlockTraits::child_end(exit);
-       PI != PE; ++PI) {
-    BlockT *Pred = *PI;
-    if (contains(Pred)) {
-      Exitings.push_back(Pred);
-      continue;
-    }
-
-    CoverAll = false;
-  }
-
-  return CoverAll;
-}
-
-template <class Tr>
 typename RegionBase<Tr>::BlockT *RegionBase<Tr>::getExitingBlock() const {
   BlockT *exit = getExit();
   BlockT *exitingBlock = nullptr;
@@ -254,23 +231,23 @@ std::string RegionBase<Tr>::getNameStr() const {
 template <class Tr>
 void RegionBase<Tr>::verifyBBInRegion(BlockT *BB) const {
   if (!contains(BB))
-    report_fatal_error("Broken region found: enumerated BB not in region!");
+    llvm_unreachable("Broken region found: enumerated BB not in region!");
 
   BlockT *entry = getEntry(), *exit = getExit();
 
   for (BlockT *Succ :
        make_range(BlockTraits::child_begin(BB), BlockTraits::child_end(BB))) {
     if (!contains(Succ) && exit != Succ)
-      report_fatal_error("Broken region found: edges leaving the region must go "
-                         "to the exit node!");
+      llvm_unreachable("Broken region found: edges leaving the region must go "
+                       "to the exit node!");
   }
 
   if (entry != BB) {
     for (BlockT *Pred : make_range(InvBlockTraits::child_begin(BB),
                                    InvBlockTraits::child_end(BB))) {
       if (!contains(Pred))
-        report_fatal_error("Broken region found: edges entering the region must "
-                           "go to the entry node!");
+        llvm_unreachable("Broken region found: edges entering the region must "
+                         "go to the entry node!");
     }
   }
 }
@@ -557,7 +534,7 @@ void RegionInfoBase<Tr>::verifyBBMap(const RegionT *R) const {
     } else {
       BlockT *BB = Element->template getNodeAs<BlockT>();
       if (getRegionFor(BB) != R)
-        report_fatal_error("BB map does not match region nesting");
+        llvm_unreachable("BB map does not match region nesting");
     }
   }
 }

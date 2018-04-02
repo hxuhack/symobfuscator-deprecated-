@@ -205,14 +205,16 @@ static MVT getZeroExtensionResultType(const MCInst *MI) {
 }
 
 /// Wraps the destination register name with AVX512 mask/maskz filtering.
-static void printMasking(raw_ostream &OS, const MCInst *MI,
-                         const char *(*getRegName)(unsigned)) {
+static std::string getMaskName(const MCInst *MI, const char *DestName,
+                               const char *(*getRegName)(unsigned)) {
+  std::string OpMaskName(DestName);
+
   bool MaskWithZero = false;
   const char *MaskRegName = nullptr;
 
   switch (MI->getOpcode()) {
   default:
-    return;
+    return OpMaskName;
   CASE_MASKZ_MOVDUP(MOVDDUP, m)
   CASE_MASKZ_MOVDUP(MOVDDUP, r)
   CASE_MASKZ_MOVDUP(MOVSHDUP, m)
@@ -291,8 +293,6 @@ static void printMasking(raw_ostream &OS, const MCInst *MI,
   CASE_MASKZ_INS_COMMON(BROADCASTI32X4, , rm)
   CASE_MASKZ_INS_COMMON(BROADCASTF32X8, , rm)
   CASE_MASKZ_INS_COMMON(BROADCASTI32X8, , rm)
-  CASE_MASKZ_INS_COMMON(BROADCASTI32X2, Z128, r)
-  CASE_MASKZ_INS_COMMON(BROADCASTI32X2, Z128, m)
   CASE_MASKZ_INS_COMMON(BROADCASTF32X2, Z256, r)
   CASE_MASKZ_INS_COMMON(BROADCASTI32X2, Z256, r)
   CASE_MASKZ_INS_COMMON(BROADCASTF32X2, Z256, m)
@@ -382,8 +382,6 @@ static void printMasking(raw_ostream &OS, const MCInst *MI,
   CASE_MASK_INS_COMMON(BROADCASTI32X4, , rm)
   CASE_MASK_INS_COMMON(BROADCASTF32X8, , rm)
   CASE_MASK_INS_COMMON(BROADCASTI32X8, , rm)
-  CASE_MASK_INS_COMMON(BROADCASTI32X2, Z128, r)
-  CASE_MASK_INS_COMMON(BROADCASTI32X2, Z128, m)
   CASE_MASK_INS_COMMON(BROADCASTF32X2, Z256, r)
   CASE_MASK_INS_COMMON(BROADCASTI32X2, Z256, r)
   CASE_MASK_INS_COMMON(BROADCASTF32X2, Z256, m)
@@ -397,11 +395,15 @@ static void printMasking(raw_ostream &OS, const MCInst *MI,
   }
 
   // MASK: zmmX {%kY}
-  OS << " {%" << MaskRegName << "}";
+  OpMaskName += " {%";
+  OpMaskName += MaskRegName;
+  OpMaskName += "}";
 
   // MASKZ: zmmX {%kY} {z}
   if (MaskWithZero)
-    OS << " {z}";
+    OpMaskName += " {z}";
+
+  return OpMaskName;
 }
 
 //===----------------------------------------------------------------------===//
@@ -583,12 +585,12 @@ bool llvm::EmitAnyX86InstComments(const MCInst *MI, raw_ostream &OS,
   case X86::VPSLLDQYri:
   case X86::VPSLLDQZ128rr:
   case X86::VPSLLDQZ256rr:
-  case X86::VPSLLDQZrr:
+  case X86::VPSLLDQZ512rr:
     Src1Name = getRegName(MI->getOperand(1).getReg());
     LLVM_FALLTHROUGH;
   case X86::VPSLLDQZ128rm:
   case X86::VPSLLDQZ256rm:
-  case X86::VPSLLDQZrm:
+  case X86::VPSLLDQZ512rm:
     DestName = getRegName(MI->getOperand(0).getReg());
     if (MI->getOperand(NumOperands - 1).isImm())
       DecodePSLLDQMask(getRegOperandVectorVT(MI, MVT::i8, 0),
@@ -601,12 +603,12 @@ bool llvm::EmitAnyX86InstComments(const MCInst *MI, raw_ostream &OS,
   case X86::VPSRLDQYri:
   case X86::VPSRLDQZ128rr:
   case X86::VPSRLDQZ256rr:
-  case X86::VPSRLDQZrr:
+  case X86::VPSRLDQZ512rr:
     Src1Name = getRegName(MI->getOperand(1).getReg());
     LLVM_FALLTHROUGH;
   case X86::VPSRLDQZ128rm:
   case X86::VPSRLDQZ256rm:
-  case X86::VPSRLDQZrm:
+  case X86::VPSRLDQZ512rm:
     DestName = getRegName(MI->getOperand(0).getReg());
     if (MI->getOperand(NumOperands - 1).isImm())
       DecodePSRLDQMask(getRegOperandVectorVT(MI, MVT::i8, 0),
@@ -1088,13 +1090,6 @@ bool llvm::EmitAnyX86InstComments(const MCInst *MI, raw_ostream &OS,
     DecodeSubVectorBroadcast(MVT::v16f32, MVT::v8f32, ShuffleMask);
     DestName = getRegName(MI->getOperand(0).getReg());
     break;
-  CASE_AVX512_INS_COMMON(BROADCASTI32X2, Z128, r)
-    Src1Name = getRegName(MI->getOperand(NumOperands - 1).getReg());
-    LLVM_FALLTHROUGH;
-  CASE_AVX512_INS_COMMON(BROADCASTI32X2, Z128, m)
-    DecodeSubVectorBroadcast(MVT::v4f32, MVT::v2f32, ShuffleMask);
-    DestName = getRegName(MI->getOperand(0).getReg());
-    break;
   CASE_AVX512_INS_COMMON(BROADCASTF32X2, Z256, r)
   CASE_AVX512_INS_COMMON(BROADCASTI32X2, Z256, r)
     Src1Name = getRegName(MI->getOperand(NumOperands - 1).getReg());
@@ -1154,13 +1149,7 @@ bool llvm::EmitAnyX86InstComments(const MCInst *MI, raw_ostream &OS,
     return false;
 
   if (!DestName) DestName = Src1Name;
-  if (DestName) {
-    OS << DestName;
-    printMasking(OS, MI, getRegName);
-  } else
-    OS << "mem";
-
-  OS << " = ";
+  OS << (DestName ? getMaskName(MI, DestName, getRegName) : "mem") << " = ";
 
   // If the two sources are the same, canonicalize the input elements to be
   // from the first src so that we get larger element spans.

@@ -89,7 +89,7 @@ entry:
 ; CHECK: @foo6
 ; CHECK-DAG: ld
 ; CHECK-DAG: ld
-; CHECK-DAG: std
+; CHECK-DAG: stdx
 ; CHECK: stdx
 
 ; For VSX on P7, unaligned loads and stores are preferable to aligned

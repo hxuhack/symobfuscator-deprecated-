@@ -12,12 +12,14 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Support/Format.h"
 #include "llvm/Support/ManagedStatic.h"
 #include "llvm/Support/MemoryBuffer.h"
 #include "llvm/Support/PrettyStackTrace.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/SourceMgr.h"
 #include "llvm/Support/raw_ostream.h"
+#include <system_error>
 using namespace llvm;
 
 static cl::list<std::string>
@@ -218,6 +220,7 @@ int main(int argc, char **argv) {
   if (InputFilenames.size() == 0)
     InputFilenames.push_back("-");
 
-  llvm::for_each(InputFilenames, parseMCMarkup);
+  std::for_each(InputFilenames.begin(), InputFilenames.end(),
+                parseMCMarkup);
   return 0;
 }

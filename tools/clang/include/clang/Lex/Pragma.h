@@ -1,4 +1,4 @@
-//===- Pragma.h - Pragma registration and handling --------------*- C++ -*-===//
+//===--- Pragma.h - Pragma registration and handling ------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,13 +17,13 @@
 #include "clang/Basic/LLVM.h"
 #include "llvm/ADT/StringMap.h"
 #include "llvm/ADT/StringRef.h"
-#include <string>
+#include <cassert>
 
 namespace clang {
-
-class PragmaNamespace;
-class Preprocessor;
-class Token;
+  class Preprocessor;
+  class Token;
+  class IdentifierInfo;
+  class PragmaNamespace;
 
   /**
    * \brief Describes how the pragma was introduced, e.g., with \#pragma,
@@ -58,10 +58,9 @@ class Token;
 /// pragmas.
 class PragmaHandler {
   std::string Name;
-
 public:
-  PragmaHandler() = default;
   explicit PragmaHandler(StringRef name) : Name(name) {}
+  PragmaHandler() {}
   virtual ~PragmaHandler();
 
   StringRef getName() const { return Name; }
@@ -90,8 +89,8 @@ public:
 class PragmaNamespace : public PragmaHandler {
   /// Handlers - This is a map of the handlers in this namespace with their name
   /// as key.
-  llvm::StringMap<PragmaHandler *> Handlers;
-
+  ///
+  llvm::StringMap<PragmaHandler*> Handlers;
 public:
   explicit PragmaNamespace(StringRef Name) : PragmaHandler(Name) {}
   ~PragmaNamespace() override;
@@ -104,13 +103,16 @@ public:
                              bool IgnoreNull = true) const;
 
   /// AddPragma - Add a pragma to this namespace.
+  ///
   void AddPragma(PragmaHandler *Handler);
 
   /// RemovePragmaHandler - Remove the given handler from the
   /// namespace.
   void RemovePragmaHandler(PragmaHandler *Handler);
 
-  bool IsEmpty() const { return Handlers.empty(); }
+  bool IsEmpty() {
+    return Handlers.empty();
+  }
 
   void HandlePragma(Preprocessor &PP, PragmaIntroducerKind Introducer,
                     Token &FirstToken) override;
@@ -118,6 +120,7 @@ public:
   PragmaNamespace *getIfNamespace() override { return this; }
 };
 
-} // namespace clang
 
-#endif // LLVM_CLANG_LEX_PRAGMA_H
+}  // end namespace clang
+
+#endif

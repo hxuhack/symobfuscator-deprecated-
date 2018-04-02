@@ -1,4 +1,4 @@
-//===- HexagonMCDuplexInfo.cpp - Instruction bundle checking --------------===//
+//===----- HexagonMCDuplexInfo.cpp - Instruction bundle checking ----------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,22 +11,15 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "MCTargetDesc/HexagonBaseInfo.h"
+#include "HexagonBaseInfo.h"
 #include "MCTargetDesc/HexagonMCInstrInfo.h"
-#include "MCTargetDesc/HexagonMCTargetDesc.h"
+
 #include "llvm/ADT/SmallVector.h"
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCInst.h"
 #include "llvm/MC/MCSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include <cassert>
-#include <cstdint>
-#include <iterator>
+
 #include <map>
-#include <utility>
 
 using namespace llvm;
 using namespace Hexagon;
@@ -272,7 +265,7 @@ unsigned HexagonMCInstrInfo::getDuplexCandidateGroup(MCInst const &MCI) {
   case Hexagon::J2_jumpr:
   case Hexagon::PS_jmpret:
     // jumpr r31
-    // Actual form JMPR implicit-def %pc, implicit %r31, implicit internal %r0.
+    // Actual form JMPR %PC<imp-def>, %R31<imp-use>, %R0<imp-use,internal>.
     DstReg = MCI.getOperand(0).getReg();
     if (Hexagon::R31 == DstReg)
       return HexagonII::HSIG_L2;
@@ -305,7 +298,7 @@ unsigned HexagonMCInstrInfo::getDuplexCandidateGroup(MCInst const &MCI) {
   case Hexagon::L4_return_tnew_pt:
   case Hexagon::L4_return_fnew_pt:
     // [if ([!]p0[.new])] dealloc_return
-    SrcReg = MCI.getOperand(1).getReg();
+    SrcReg = MCI.getOperand(0).getReg();
     if (Hexagon::P0 == SrcReg) {
       return HexagonII::HSIG_L2;
     }
@@ -388,7 +381,7 @@ unsigned HexagonMCInstrInfo::getDuplexCandidateGroup(MCInst const &MCI) {
     }
     break;
   case Hexagon::S2_allocframe:
-    if (inRange<5, 3>(MCI, 2))
+    if (inRange<5, 3>(MCI, 0))
       return HexagonII::HSIG_S2;
     break;
   //
@@ -471,7 +464,7 @@ unsigned HexagonMCInstrInfo::getDuplexCandidateGroup(MCInst const &MCI) {
   case Hexagon::C2_cmovenewif:
     // if ([!]P0[.new]) Rd = #0
     // Actual form:
-    // %r16 = C2_cmovenewit internal %p0, 0, implicit undef %r16;
+    // %R16<def> = C2_cmovenewit %P0<internal>, 0, %R16<imp-use,undef>;
     DstReg = MCI.getOperand(0).getReg();  // Rd
     PredReg = MCI.getOperand(1).getReg(); // P0
     if (HexagonMCInstrInfo::isIntRegForSubInst(DstReg) &&
@@ -742,7 +735,7 @@ MCInst HexagonMCInstrInfo::deriveSubInst(MCInst const &Inst) {
     break; //    1,2,3 SUBInst $Rx = add($_src_, $Rs)
   case Hexagon::S2_allocframe:
     Result.setOpcode(Hexagon::SS2_allocframe);
-    addOps(Result, Inst, 2);
+    addOps(Result, Inst, 0);
     break; //    1 SUBInst allocframe(#$u5_3)
   case Hexagon::A2_andir:
     if (minConstant(Inst, 2) == 255) {

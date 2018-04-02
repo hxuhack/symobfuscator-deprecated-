@@ -129,10 +129,9 @@ Optional<std::string> Process::GetEnv(StringRef Name) {
   size_t Size = MAX_PATH;
   do {
     Buf.reserve(Size);
-    SetLastError(NO_ERROR);
     Size =
-      GetEnvironmentVariableW(NameUTF16.data(), Buf.data(), Buf.capacity());
-    if (Size == 0 && GetLastError() == ERROR_ENVVAR_NOT_FOUND)
+        GetEnvironmentVariableW(NameUTF16.data(), Buf.data(), Buf.capacity());
+    if (Size == 0)
       return None;
 
     // Try again with larger buffer.

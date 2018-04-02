@@ -1,4 +1,4 @@
-//===- BranchRelaxation.cpp -----------------------------------------------===//
+//===-- BranchRelaxation.cpp ----------------------------------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,25 +10,14 @@
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/CodeGen/LivePhysRegs.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
-#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/MachineInstr.h"
+#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/RegisterScavenging.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include "llvm/IR/DebugLoc.h"
-#include "llvm/Pass.h"
-#include "llvm/Support/Compiler.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/Format.h"
-#include "llvm/Support/MathExtras.h"
 #include "llvm/Support/raw_ostream.h"
-#include <cassert>
-#include <cstdint>
-#include <iterator>
-#include <memory>
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 
 using namespace llvm;
 
@@ -41,7 +30,6 @@ STATISTIC(NumUnconditionalRelaxed, "Number of unconditional branches relaxed");
 #define BRANCH_RELAX_NAME "Branch relaxation pass"
 
 namespace {
-
 class BranchRelaxation : public MachineFunctionPass {
   /// BasicBlockInfo - Information about the offset and size of a single
   /// basic block.
@@ -50,16 +38,16 @@ class BranchRelaxation : public MachineFunctionPass {
     /// of this basic block.
     ///
     /// The offset is always aligned as required by the basic block.
-    unsigned Offset = 0;
+    unsigned Offset;
 
     /// Size - Size of the basic block in bytes.  If the block contains
     /// inline assembly, this is a worst case estimate.
     ///
     /// The size does not include any alignment padding whether from the
     /// beginning of the block, or from an aligned jump table at the end.
-    unsigned Size = 0;
+    unsigned Size;
 
-    BasicBlockInfo() = default;
+    BasicBlockInfo() : Offset(0), Size(0) {}
 
     /// Compute the offset immediately following this block. \p MBB is the next
     /// block.
@@ -107,18 +95,18 @@ class BranchRelaxation : public MachineFunctionPass {
 
 public:
   static char ID;
-
-  BranchRelaxation() : MachineFunctionPass(ID) {}
+  BranchRelaxation() : MachineFunctionPass(ID) { }
 
   bool runOnMachineFunction(MachineFunction &MF) override;
 
-  StringRef getPassName() const override { return BRANCH_RELAX_NAME; }
+  StringRef getPassName() const override {
+    return BRANCH_RELAX_NAME;
+  }
 };
 
-} // end anonymous namespace
+}
 
 char BranchRelaxation::ID = 0;
-
 char &llvm::BranchRelaxationPassID = BranchRelaxation::ID;
 
 INITIALIZE_PASS(BranchRelaxation, DEBUG_TYPE, BRANCH_RELAX_NAME, false, false)
@@ -143,7 +131,7 @@ void BranchRelaxation::verify() {
 LLVM_DUMP_METHOD void BranchRelaxation::dumpBBs() {
   for (auto &MBB : *MF) {
     const BasicBlockInfo &BBI = BlockInfo[MBB.getNumber()];
-    dbgs() << format("%bb.%u\toffset=%08x\t", MBB.getNumber(), BBI.Offset)
+    dbgs() << format("BB#%u\toffset=%08x\t", MBB.getNumber(), BBI.Offset)
            << format("size=%#x\n", BBI.Size);
   }
 }
@@ -208,7 +196,7 @@ void BranchRelaxation::adjustBlockOffsets(MachineBasicBlock &Start) {
   }
 }
 
-/// Insert a new empty basic block and insert it after \BB
+  /// Insert a new empty basic block and insert it after \BB
 MachineBasicBlock *BranchRelaxation::createNewBlockAfter(MachineBasicBlock &BB) {
   // Create a new MBB for the code after the OrigBB.
   MachineBasicBlock *NewBB =
@@ -245,6 +233,7 @@ MachineBasicBlock *BranchRelaxation::splitBlockBeforeInstr(MachineInstr &MI,
   // Insert an entry into BlockInfo to align it properly with the block numbers.
   BlockInfo.insert(BlockInfo.begin() + NewBB->getNumber(), BasicBlockInfo());
 
+
   NewBB->transferSuccessors(OrigBB);
   OrigBB->addSuccessor(NewBB);
   OrigBB->addSuccessor(DestBB);
@@ -270,7 +259,7 @@ MachineBasicBlock *BranchRelaxation::splitBlockBeforeInstr(MachineInstr &MI,
 
   // Need to fix live-in lists if we track liveness.
   if (TRI->trackLivenessAfterRegAlloc(*MF))
-    computeAndAddLiveIns(LiveRegs, *NewBB);
+    computeLiveIns(LiveRegs, MF->getRegInfo(), *NewBB);
 
   ++NumSplit;
 
@@ -287,10 +276,13 @@ bool BranchRelaxation::isBlockInRange(
   if (TII->isBranchOffsetInRange(MI.getOpcode(), DestOffset - BrOffset))
     return true;
 
-  DEBUG(dbgs() << "Out of range branch to destination "
-               << printMBBReference(DestBB) << " from "
-               << printMBBReference(*MI.getParent()) << " to " << DestOffset
-               << " offset " << DestOffset - BrOffset << '\t' << MI);
+  DEBUG(
+    dbgs() << "Out of range branch to destination BB#" << DestBB.getNumber()
+           << " from BB#" << MI.getParent()->getNumber()
+           << " to " << DestOffset
+           << " offset " << DestOffset - BrOffset
+           << '\t' << MI
+  );
 
   return false;
 }
@@ -356,16 +348,16 @@ bool BranchRelaxation::fixupConditionalBranch(MachineInstr &MI) {
 
     // Need to fix live-in lists if we track liveness.
     if (TRI->trackLivenessAfterRegAlloc(*MF))
-      computeAndAddLiveIns(LiveRegs, NewBB);
+      computeLiveIns(LiveRegs, MF->getRegInfo(), NewBB);
   }
 
   // We now have an appropriate fall-through block in place (either naturally or
   // just created), so we can invert the condition.
   MachineBasicBlock &NextBB = *std::next(MachineFunction::iterator(MBB));
 
-  DEBUG(dbgs() << "  Insert B to " << printMBBReference(*TBB)
-               << ", invert condition and change dest. to "
-               << printMBBReference(NextBB) << '\n');
+  DEBUG(dbgs() << "  Insert B to BB#" << TBB->getNumber()
+               << ", invert condition and change dest. to BB#"
+               << NextBB.getNumber() << '\n');
 
   unsigned &MBBSize = BlockInfo[MBB->getNumber()].Size;
 

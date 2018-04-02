@@ -46,18 +46,17 @@ FindFirstNonCommonLetter(const std::vector<const
 /// code to verify that CharNo and later are the same.
 ///
 /// \return - True if control can leave the emitted code fragment.
-bool StringMatcher::EmitStringMatcherForChar(
-    const std::vector<const StringPair *> &Matches, unsigned CharNo,
-    unsigned IndentCount, bool IgnoreDuplicates) const {
+bool StringMatcher::
+EmitStringMatcherForChar(const std::vector<const StringPair*> &Matches,
+                         unsigned CharNo, unsigned IndentCount) const {
   assert(!Matches.empty() && "Must have at least one string to match!");
-  std::string Indent(IndentCount * 2 + 4, ' ');
+  std::string Indent(IndentCount*2+4, ' ');
   
   // If we have verified that the entire string matches, we're done: output the
   // matching code.
   if (CharNo == Matches[0]->first.size()) {
-    if (Matches.size() > 1 && !IgnoreDuplicates)
-      report_fatal_error("Had duplicate keys to match on");
-
+    assert(Matches.size() == 1 && "Had duplicate keys to match on");
+    
     // If the to-execute code has \n's in it, indent each subsequent line.
     StringRef Code = Matches[0]->second;
     
@@ -101,9 +100,8 @@ bool StringMatcher::EmitStringMatcherForChar(
          << NumChars << ") != 0)\n";
       OS << Indent << "  break;\n";
     }
-
-    return EmitStringMatcherForChar(Matches, FirstNonCommonLetter, IndentCount,
-                                    IgnoreDuplicates);
+    
+    return EmitStringMatcherForChar(Matches, FirstNonCommonLetter, IndentCount);
   }
   
   // Otherwise, we have multiple possible things, emit a switch on the
@@ -118,8 +116,7 @@ bool StringMatcher::EmitStringMatcherForChar(
        << LI->second.size() << " string";
     if (LI->second.size() != 1) OS << 's';
     OS << " to match.\n";
-    if (EmitStringMatcherForChar(LI->second, CharNo + 1, IndentCount + 1,
-                                 IgnoreDuplicates))
+    if (EmitStringMatcherForChar(LI->second, CharNo+1, IndentCount+1))
       OS << Indent << "  break;\n";
   }
   
@@ -129,7 +126,7 @@ bool StringMatcher::EmitStringMatcherForChar(
 
 /// Emit - Top level entry point.
 ///
-void StringMatcher::Emit(unsigned Indent, bool IgnoreDuplicates) const {
+void StringMatcher::Emit(unsigned Indent) const {
   // If nothing to match, just fall through.
   if (Matches.empty()) return;
   
@@ -149,7 +146,7 @@ void StringMatcher::Emit(unsigned Indent, bool IgnoreDuplicates) const {
     OS.indent(Indent*2+2) << "case " << LI->first << ":\t // "
        << LI->second.size()
        << " string" << (LI->second.size() == 1 ? "" : "s") << " to match.\n";
-    if (EmitStringMatcherForChar(LI->second, 0, Indent, IgnoreDuplicates))
+    if (EmitStringMatcherForChar(LI->second, 0, Indent))
       OS.indent(Indent*2+4) << "break;\n";
   }
   

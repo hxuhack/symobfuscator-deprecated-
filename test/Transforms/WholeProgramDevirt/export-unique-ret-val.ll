@@ -8,10 +8,6 @@
 ; SUMMARY-NEXT:     TTRes:
 ; SUMMARY-NEXT:       Kind:            Unsat
 ; SUMMARY-NEXT:       SizeM1BitWidth:  0
-; SUMMARY-NEXT:       AlignLog2:       0
-; SUMMARY-NEXT:       SizeM1:          0
-; SUMMARY-NEXT:       BitMask:         0
-; SUMMARY-NEXT:       InlineBits:      0
 ; SUMMARY-NEXT:     WPDRes:
 ; SUMMARY-NEXT:       0:
 ; SUMMARY-NEXT:         Kind:            Indir
@@ -20,16 +16,10 @@
 ; SUMMARY-NEXT:           12,24:
 ; SUMMARY-NEXT:             Kind:            UniqueRetVal
 ; SUMMARY-NEXT:             Info:            0
-; SUMMARY-NEXT:             Byte:            0
-; SUMMARY-NEXT:             Bit:             0
 ; SUMMARY-NEXT:   typeid4:
 ; SUMMARY-NEXT:     TTRes:
 ; SUMMARY-NEXT:       Kind:            Unsat
 ; SUMMARY-NEXT:       SizeM1BitWidth:  0
-; SUMMARY-NEXT:       AlignLog2:       0
-; SUMMARY-NEXT:       SizeM1:          0
-; SUMMARY-NEXT:       BitMask:         0
-; SUMMARY-NEXT:       InlineBits:      0
 ; SUMMARY-NEXT:     WPDRes:
 ; SUMMARY-NEXT:       0:
 ; SUMMARY-NEXT:         Kind:            Indir
@@ -38,8 +28,6 @@
 ; SUMMARY-NEXT:           24,12:
 ; SUMMARY-NEXT:             Kind:            UniqueRetVal
 ; SUMMARY-NEXT:             Info:            1
-; SUMMARY-NEXT:             Byte:            0
-; SUMMARY-NEXT:             Bit:             0
 
 ; CHECK: @vt3a = constant i1 (i8*, i32, i32)* @vf3a
 @vt3a = constant i1 (i8*, i32, i32)* @vf3a, !type !0

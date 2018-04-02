@@ -14,16 +14,14 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/BranchProbabilityInfo.h"
 #include "llvm/Analysis/EHPersonalities.h"
-#include "llvm/Analysis/OptimizationRemarkEmitter.h"
+#include "llvm/Analysis/OptimizationDiagnosticInfo.h"
 #include "llvm/CodeGen/Passes.h"
-#include "llvm/CodeGen/TargetLowering.h"
+#include "llvm/CodeGen/StackProtector.h"
 #include "llvm/CodeGen/TargetPassConfig.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/IR/Attributes.h"
 #include "llvm/IR/BasicBlock.h"
 #include "llvm/IR/Constants.h"
@@ -44,8 +42,10 @@
 #include "llvm/Pass.h"
 #include "llvm/Support/Casting.h"
 #include "llvm/Support/CommandLine.h"
+#include "llvm/Target/TargetLowering.h"
 #include "llvm/Target/TargetMachine.h"
 #include "llvm/Target/TargetOptions.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include <utility>
 
 using namespace llvm;
@@ -247,12 +247,10 @@ bool StackProtector::RequiresStackProtector() {
   OptimizationRemarkEmitter ORE(F);
 
   if (F->hasFnAttribute(Attribute::StackProtectReq)) {
-    ORE.emit([&]() {
-      return OptimizationRemark(DEBUG_TYPE, "StackProtectorRequested", F)
+    ORE.emit(OptimizationRemark(DEBUG_TYPE, "StackProtectorRequested", F)
              << "Stack protection applied to function "
              << ore::NV("Function", F)
-             << " due to a function attribute or command-line switch";
-    });
+             << " due to a function attribute or command-line switch");
     NeedsProtector = true;
     Strong = true; // Use the same heuristic as strong to determine SSPLayout
   } else if (F->hasFnAttribute(Attribute::StackProtectStrong))
@@ -266,31 +264,29 @@ bool StackProtector::RequiresStackProtector() {
     for (const Instruction &I : BB) {
       if (const AllocaInst *AI = dyn_cast<AllocaInst>(&I)) {
         if (AI->isArrayAllocation()) {
-          auto RemarkBuilder = [&]() {
-            return OptimizationRemark(DEBUG_TYPE, "StackProtectorAllocaOrArray",
-                                      &I)
-                   << "Stack protection applied to function "
-                   << ore::NV("Function", F)
-                   << " due to a call to alloca or use of a variable length "
-                      "array";
-          };
+          OptimizationRemark Remark(DEBUG_TYPE, "StackProtectorAllocaOrArray",
+                                    &I);
+          Remark
+              << "Stack protection applied to function "
+              << ore::NV("Function", F)
+              << " due to a call to alloca or use of a variable length array";
           if (const auto *CI = dyn_cast<ConstantInt>(AI->getArraySize())) {
             if (CI->getLimitedValue(SSPBufferSize) >= SSPBufferSize) {
               // A call to alloca with size >= SSPBufferSize requires
               // stack protectors.
               Layout.insert(std::make_pair(AI, SSPLK_LargeArray));
-              ORE.emit(RemarkBuilder);
+              ORE.emit(Remark);
               NeedsProtector = true;
             } else if (Strong) {
               // Require protectors for all alloca calls in strong mode.
               Layout.insert(std::make_pair(AI, SSPLK_SmallArray));
-              ORE.emit(RemarkBuilder);
+              ORE.emit(Remark);
               NeedsProtector = true;
             }
           } else {
             // A call to alloca with a variable size requires protectors.
             Layout.insert(std::make_pair(AI, SSPLK_LargeArray));
-            ORE.emit(RemarkBuilder);
+            ORE.emit(Remark);
             NeedsProtector = true;
           }
           continue;
@@ -300,13 +296,11 @@ bool StackProtector::RequiresStackProtector() {
         if (ContainsProtectableArray(AI->getAllocatedType(), IsLarge, Strong)) {
           Layout.insert(std::make_pair(AI, IsLarge ? SSPLK_LargeArray
                                                    : SSPLK_SmallArray));
-          ORE.emit([&]() {
-            return OptimizationRemark(DEBUG_TYPE, "StackProtectorBuffer", &I)
+          ORE.emit(OptimizationRemark(DEBUG_TYPE, "StackProtectorBuffer", &I)
                    << "Stack protection applied to function "
                    << ore::NV("Function", F)
                    << " due to a stack allocated buffer or struct containing a "
-                      "buffer";
-          });
+                      "buffer");
           NeedsProtector = true;
           continue;
         }
@@ -314,13 +308,11 @@ bool StackProtector::RequiresStackProtector() {
         if (Strong && HasAddressTaken(AI)) {
           ++NumAddrTaken;
           Layout.insert(std::make_pair(AI, SSPLK_AddrOf));
-          ORE.emit([&]() {
-            return OptimizationRemark(DEBUG_TYPE, "StackProtectorAddressTaken",
-                                      &I)
-                   << "Stack protection applied to function "
-                   << ore::NV("Function", F)
-                   << " due to the address of a local variable being taken";
-          });
+          ORE.emit(
+              OptimizationRemark(DEBUG_TYPE, "StackProtectorAddressTaken", &I)
+              << "Stack protection applied to function "
+              << ore::NV("Function", F)
+              << " due to the address of a local variable being taken");
           NeedsProtector = true;
         }
       }
@@ -385,12 +377,8 @@ static bool CreatePrologue(Function *F, Module *M, ReturnInst *RI,
 ///  - The epilogue checks the value stored in the prologue against the original
 ///    value. It calls __stack_chk_fail if they differ.
 bool StackProtector::InsertStackProtectors() {
-  // If the target wants to XOR the frame pointer into the guard value, it's
-  // impossible to emit the check in IR, so the target *must* support stack
-  // protection in SDAG.
   bool SupportsSelectionDAGSP =
-      TLI->useStackGuardXorFP() ||
-      (EnableSelectionDAGSP && !TM->Options.EnableFastISel);
+      EnableSelectionDAGSP && !TM->Options.EnableFastISel;
   AllocaInst *AI = nullptr;       // Place on stack that stores the stack guard.
 
   for (Function::iterator I = F->begin(), E = F->end(); I != E;) {

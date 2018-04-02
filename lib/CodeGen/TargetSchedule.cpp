@@ -16,15 +16,15 @@
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/MC/MCInstrDesc.h"
 #include "llvm/MC/MCInstrItineraries.h"
 #include "llvm/MC/MCSchedule.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
@@ -316,7 +316,7 @@ computeOutputLatency(const MachineInstr *DefMI, unsigned DefOperIdx,
   // correctly append imp-use operands, and readsReg() strangely returns false
   // for predicated defs.
   unsigned Reg = DefMI->getOperand(DefOperIdx).getReg();
-  const MachineFunction &MF = *DefMI->getMF();
+  const MachineFunction &MF = *DefMI->getParent()->getParent();
   const TargetRegisterInfo *TRI = MF.getSubtarget().getRegisterInfo();
   if (!DepMI->readsRegister(Reg, TRI) && TII->isPredicated(*DepMI))
     return computeInstrLatency(DefMI);
@@ -339,46 +339,42 @@ computeOutputLatency(const MachineInstr *DefMI, unsigned DefOperIdx,
 static Optional<double>
 getRThroughputFromItineraries(unsigned schedClass,
                               const InstrItineraryData *IID){
-  Optional<double> Throughput;
+  double Unknown = std::numeric_limits<double>::infinity();
+  double Throughput = Unknown;
 
   for (const InstrStage *IS = IID->beginStage(schedClass),
                         *E = IID->endStage(schedClass);
        IS != E; ++IS) {
-    if (IS->getCycles()) {
-      double Temp = countPopulation(IS->getUnits()) * 1.0 / IS->getCycles();
-      Throughput = Throughput.hasValue()
-                        ? std::min(Throughput.getValue(), Temp)
-                        : Temp;
-    }
+    unsigned Cycles = IS->getCycles();
+    if (!Cycles)
+      continue;
+    Throughput =
+        std::min(Throughput, countPopulation(IS->getUnits()) * 1.0 / Cycles);
   }
-  if (Throughput.hasValue())
-    // We need reciprocal throughput that's why we return such value.
-    return 1 / Throughput.getValue();
-  return Throughput;
+  // We need reciprocal throughput that's why we return such value.
+  return 1 / Throughput;
 }
 
 static Optional<double>
 getRThroughputFromInstrSchedModel(const MCSchedClassDesc *SCDesc,
                                   const TargetSubtargetInfo *STI,
                                   const MCSchedModel &SchedModel) {
-  Optional<double> Throughput;
+  double Unknown = std::numeric_limits<double>::infinity();
+  double Throughput = Unknown;
 
   for (const MCWriteProcResEntry *WPR = STI->getWriteProcResBegin(SCDesc),
                                  *WEnd = STI->getWriteProcResEnd(SCDesc);
        WPR != WEnd; ++WPR) {
-    if (WPR->Cycles) {
-      unsigned NumUnits =
-          SchedModel.getProcResource(WPR->ProcResourceIdx)->NumUnits;
-      double Temp = NumUnits * 1.0 / WPR->Cycles;
-      Throughput = Throughput.hasValue()
-                       ? std::min(Throughput.getValue(), Temp)
-                       : Temp;
-    }
+    unsigned Cycles = WPR->Cycles;
+    if (!Cycles)
+      return Optional<double>();
+
+    unsigned NumUnits =
+        SchedModel.getProcResource(WPR->ProcResourceIdx)->NumUnits;
+    Throughput = std::min(Throughput, NumUnits * 1.0 / Cycles);
   }
-  if (Throughput.hasValue())
-    // We need reciprocal throughput that's why we return such value.
-    return 1 / Throughput.getValue();
-  return Throughput;
+  // We need reciprocal throughput that's why we return such value.
+  return 1 / Throughput;
 }
 
 Optional<double>

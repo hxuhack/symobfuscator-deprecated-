@@ -16,7 +16,6 @@
 #include "CGCXXABI.h"
 #include "CGDebugInfo.h"
 #include "CGObjCRuntime.h"
-#include "ConstantEmitter.h"
 #include "clang/CodeGen/CGFunctionInfo.h"
 #include "clang/Frontend/CodeGenOptions.h"
 #include "llvm/IR/CallSite.h"
@@ -89,8 +88,7 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorCall(
       *this, MD, This, ImplicitParam, ImplicitParamTy, CE, Args, RtlArgs);
   auto &FnInfo = CGM.getTypes().arrangeCXXMethodCall(
       Args, FPT, CallInfo.ReqArgs, CallInfo.PrefixSize);
-  return EmitCall(FnInfo, Callee, ReturnValue, Args, nullptr,
-                  CE ? CE->getExprLoc() : SourceLocation());
+  return EmitCall(FnInfo, Callee, ReturnValue, Args);
 }
 
 RValue CodeGenFunction::EmitCXXDestructorCall(
@@ -369,11 +367,9 @@ RValue CodeGenFunction::EmitCXXMemberOrOperatorMemberCallExpr(
   } else {
     if (SanOpts.has(SanitizerKind::CFINVCall) &&
         MD->getParent()->isDynamicClass()) {
-      llvm::Value *VTable;
-      const CXXRecordDecl *RD;
-      std::tie(VTable, RD) =
-          CGM.getCXXABI().LoadVTablePtr(*this, This, MD->getParent());
-      EmitVTablePtrCheckForCall(RD, VTable, CFITCK_NVCall, CE->getLocStart());
+      llvm::Value *VTable = GetVTablePtr(This, Int8PtrTy, MD->getParent());
+      EmitVTablePtrCheckForCall(MD->getParent(), VTable, CFITCK_NVCall,
+                                CE->getLocStart());
     }
 
     if (getLangOpts().AppleKext && MD->isVirtual() && HasQualifier)
@@ -447,7 +443,7 @@ CodeGenFunction::EmitCXXMemberPointerCallExpr(const CXXMemberCallExpr *E,
   EmitCallArgs(Args, FPT, E->arguments());
   return EmitCall(CGM.getTypes().arrangeCXXMethodCall(Args, FPT, required,
                                                       /*PrefixSize=*/0),
-                  Callee, ReturnValue, Args, nullptr, E->getExprLoc());
+                  Callee, ReturnValue, Args);
 }
 
 RValue
@@ -614,7 +610,7 @@ CodeGenFunction::EmitCXXConstructExpr(const CXXConstructExpr *E,
 
      case CXXConstructExpr::CK_VirtualBase:
       ForVirtualBase = true;
-      LLVM_FALLTHROUGH;
+      // fall-through
 
      case CXXConstructExpr::CK_NonVirtualBase:
       Type = Ctor_Base;
@@ -685,8 +681,8 @@ static llvm::Value *EmitCXXNewAllocSize(CodeGenFunction &CGF,
   // Emit the array size expression.
   // We multiply the size of all dimensions for NumElements.
   // e.g for 'int[2][3]', ElemType is 'int' and NumElements is 6.
-  numElements =
-    ConstantEmitter(CGF).tryEmitAbstract(e->getArraySize(), e->getType());
+  numElements = CGF.CGM.EmitConstantExpr(e->getArraySize(),
+                                         CGF.getContext().getSizeType(), &CGF);
   if (!numElements)
     numElements = CGF.EmitScalarExpr(e->getArraySize());
   assert(isa<llvm::IntegerType>(numElements->getType()));
@@ -1314,44 +1310,29 @@ RValue CodeGenFunction::EmitBuiltinNewDeleteCall(const FunctionProtoType *Type,
   llvm_unreachable("predeclared global operator new/delete is missing");
 }
 
-namespace {
-/// The parameters to pass to a usual operator delete.
-struct UsualDeleteParams {
-  bool DestroyingDelete = false;
-  bool Size = false;
-  bool Alignment = false;
-};
-}
-
-static UsualDeleteParams getUsualDeleteParams(const FunctionDecl *FD) {
-  UsualDeleteParams Params;
-
-  const FunctionProtoType *FPT = FD->getType()->castAs<FunctionProtoType>();
+static std::pair<bool, bool>
+shouldPassSizeAndAlignToUsualDelete(const FunctionProtoType *FPT) {
   auto AI = FPT->param_type_begin(), AE = FPT->param_type_end();
 
   // The first argument is always a void*.
   ++AI;
 
-  // The next parameter may be a std::destroying_delete_t.
-  if (FD->isDestroyingOperatorDelete()) {
-    Params.DestroyingDelete = true;
-    assert(AI != AE);
-    ++AI;
-  }
-
   // Figure out what other parameters we should be implicitly passing.
+  bool PassSize = false;
+  bool PassAlignment = false;
+
   if (AI != AE && (*AI)->isIntegerType()) {
-    Params.Size = true;
+    PassSize = true;
     ++AI;
   }
 
   if (AI != AE && (*AI)->isAlignValT()) {
-    Params.Alignment = true;
+    PassAlignment = true;
     ++AI;
   }
 
   assert(AI == AE && "unexpected usual deallocation function parameter");
-  return Params;
+  return {PassSize, PassAlignment};
 }
 
 namespace {
@@ -1404,27 +1385,25 @@ namespace {
           OperatorDelete->getType()->getAs<FunctionProtoType>();
       CallArgList DeleteArgs;
 
-      // The first argument is always a void* (or C* for a destroying operator
-      // delete for class type C).
+      // The first argument is always a void*.
       DeleteArgs.add(Traits::get(CGF, Ptr), FPT->getParamType(0));
 
       // Figure out what other parameters we should be implicitly passing.
-      UsualDeleteParams Params;
+      bool PassSize = false;
+      bool PassAlignment = false;
       if (NumPlacementArgs) {
         // A placement deallocation function is implicitly passed an alignment
         // if the placement allocation function was, but is never passed a size.
-        Params.Alignment = PassAlignmentToPlacementDelete;
+        PassAlignment = PassAlignmentToPlacementDelete;
       } else {
         // For a non-placement new-expression, 'operator delete' can take a
         // size and/or an alignment if it has the right parameters.
-        Params = getUsualDeleteParams(OperatorDelete);
+        std::tie(PassSize, PassAlignment) =
+            shouldPassSizeAndAlignToUsualDelete(FPT);
       }
 
-      assert(!Params.DestroyingDelete &&
-             "should not call destroying delete in a new-expression");
-
       // The second argument can be a std::size_t (for non-placement delete).
-      if (Params.Size)
+      if (PassSize)
         DeleteArgs.add(Traits::get(CGF, AllocSize),
                        CGF.getContext().getSizeType());
 
@@ -1432,7 +1411,7 @@ namespace {
       // is an enum whose underlying type is std::size_t.
       // FIXME: Use the right type as the parameter type. Note that in a call
       // to operator delete(size_t, ...), we may not have it available.
-      if (Params.Alignment)
+      if (PassAlignment)
         DeleteArgs.add(RValue::get(llvm::ConstantInt::get(
                            CGF.SizeTy, AllocAlign.getQuantity())),
                        CGF.getContext().getSizeType());
@@ -1735,7 +1714,9 @@ void CodeGenFunction::EmitDeleteCall(const FunctionDecl *DeleteFD,
 
   CallArgList DeleteArgs;
 
-  auto Params = getUsualDeleteParams(DeleteFD);
+  std::pair<bool, bool> PassSizeAndAlign =
+      shouldPassSizeAndAlignToUsualDelete(DeleteFTy);
+
   auto ParamTypeIt = DeleteFTy->param_type_begin();
 
   // Pass the pointer itself.
@@ -1743,16 +1724,8 @@ void CodeGenFunction::EmitDeleteCall(const FunctionDecl *DeleteFD,
   llvm::Value *DeletePtr = Builder.CreateBitCast(Ptr, ConvertType(ArgTy));
   DeleteArgs.add(RValue::get(DeletePtr), ArgTy);
 
-  // Pass the std::destroying_delete tag if present.
-  if (Params.DestroyingDelete) {
-    QualType DDTag = *ParamTypeIt++;
-    // Just pass an 'undef'. We expect the tag type to be an empty struct.
-    auto *V = llvm::UndefValue::get(getTypes().ConvertType(DDTag));
-    DeleteArgs.add(RValue::get(V), DDTag);
-  }
-
   // Pass the size if the delete function has a size_t parameter.
-  if (Params.Size) {
+  if (PassSizeAndAlign.first) {
     QualType SizeType = *ParamTypeIt++;
     CharUnits DeleteTypeSize = getContext().getTypeSizeInChars(DeleteTy);
     llvm::Value *Size = llvm::ConstantInt::get(ConvertType(SizeType),
@@ -1771,7 +1744,7 @@ void CodeGenFunction::EmitDeleteCall(const FunctionDecl *DeleteFD,
   }
 
   // Pass the alignment if the delete function has an align_val_t parameter.
-  if (Params.Alignment) {
+  if (PassSizeAndAlign.second) {
     QualType AlignValType = *ParamTypeIt++;
     CharUnits DeleteTypeAlign = getContext().toCharUnitsFromBits(
         getContext().getTypeAlignIfKnown(DeleteTy));
@@ -1813,21 +1786,6 @@ CodeGenFunction::pushCallObjectDeleteCleanup(const FunctionDecl *OperatorDelete,
                                         OperatorDelete, ElementType);
 }
 
-/// Emit the code for deleting a single object with a destroying operator
-/// delete. If the element type has a non-virtual destructor, Ptr has already
-/// been converted to the type of the parameter of 'operator delete'. Otherwise
-/// Ptr points to an object of the static type.
-static void EmitDestroyingObjectDelete(CodeGenFunction &CGF,
-                                       const CXXDeleteExpr *DE, Address Ptr,
-                                       QualType ElementType) {
-  auto *Dtor = ElementType->getAsCXXRecordDecl()->getDestructor();
-  if (Dtor && Dtor->isVirtual())
-    CGF.CGM.getCXXABI().emitVirtualObjectDelete(CGF, DE, Ptr, ElementType,
-                                                Dtor);
-  else
-    CGF.EmitDeleteCall(DE->getOperatorDelete(), Ptr.getPointer(), ElementType);
-}
-
 /// Emit the code for deleting a single object.
 static void EmitObjectDelete(CodeGenFunction &CGF,
                              const CXXDeleteExpr *DE,
@@ -1841,9 +1799,6 @@ static void EmitObjectDelete(CodeGenFunction &CGF,
   CGF.EmitTypeCheck(CodeGenFunction::TCK_MemberCall,
                     DE->getExprLoc(), Ptr.getPointer(),
                     ElementType);
-
-  const FunctionDecl *OperatorDelete = DE->getOperatorDelete();
-  assert(!OperatorDelete->isDestroyingOperatorDelete());
 
   // Find the destructor for the type, if applicable.  If the
   // destructor is virtual, we'll just emit the vcall and return.
@@ -1864,6 +1819,7 @@ static void EmitObjectDelete(CodeGenFunction &CGF,
   // Make sure that we call delete even if the dtor throws.
   // This doesn't have to a conditional cleanup because we're going
   // to pop it off in a second.
+  const FunctionDecl *OperatorDelete = DE->getOperatorDelete();
   CGF.EHStack.pushCleanup<CallObjectDelete>(NormalAndEHCleanup,
                                             Ptr.getPointer(),
                                             OperatorDelete, ElementType);
@@ -1975,19 +1931,10 @@ void CodeGenFunction::EmitCXXDeleteExpr(const CXXDeleteExpr *E) {
   Builder.CreateCondBr(IsNull, DeleteEnd, DeleteNotNull);
   EmitBlock(DeleteNotNull);
 
-  QualType DeleteTy = E->getDestroyedType();
-
-  // A destroying operator delete overrides the entire operation of the
-  // delete expression.
-  if (E->getOperatorDelete()->isDestroyingOperatorDelete()) {
-    EmitDestroyingObjectDelete(*this, E, Ptr, DeleteTy);
-    EmitBlock(DeleteEnd);
-    return;
-  }
-
   // We might be deleting a pointer to array.  If so, GEP down to the
   // first non-array element.
   // (this assumes that A(*)[3][7] is converted to [3 x [7 x %A]]*)
+  QualType DeleteTy = Arg->getType()->getAs<PointerType>()->getPointeeType();
   if (DeleteTy->isConstantArrayType()) {
     llvm::Value *Zero = Builder.getInt32(0);
     SmallVector<llvm::Value*,8> GEP;
@@ -2056,15 +2003,6 @@ static llvm::Value *EmitTypeidFromVTable(CodeGenFunction &CGF, const Expr *E,
   // Get the vtable pointer.
   Address ThisPtr = CGF.EmitLValue(E).getAddress();
 
-  QualType SrcRecordTy = E->getType();
-
-  // C++ [class.cdtor]p4:
-  //   If the operand of typeid refers to the object under construction or
-  //   destruction and the static type of the operand is neither the constructor
-  //   or destructor’s class nor one of its bases, the behavior is undefined.
-  CGF.EmitTypeCheck(CodeGenFunction::TCK_DynamicOperation, E->getExprLoc(),
-                    ThisPtr.getPointer(), SrcRecordTy);
-
   // C++ [expr.typeid]p2:
   //   If the glvalue expression is obtained by applying the unary * operator to
   //   a pointer and the pointer is a null pointer value, the typeid expression
@@ -2073,6 +2011,7 @@ static llvm::Value *EmitTypeidFromVTable(CodeGenFunction &CGF, const Expr *E,
   // However, this paragraph's intent is not clear.  We choose a very generous
   // interpretation which implores us to consider comma operators, conditional
   // operators, parentheses and other such constructs.
+  QualType SrcRecordTy = E->getType();
   if (CGF.CGM.getCXXABI().shouldTypeidBeNullChecked(
           isGLValueFromPointerDeref(E), SrcRecordTy)) {
     llvm::BasicBlock *BadTypeidBlock =
@@ -2135,6 +2074,10 @@ llvm::Value *CodeGenFunction::EmitDynamicCast(Address ThisAddr,
   CGM.EmitExplicitCastExprType(DCE, this);
   QualType DestTy = DCE->getTypeAsWritten();
 
+  if (DCE->isAlwaysNull())
+    if (llvm::Value *T = EmitDynamicCastToNull(*this, DestTy))
+      return T;
+
   QualType SrcTy = DCE->getSubExpr()->getType();
 
   // C++ [expr.dynamic.cast]p7:
@@ -2154,18 +2097,6 @@ llvm::Value *CodeGenFunction::EmitDynamicCast(Address ThisAddr,
     SrcRecordTy = SrcTy;
     DestRecordTy = DestTy->castAs<ReferenceType>()->getPointeeType();
   }
-
-  // C++ [class.cdtor]p5:
-  //   If the operand of the dynamic_cast refers to the object under
-  //   construction or destruction and the static type of the operand is not a
-  //   pointer to or object of the constructor or destructor’s own class or one
-  //   of its bases, the dynamic_cast results in undefined behavior.
-  EmitTypeCheck(TCK_DynamicOperation, DCE->getExprLoc(), ThisAddr.getPointer(),
-                SrcRecordTy);
-
-  if (DCE->isAlwaysNull())
-    if (llvm::Value *T = EmitDynamicCastToNull(*this, DestTy))
-      return T;
 
   assert(SrcRecordTy->isRecordType() && "source type must be a record type!");
 

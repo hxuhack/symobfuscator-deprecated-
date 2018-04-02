@@ -58,7 +58,6 @@ private:
   bool tryIntrinsicNoChain(SDNode *N);
   bool tryIntrinsicChain(SDNode *N);
   void SelectTexSurfHandle(SDNode *N);
-  void SelectMatchAll(SDNode *N);
   bool tryLoad(SDNode *N);
   bool tryLoadVector(SDNode *N);
   bool tryLDGLDU(SDNode *N);
@@ -74,8 +73,6 @@ private:
   bool tryConstantFP16(SDNode *N);
   bool SelectSETP_F16X2(SDNode *N);
   bool tryEXTRACT_VECTOR_ELEMENT(SDNode *N);
-  bool tryWMMA_LDST(SDNode *N);
-  bool tryWMMA_MMA(SDNode *N);
 
   inline SDValue getI32Imm(unsigned Imm, const SDLoc &DL) {
     return CurDAG->getTargetConstant(Imm, DL, MVT::i32);

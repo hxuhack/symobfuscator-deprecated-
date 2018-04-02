@@ -16,7 +16,6 @@
 #define LLVM_LIB_TARGET_AMDGPU_SIISELLOWERING_H
 
 #include "AMDGPUISelLowering.h"
-#include "AMDGPUArgumentUsageInfo.h"
 #include "SIInstrInfo.h"
 
 namespace llvm {
@@ -24,7 +23,6 @@ namespace llvm {
 class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue lowerKernArgParameterPtr(SelectionDAG &DAG, const SDLoc &SL,
                                    SDValue Chain, uint64_t Offset) const;
-  SDValue getImplicitArgPtr(SelectionDAG &DAG, const SDLoc &SL) const;
   SDValue lowerKernargMemParameter(SelectionDAG &DAG, EVT VT, EVT MemVT,
                                    const SDLoc &SL, SDValue Chain,
                                    uint64_t Offset, bool Signed,
@@ -33,10 +31,6 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue lowerStackParameter(SelectionDAG &DAG, CCValAssign &VA,
                               const SDLoc &SL, SDValue Chain,
                               const ISD::InputArg &Arg) const;
-  SDValue getPreloadedValue(SelectionDAG &DAG,
-                            const SIMachineFunctionInfo &MFI,
-                            EVT VT,
-                            AMDGPUFunctionArgInfo::PreloadedValue) const;
 
   SDValue LowerGlobalAddress(AMDGPUMachineFunction *MFI, SDValue Op,
                              SelectionDAG &DAG) const override;
@@ -82,13 +76,12 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue lowerEXTRACT_VECTOR_ELT(SDValue Op, SelectionDAG &DAG) const;
   SDValue lowerTRAP(SDValue Op, SelectionDAG &DAG) const;
 
-  SDNode *adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
+  void adjustWritemask(MachineSDNode *&N, SelectionDAG &DAG) const;
 
   SDValue performUCharToFloatCombine(SDNode *N,
                                      DAGCombinerInfo &DCI) const;
   SDValue performSHLPtrCombine(SDNode *N,
                                unsigned AS,
-                               EVT MemVT,
                                DAGCombinerInfo &DCI) const;
 
   SDValue performMemSDNodeCombine(MemSDNode *N, DAGCombinerInfo &DCI) const;
@@ -112,7 +105,6 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue performFMed3Combine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performCvtPkRTZCombine(SDNode *N, DAGCombinerInfo &DCI) const;
   SDValue performExtractVectorEltCombine(SDNode *N, DAGCombinerInfo &DCI) const;
-  SDValue performBuildVectorCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   unsigned getFusedOpcode(const SelectionDAG &DAG,
                           const SDNode *N0, const SDNode *N1) const;
@@ -125,7 +117,6 @@ class SITargetLowering final : public AMDGPUTargetLowering {
   SDValue performCvtF32UByteNCombine(SDNode *N, DAGCombinerInfo &DCI) const;
 
   bool isLegalFlatAddressingMode(const AddrMode &AM) const;
-  bool isLegalGlobalAddressingMode(const AddrMode &AM) const;
   bool isLegalMUBUFAddressingMode(const AddrMode &AM) const;
 
   unsigned isCFIntrinsic(const SDNode *Intr) const;
@@ -149,10 +140,10 @@ public:
 
   const SISubtarget *getSubtarget() const;
 
-  bool isShuffleMaskLegal(ArrayRef<int> /*Mask*/, EVT /*VT*/) const override;
+  bool isShuffleMaskLegal(const SmallVectorImpl<int> &/*Mask*/,
+                          EVT /*VT*/) const override;
 
   bool getTgtMemIntrinsic(IntrinsicInfo &, const CallInst &,
-                          MachineFunction &MF,
                           unsigned IntrinsicID) const override;
 
   bool getAddrModeArguments(IntrinsicInst * /*I*/,
@@ -160,8 +151,7 @@ public:
                             Type *&/*AccessTy*/) const override;
 
   bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM, Type *Ty,
-                             unsigned AS,
-                             Instruction *I = nullptr) const override;
+                             unsigned AS) const override;
 
   bool canMergeStoresTo(unsigned AS, EVT MemVT,
                         const SelectionDAG &DAG) const override;
@@ -191,12 +181,6 @@ public:
 
   bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
-  bool supportSplitCSR(MachineFunction *MF) const override;
-  void initializeSplitCSR(MachineBasicBlock *Entry) const override;
-  void insertCopiesSplitCSR(
-    MachineBasicBlock *Entry,
-    const SmallVectorImpl<MachineBasicBlock *> &Exits) const override;
-
   SDValue LowerFormalArguments(SDValue Chain, CallingConv::ID CallConv,
                                bool isVarArg,
                                const SmallVectorImpl<ISD::InputArg> &Ins,
@@ -213,32 +197,6 @@ public:
                       const SmallVectorImpl<SDValue> &OutVals, const SDLoc &DL,
                       SelectionDAG &DAG) const override;
 
-  void passSpecialInputs(
-    CallLoweringInfo &CLI,
-    const SIMachineFunctionInfo &Info,
-    SmallVectorImpl<std::pair<unsigned, SDValue>> &RegsToPass,
-    SmallVectorImpl<SDValue> &MemOpChains,
-    SDValue Chain,
-    SDValue StackPtr) const;
-
-  SDValue LowerCallResult(SDValue Chain, SDValue InFlag,
-                          CallingConv::ID CallConv, bool isVarArg,
-                          const SmallVectorImpl<ISD::InputArg> &Ins,
-                          const SDLoc &DL, SelectionDAG &DAG,
-                          SmallVectorImpl<SDValue> &InVals, bool isThisReturn,
-                          SDValue ThisVal) const;
-
-  bool mayBeEmittedAsTailCall(const CallInst *) const override;
-
-  bool isEligibleForTailCallOptimization(
-    SDValue Callee, CallingConv::ID CalleeCC, bool isVarArg,
-    const SmallVectorImpl<ISD::OutputArg> &Outs,
-    const SmallVectorImpl<SDValue> &OutVals,
-    const SmallVectorImpl<ISD::InputArg> &Ins, SelectionDAG &DAG) const;
-
-  SDValue LowerCall(CallLoweringInfo &CLI,
-                    SmallVectorImpl<SDValue> &InVals) const override;
-
   unsigned getRegisterByName(const char* RegName, EVT VT,
                              SelectionDAG &DAG) const override;
 
@@ -248,8 +206,6 @@ public:
   MachineBasicBlock *
   EmitInstrWithCustomInserter(MachineInstr &MI,
                               MachineBasicBlock *BB) const override;
-
-  bool hasBitPreservingFPLogic(EVT VT) const override;
   bool enableAggressiveFMAFusion(EVT VT) const override;
   EVT getSetCCResultType(const DataLayout &DL, LLVMContext &Context,
                          EVT VT) const override;
@@ -278,12 +234,6 @@ public:
                    SDValue V) const;
 
   void finalizeLowering(MachineFunction &MF) const override;
-
-  void computeKnownBitsForFrameIndex(const SDValue Op,
-                                     KnownBits &Known,
-                                     const APInt &DemandedElts,
-                                     const SelectionDAG &DAG,
-                                     unsigned Depth = 0) const override;
 };
 
 } // End namespace llvm

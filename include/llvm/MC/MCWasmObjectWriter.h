@@ -44,9 +44,8 @@ public:
 /// \param MOTW - The target specific Wasm writer subclass.
 /// \param OS - The stream to write to.
 /// \returns The constructed object writer.
-std::unique_ptr<MCObjectWriter>
-createWasmObjectWriter(std::unique_ptr<MCWasmObjectTargetWriter> MOTW,
-                       raw_pwrite_stream &OS);
+MCObjectWriter *createWasmObjectWriter(MCWasmObjectTargetWriter *MOTW,
+                                       raw_pwrite_stream &OS);
 
 } // End llvm namespace
 

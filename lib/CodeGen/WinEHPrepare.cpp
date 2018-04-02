@@ -838,11 +838,17 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
     for (auto &BBMapping : Orig2Clone) {
       BasicBlock *OldBlock = BBMapping.first;
       BasicBlock *NewBlock = BBMapping.second;
-      for (PHINode &OldPN : OldBlock->phis()) {
-        UpdatePHIOnClonedBlock(&OldPN, /*IsForOldBlock=*/true);
+      for (Instruction &OldI : *OldBlock) {
+        auto *OldPN = dyn_cast<PHINode>(&OldI);
+        if (!OldPN)
+          break;
+        UpdatePHIOnClonedBlock(OldPN, /*IsForOldBlock=*/true);
       }
-      for (PHINode &NewPN : NewBlock->phis()) {
-        UpdatePHIOnClonedBlock(&NewPN, /*IsForOldBlock=*/false);
+      for (Instruction &NewI : *NewBlock) {
+        auto *NewPN = dyn_cast<PHINode>(&NewI);
+        if (!NewPN)
+          break;
+        UpdatePHIOnClonedBlock(NewPN, /*IsForOldBlock=*/false);
       }
     }
 
@@ -852,13 +858,17 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
       BasicBlock *OldBlock = BBMapping.first;
       BasicBlock *NewBlock = BBMapping.second;
       for (BasicBlock *SuccBB : successors(NewBlock)) {
-        for (PHINode &SuccPN : SuccBB->phis()) {
+        for (Instruction &SuccI : *SuccBB) {
+          auto *SuccPN = dyn_cast<PHINode>(&SuccI);
+          if (!SuccPN)
+            break;
+
           // Ok, we have a PHI node.  Figure out what the incoming value was for
           // the OldBlock.
-          int OldBlockIdx = SuccPN.getBasicBlockIndex(OldBlock);
+          int OldBlockIdx = SuccPN->getBasicBlockIndex(OldBlock);
           if (OldBlockIdx == -1)
             break;
-          Value *IV = SuccPN.getIncomingValue(OldBlockIdx);
+          Value *IV = SuccPN->getIncomingValue(OldBlockIdx);
 
           // Remap the value if necessary.
           if (auto *Inst = dyn_cast<Instruction>(IV)) {
@@ -867,7 +877,7 @@ void WinEHPrepare::cloneCommonBlocks(Function &F) {
               IV = I->second;
           }
 
-          SuccPN.addIncoming(IV, NewBlock);
+          SuccPN->addIncoming(IV, NewBlock);
         }
       }
     }
@@ -1004,7 +1014,6 @@ void WinEHPrepare::cleanupPreparedFunclets(Function &F) {
   removeUnreachableBlocks(F);
 }
 
-#ifndef NDEBUG
 void WinEHPrepare::verifyPreparedFunclets(Function &F) {
   for (BasicBlock &BB : F) {
     size_t NumColors = BlockColors[&BB].size();
@@ -1017,7 +1026,6 @@ void WinEHPrepare::verifyPreparedFunclets(Function &F) {
            "EH Pad still has a PHI!");
   }
 }
-#endif
 
 bool WinEHPrepare::prepareExplicitEH(Function &F) {
   // Remove unreachable blocks.  It is not valuable to assign them a color and

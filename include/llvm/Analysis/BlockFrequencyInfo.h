@@ -18,36 +18,31 @@
 #include "llvm/IR/PassManager.h"
 #include "llvm/Pass.h"
 #include "llvm/Support/BlockFrequency.h"
-#include <cstdint>
-#include <memory>
+#include <climits>
 
 namespace llvm {
 
-class BasicBlock;
 class BranchProbabilityInfo;
-class Function;
 class LoopInfo;
-class Module;
-class raw_ostream;
 template <class BlockT> class BlockFrequencyInfoImpl;
-
-enum PGOViewCountsType { PGOVCT_None, PGOVCT_Graph, PGOVCT_Text };
 
 /// BlockFrequencyInfo pass uses BlockFrequencyInfoImpl implementation to
 /// estimate IR basic block frequencies.
 class BlockFrequencyInfo {
-  using ImplType = BlockFrequencyInfoImpl<BasicBlock>;
-
+  typedef BlockFrequencyInfoImpl<BasicBlock> ImplType;
   std::unique_ptr<ImplType> BFI;
+
+  void operator=(const BlockFrequencyInfo &) = delete;
+  BlockFrequencyInfo(const BlockFrequencyInfo &) = delete;
 
 public:
   BlockFrequencyInfo();
   BlockFrequencyInfo(const Function &F, const BranchProbabilityInfo &BPI,
                      const LoopInfo &LI);
-  BlockFrequencyInfo(const BlockFrequencyInfo &) = delete;
-  BlockFrequencyInfo &operator=(const BlockFrequencyInfo &) = delete;
   BlockFrequencyInfo(BlockFrequencyInfo &&Arg);
+
   BlockFrequencyInfo &operator=(BlockFrequencyInfo &&RHS);
+
   ~BlockFrequencyInfo();
 
   /// Handle invalidation explicitly.
@@ -74,10 +69,6 @@ public:
   /// This uses the frequency \p Freq and multiplies it by
   /// the enclosing function's count (if available) and returns the value.
   Optional<uint64_t> getProfileCountFromFreq(uint64_t Freq) const;
-
-  /// \brief Returns true if \p BB is an irreducible loop header
-  /// block. Otherwise false.
-  bool isIrrLoopHeader(const BasicBlock *BB);
 
   // Set the frequency of the given basic block.
   void setBlockFreq(const BasicBlock *BB, uint64_t Freq);
@@ -109,12 +100,11 @@ public:
 class BlockFrequencyAnalysis
     : public AnalysisInfoMixin<BlockFrequencyAnalysis> {
   friend AnalysisInfoMixin<BlockFrequencyAnalysis>;
-
   static AnalysisKey Key;
 
 public:
-  /// \brief Provide the result type for this analysis pass.
-  using Result = BlockFrequencyInfo;
+  /// \brief Provide the result typedef for this analysis pass.
+  typedef BlockFrequencyInfo Result;
 
   /// \brief Run the analysis pass over a function and produce BFI.
   Result run(Function &F, FunctionAnalysisManager &AM);
@@ -127,7 +117,6 @@ class BlockFrequencyPrinterPass
 
 public:
   explicit BlockFrequencyPrinterPass(raw_ostream &OS) : OS(OS) {}
-
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
@@ -151,6 +140,6 @@ public:
   void print(raw_ostream &OS, const Module *M) const override;
 };
 
-} // end namespace llvm
+}
 
-#endif // LLVM_ANALYSIS_BLOCKFREQUENCYINFO_H
+#endif

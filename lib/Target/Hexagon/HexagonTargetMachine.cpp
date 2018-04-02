@@ -28,9 +28,6 @@
 
 using namespace llvm;
 
-static cl::opt<bool> EnableCExtOpt("hexagon-cext", cl::Hidden, cl::ZeroOrMore,
-  cl::init(true), cl::desc("Enable Hexagon constant-extender optimization"));
-
 static cl::opt<bool> EnableRDFOpt("rdf-opt", cl::Hidden, cl::ZeroOrMore,
   cl::init(true), cl::desc("Enable RDF-based optimizations"));
 
@@ -94,10 +91,6 @@ static cl::opt<bool> EnableVectorPrint("enable-hexagon-vector-print",
   cl::Hidden, cl::ZeroOrMore, cl::init(false),
   cl::desc("Enable Hexagon Vector print instr pass"));
 
-static cl::opt<bool> EnableTrapUnreachable("hexagon-trap-unreachable",
-  cl::Hidden, cl::ZeroOrMore, cl::init(false),
-  cl::desc("Enable generating trap for unreachable"));
-
 /// HexagonTargetMachineModule - Note that this is used on hosts that
 /// cannot link in a library unless there are references into the
 /// library.  In particular, it seems that it is not possible to get
@@ -107,13 +100,7 @@ extern "C" int HexagonTargetMachineModule;
 int HexagonTargetMachineModule = 0;
 
 static ScheduleDAGInstrs *createVLIWMachineSched(MachineSchedContext *C) {
-  ScheduleDAGMILive *DAG =
-    new VLIWMachineScheduler(C, make_unique<ConvergingVLIWScheduler>());
-  DAG->addMutation(make_unique<HexagonSubtarget::UsrOverflowMutation>());
-  DAG->addMutation(make_unique<HexagonSubtarget::HVXMemLatencyMutation>());
-  DAG->addMutation(make_unique<HexagonSubtarget::CallMutation>());
-  DAG->addMutation(createCopyConstrainDAGMutation(DAG->TII, DAG->TRI));
-  return DAG;
+  return new VLIWMachineScheduler(C, make_unique<ConvergingVLIWScheduler>());
 }
 
 static MachineSchedRegistry
@@ -122,31 +109,23 @@ SchedCustomRegistry("hexagon", "Run Hexagon's custom scheduler",
 
 namespace llvm {
   extern char &HexagonExpandCondsetsID;
-  void initializeHexagonConstExtendersPass(PassRegistry&);
-  void initializeHexagonEarlyIfConversionPass(PassRegistry&);
   void initializeHexagonExpandCondsetsPass(PassRegistry&);
   void initializeHexagonGenMuxPass(PassRegistry&);
-  void initializeHexagonHardwareLoopsPass(PassRegistry&);
   void initializeHexagonLoopIdiomRecognizePass(PassRegistry&);
-  void initializeHexagonVectorLoopCarriedReusePass(PassRegistry&);
   void initializeHexagonNewValueJumpPass(PassRegistry&);
   void initializeHexagonOptAddrModePass(PassRegistry&);
   void initializeHexagonPacketizerPass(PassRegistry&);
-  void initializeHexagonRDFOptPass(PassRegistry&);
   Pass *createHexagonLoopIdiomPass();
-  Pass *createHexagonVectorLoopCarriedReusePass();
 
   FunctionPass *createHexagonBitSimplify();
   FunctionPass *createHexagonBranchRelaxation();
   FunctionPass *createHexagonCallFrameInformation();
   FunctionPass *createHexagonCFGOptimizer();
   FunctionPass *createHexagonCommonGEP();
-  FunctionPass *createHexagonConstExtenders();
   FunctionPass *createHexagonConstPropagationPass();
   FunctionPass *createHexagonCopyToCombine();
   FunctionPass *createHexagonEarlyIfConversion();
   FunctionPass *createHexagonFixupHwLoops();
-  FunctionPass *createHexagonGatherPacketize();
   FunctionPass *createHexagonGenExtract();
   FunctionPass *createHexagonGenInsert();
   FunctionPass *createHexagonGenMux();
@@ -173,48 +152,34 @@ static Reloc::Model getEffectiveRelocModel(Optional<Reloc::Model> RM) {
   return *RM;
 }
 
-static CodeModel::Model getEffectiveCodeModel(Optional<CodeModel::Model> CM) {
-  if (CM)
-    return *CM;
-  return CodeModel::Small;
-}
-
 extern "C" void LLVMInitializeHexagonTarget() {
   // Register the target.
   RegisterTargetMachine<HexagonTargetMachine> X(getTheHexagonTarget());
 
   PassRegistry &PR = *PassRegistry::getPassRegistry();
-  initializeHexagonConstExtendersPass(PR);
-  initializeHexagonEarlyIfConversionPass(PR);
   initializeHexagonGenMuxPass(PR);
-  initializeHexagonHardwareLoopsPass(PR);
   initializeHexagonLoopIdiomRecognizePass(PR);
-  initializeHexagonVectorLoopCarriedReusePass(PR);
   initializeHexagonNewValueJumpPass(PR);
   initializeHexagonOptAddrModePass(PR);
   initializeHexagonPacketizerPass(PR);
-  initializeHexagonRDFOptPass(PR);
 }
 
 HexagonTargetMachine::HexagonTargetMachine(const Target &T, const Triple &TT,
                                            StringRef CPU, StringRef FS,
                                            const TargetOptions &Options,
                                            Optional<Reloc::Model> RM,
-                                           Optional<CodeModel::Model> CM,
-                                           CodeGenOpt::Level OL, bool JIT)
+                                           CodeModel::Model CM,
+                                           CodeGenOpt::Level OL)
     // Specify the vector alignment explicitly. For v512x1, the calculated
     // alignment would be 512*alignment(i1), which is 512 bytes, instead of
     // the required minimum of 64 bytes.
     : LLVMTargetMachine(
-          T,
-          "e-m:e-p:32:32:32-a:0-n16:32-"
-          "i64:64:64-i32:32:32-i16:16:16-i1:8:8-f32:32:32-f64:64:64-"
-          "v32:32:32-v64:64:64-v512:512:512-v1024:1024:1024-v2048:2048:2048",
-          TT, CPU, FS, Options, getEffectiveRelocModel(RM),
-          getEffectiveCodeModel(CM), (HexagonNoOpt ? CodeGenOpt::None : OL)),
+          T, "e-m:e-p:32:32:32-a:0-n16:32-"
+             "i64:64:64-i32:32:32-i16:16:16-i1:8:8-f32:32:32-f64:64:64-"
+             "v32:32:32-v64:64:64-v512:512:512-v1024:1024:1024-v2048:2048:2048",
+          TT, CPU, FS, Options, getEffectiveRelocModel(RM), CM,
+          (HexagonNoOpt ? CodeGenOpt::None : OL)),
       TLOF(make_unique<HexagonTargetObjectFile>()) {
-  if (EnableTrapUnreachable)
-    this->Options.TrapUnreachable = true;
   initializeHexagonExpandCondsetsPass(*PassRegistry::getPassRegistry());
   initAsmInfo();
 }
@@ -251,16 +216,12 @@ void HexagonTargetMachine::adjustPassManager(PassManagerBuilder &PMB) {
     [&](const PassManagerBuilder &, legacy::PassManagerBase &PM) {
       PM.add(createHexagonLoopIdiomPass());
     });
-  PMB.addExtension(
-    PassManagerBuilder::EP_LoopOptimizerEnd,
-    [&](const PassManagerBuilder &, legacy::PassManagerBase &PM) {
-      PM.add(createHexagonVectorLoopCarriedReusePass());
-    });
 }
 
-TargetTransformInfo
-HexagonTargetMachine::getTargetTransformInfo(const Function &F) {
-  return TargetTransformInfo(HexagonTTIImpl(this, F));
+TargetIRAnalysis HexagonTargetMachine::getTargetIRAnalysis() {
+  return TargetIRAnalysis([this](const Function &F) {
+    return TargetTransformInfo(HexagonTTIImpl(this, F));
+  });
 }
 
 
@@ -350,8 +311,6 @@ bool HexagonPassConfig::addInstSelector() {
 
 void HexagonPassConfig::addPreRegAlloc() {
   if (getOptLevel() != CodeGenOpt::None) {
-    if (EnableCExtOpt)
-      addPass(createHexagonConstExtenders());
     if (EnableExpandCondsets)
       insertPass(&RegisterCoalescerID, &HexagonExpandCondsetsID);
     if (!DisableStoreWidening)
@@ -396,15 +355,9 @@ void HexagonPassConfig::addPreEmitPass() {
     // Generate MUX from pairs of conditional transfers.
     if (EnableGenMux)
       addPass(createHexagonGenMux());
-  }
 
-  // Create packets for 2 instructions that consitute a gather instruction.
-  // Do this regardless of the opt level.
-  addPass(createHexagonGatherPacketize(), false);
-
-  if (!NoOpt)
     addPass(createHexagonPacketizer(), false);
-
+  }
   if (EnableVectorPrint)
     addPass(createHexagonVectorPrint(), false);
 

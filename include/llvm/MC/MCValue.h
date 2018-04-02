@@ -38,12 +38,11 @@ class raw_ostream;
 /// Note that this class must remain a simple POD value class, because we need
 /// it to live in unions etc.
 class MCValue {
-  const MCSymbolRefExpr *SymA = nullptr, *SymB = nullptr;
-  int64_t Cst = 0;
-  uint32_t RefKind = 0;
-
+  const MCSymbolRefExpr *SymA, *SymB;
+  int64_t Cst;
+  uint32_t RefKind;
 public:
-  MCValue() = default;
+  MCValue() : SymA(nullptr), SymB(nullptr), Cst(0), RefKind(0) {}
   int64_t getConstant() const { return Cst; }
   const MCSymbolRefExpr *getSymA() const { return SymA; }
   const MCSymbolRefExpr *getSymB() const { return SymB; }

@@ -15,6 +15,7 @@
 #include "llvm/ADT/StringSwitch.h"
 #include "llvm/ADT/Triple.h"
 #include "llvm/IR/LLVMContext.h"
+#include "llvm/IR/Module.h"
 #include "llvm/ToolDrivers/llvm-dlltool/DlltoolDriver.h"
 #include "llvm/ToolDrivers/llvm-lib/LibDriver.h"
 #include "llvm/Object/Archive.h"
@@ -35,6 +36,9 @@
 #include "llvm/Support/TargetSelect.h"
 #include "llvm/Support/ToolOutputFile.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cstdlib>
+#include <memory>
 
 #if !defined(_MSC_VER) && !defined(__MINGW32__)
 #include <unistd.h>
@@ -50,7 +54,6 @@ static StringRef ToolName;
 // Show the error message and exit.
 LLVM_ATTRIBUTE_NORETURN static void fail(Twine Error) {
   errs() << ToolName << ": " << Error << ".\n";
-  cl::PrintHelpMessage();
   exit(1);
 }
 
@@ -123,8 +126,6 @@ static cl::extrahelp MoreHelp(
   "  [v] - be verbose about actions taken\n"
 );
 
-static const char OptionChars[] = "dmpqrtxabiosSTucv";
-
 // This enumeration delineates the kinds of operations on an archive
 // that are permitted.
 enum ArchiveOperation {
@@ -163,18 +164,26 @@ static std::string ArchiveName;
 // on the command line.
 static std::vector<StringRef> Members;
 
+// Show the error message, the help message and exit.
+LLVM_ATTRIBUTE_NORETURN static void
+show_help(const std::string &msg) {
+  errs() << ToolName << ": " << msg << "\n\n";
+  cl::PrintHelpMessage();
+  exit(1);
+}
+
 // Extract the member filename from the command line for the [relpos] argument
 // associated with a, b, and i modifiers
 static void getRelPos() {
   if(RestOfArgs.size() == 0)
-    fail("Expected [relpos] for a, b, or i modifier");
+    show_help("Expected [relpos] for a, b, or i modifier");
   RelPos = RestOfArgs[0];
   RestOfArgs.erase(RestOfArgs.begin());
 }
 
 static void getOptions() {
   if(RestOfArgs.size() == 0)
-    fail("Expected options");
+    show_help("Expected options");
   Options = RestOfArgs[0];
   RestOfArgs.erase(RestOfArgs.begin());
 }
@@ -182,7 +191,7 @@ static void getOptions() {
 // Get the archive file name from the command line
 static void getArchive() {
   if(RestOfArgs.size() == 0)
-    fail("An archive name must be specified");
+    show_help("An archive name must be specified");
   ArchiveName = RestOfArgs[0];
   RestOfArgs.erase(RestOfArgs.begin());
 }
@@ -266,7 +275,7 @@ static ArchiveOperation parseCommandLine() {
       Thin = true;
       break;
     default:
-      fail(std::string("unknown option ") + Options[i]);
+      cl::PrintHelpMessage();
     }
   }
 
@@ -281,26 +290,26 @@ static ArchiveOperation parseCommandLine() {
     NumOperations = 1;
     Operation = CreateSymTab;
     if (!Members.empty())
-      fail("The s operation takes only an archive as argument");
+      show_help("The s operation takes only an archive as argument");
   }
 
   // Perform various checks on the operation/modifier specification
   // to make sure we are dealing with a legal request.
   if (NumOperations == 0)
-    fail("You must specify at least one of the operations");
+    show_help("You must specify at least one of the operations");
   if (NumOperations > 1)
-    fail("Only one operation may be specified");
+    show_help("Only one operation may be specified");
   if (NumPositional > 1)
-    fail("You may only specify one of a, b, and i modifiers");
+    show_help("You may only specify one of a, b, and i modifiers");
   if (AddAfter || AddBefore) {
     if (Operation != Move && Operation != ReplaceOrInsert)
-      fail("The 'a', 'b' and 'i' modifiers can only be specified with "
-           "the 'm' or 'r' operations");
+      show_help("The 'a', 'b' and 'i' modifiers can only be specified with "
+            "the 'm' or 'r' operations");
   }
   if (OriginalDates && Operation != Extract)
-    fail("The 'o' modifier is only applicable to the 'x' operation");
+    show_help("The 'o' modifier is only applicable to the 'x' operation");
   if (OnlyUpdate && Operation != ReplaceOrInsert)
-    fail("The 'u' modifier is only applicable to the 'r' operation");
+    show_help("The 'u' modifier is only applicable to the 'r' operation");
 
   // Return the parsed operation to the caller
   return Operation;
@@ -679,10 +688,10 @@ performWriteOperation(ArchiveOperation Operation,
     break;
   }
 
-  Error E =
+  std::pair<StringRef, std::error_code> Result =
       writeArchive(ArchiveName, NewMembersP ? *NewMembersP : NewMembers, Symtab,
                    Kind, Deterministic, Thin, std::move(OldArchiveBuf));
-  failIfError(std::move(E), ArchiveName);
+  failIfError(Result.second, Result.first);
 }
 
 static void createSymbolTable(object::Archive *OldArchive) {
@@ -861,24 +870,6 @@ int main(int argc, char **argv) {
   if (Stem.find("ranlib") == StringRef::npos &&
       Stem.find("lib") != StringRef::npos)
     return libDriverMain(makeArrayRef(argv, argc));
-
-  for (int i = 1; i < argc; i++) {
-    // If an argument starts with a dash and only contains chars
-    // that belong to the options chars set, remove the dash.
-    // We can't handle it after the command line options parsing
-    // is done, since it will error out on an unrecognized string
-    // starting with a dash.
-    // Make sure this doesn't match the actual llvm-ar specific options
-    // that start with a dash.
-    StringRef S = argv[i];
-    if (S.startswith("-") &&
-        S.find_first_not_of(OptionChars, 1) == StringRef::npos) {
-      argv[i]++;
-      break;
-    }
-    if (S == "--")
-      break;
-  }
 
   // Have the command line options parsed and handle things
   // like --help and --version.

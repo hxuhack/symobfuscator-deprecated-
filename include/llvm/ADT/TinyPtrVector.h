@@ -97,7 +97,6 @@ public:
       if (RHS.Val.template is<EltTy>()) {
         V->clear();
         V->push_back(RHS.front());
-        RHS.Val = (EltTy)nullptr;
         return *this;
       }
       delete V;

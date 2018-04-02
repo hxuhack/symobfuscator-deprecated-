@@ -23,8 +23,6 @@ def FalkorModel : SchedMachineModel {
   let LoadLatency = 3;         // Optimistic load latency.
   let MispredictPenalty = 11;  // Minimum branch misprediction penalty.
   let CompleteModel = 1;
-
-  list<Predicate> UnsupportedFeatures = [HasSVE];
 }
 
 //===----------------------------------------------------------------------===//

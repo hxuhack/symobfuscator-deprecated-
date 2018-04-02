@@ -1,4 +1,4 @@
-//===- llvm/CodeGen/DwarfCompileUnit.h - Dwarf Compile Unit -----*- C++ -*-===//
+//===-- llvm/CodeGen/DwarfCompileUnit.h - Dwarf Compile Unit ---*- C++ -*--===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,32 +14,19 @@
 #ifndef LLVM_LIB_CODEGEN_ASMPRINTER_DWARFCOMPILEUNIT_H
 #define LLVM_LIB_CODEGEN_ASMPRINTER_DWARFCOMPILEUNIT_H
 
-#include "DbgValueHistoryCalculator.h"
-#include "DwarfDebug.h"
 #include "DwarfUnit.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/ADT/StringMap.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/BinaryFormat/Dwarf.h"
-#include "llvm/CodeGen/DIE.h"
-#include "llvm/CodeGen/LexicalScopes.h"
-#include "llvm/IR/DebugInfoMetadata.h"
-#include "llvm/Support/Casting.h"
-#include <algorithm>
-#include <cassert>
-#include <cstdint>
-#include <memory>
+#include "llvm/IR/DebugInfo.h"
 
 namespace llvm {
 
+class StringRef;
 class AsmPrinter;
+class DIE;
+class DwarfDebug;
 class DwarfFile;
-class GlobalVariable;
-class MCExpr;
 class MCSymbol;
-class MDNode;
+class LexicalScope;
 
 class DwarfCompileUnit final : public DwarfUnit {
   /// A numeric ID unique among all CUs in the module
@@ -50,7 +37,7 @@ class DwarfCompileUnit final : public DwarfUnit {
   DIE::value_iterator StmtListValue;
 
   /// Skeleton unit associated with this unit.
-  DwarfCompileUnit *Skeleton = nullptr;
+  DwarfCompileUnit *Skeleton;
 
   /// The start of the unit within its section.
   MCSymbol *LabelBegin;
@@ -58,8 +45,9 @@ class DwarfCompileUnit final : public DwarfUnit {
   /// The start of the unit macro info within macro section.
   MCSymbol *MacroLabelBegin;
 
-  using ImportedEntityList = SmallVector<const MDNode *, 8>;
-  using ImportedEntityMap = DenseMap<const MDNode *, ImportedEntityList>;
+  typedef llvm::SmallVector<const MDNode *, 8> ImportedEntityList;
+  typedef llvm::DenseMap<const MDNode *, ImportedEntityList>
+  ImportedEntityMap;
 
   ImportedEntityMap ImportedEntities;
 
@@ -78,7 +66,7 @@ class DwarfCompileUnit final : public DwarfUnit {
 
   // The base address of this unit, if any. Used for relative references in
   // ranges/locs.
-  const MCSymbol *BaseAddress = nullptr;
+  const MCSymbol *BaseAddress;
 
   DenseMap<const MDNode *, DIE *> AbstractSPDies;
   DenseMap<const MDNode *, std::unique_ptr<DbgVariable>> AbstractVariables;
@@ -176,7 +164,6 @@ public:
 
   void attachRangesOrLowHighPC(DIE &D,
                                const SmallVectorImpl<InsnRange> &Ranges);
-
   /// \brief This scope represents inlined body of a function. Construct
   /// DIE to represent this concrete inlined copy of the function.
   DIE *constructInlinedScopeDIE(LexicalScope *Scope);
@@ -194,7 +181,7 @@ public:
   /// A helper function to create children of a Scope DIE.
   DIE *createScopeChildrenDIE(LexicalScope *Scope,
                               SmallVectorImpl<DIE *> &Children,
-                              bool *HasNonScopeChildren = nullptr);
+                              unsigned *ChildScopeCount = nullptr);
 
   /// \brief Construct a DIE for this subprogram scope.
   void constructSubprogramScopeDIE(const DISubprogram *Sub, LexicalScope *Scope);
@@ -208,9 +195,8 @@ public:
 
   void finishSubprogramDefinition(const DISubprogram *SP);
   void finishVariableDefinition(const DbgVariable &Var);
-
   /// Find abstract variable associated with Var.
-  using InlinedVariable = DbgValueHistoryMap::InlinedVariable;
+  typedef DbgValueHistoryMap::InlinedVariable InlinedVariable;
   DbgVariable *getExistingAbstractVariable(InlinedVariable IV,
                                            const DILocalVariable *&Cleansed);
   DbgVariable *getExistingAbstractVariable(InlinedVariable IV);
@@ -289,10 +275,8 @@ public:
 
   void setBaseAddress(const MCSymbol *Base) { BaseAddress = Base; }
   const MCSymbol *getBaseAddress() const { return BaseAddress; }
-
-  bool hasDwarfPubSections() const;
 };
 
-} // end namespace llvm
+} // end llvm namespace
 
-#endif // LLVM_LIB_CODEGEN_ASMPRINTER_DWARFCOMPILEUNIT_H
+#endif

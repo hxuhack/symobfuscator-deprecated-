@@ -5,11 +5,11 @@
 
 # CHECK:  blezc
 # CHECK:  nop
-# CHECK: # %bb.1:
+# CHECK: # BB#1:
 # CHECK:  .insn
-# CHECK: # %bb.2:
+# CHECK: # BB#2:
 # CHECK:  .insn
-# CHECK: # %bb.3:
+# CHECK: # BB#3:
 # CHECK:  jal
 
 --- |

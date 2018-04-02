@@ -15,8 +15,6 @@
 #include "llvm/CodeGen/MachineBranchProbabilityInfo.h"
 #include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineFunctionPass.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/Passes.h"
 #include "llvm/CodeGen/TailDuplicator.h"
 #include "llvm/Pass.h"
 
@@ -49,15 +47,12 @@ char &llvm::TailDuplicateID = TailDuplicatePass::ID;
 INITIALIZE_PASS(TailDuplicatePass, DEBUG_TYPE, "Tail Duplication", false, false)
 
 bool TailDuplicatePass::runOnMachineFunction(MachineFunction &MF) {
-  if (skipFunction(MF.getFunction()))
+  if (skipFunction(*MF.getFunction()))
     return false;
 
   auto MBPI = &getAnalysis<MachineBranchProbabilityInfo>();
 
-  // TODO: Querying isSSA() to determine pre-/post-regalloc is fragile, better
-  // split this into two passes instead.
-  bool PreRegAlloc = MF.getRegInfo().isSSA();
-  Duplicator.initMF(MF, PreRegAlloc, MBPI, /* LayoutMode */ false);
+  Duplicator.initMF(MF, MBPI, /* LayoutMode */ false);
 
   bool MadeChange = false;
   while (Duplicator.tailDuplicateBlocks())

@@ -1,8 +1,5 @@
 // RUN: %clang_cc1 -fopenmp -verify -DFOPENMP -o - %s
 // RUN: %clang_cc1 -verify -o - %s
-
-// RUN: %clang_cc1 -fopenmp-simd -verify -DFOPENMP -o - %s
-// RUN: %clang_cc1 -verify -o - %s
 // expected-no-diagnostics
 #ifdef FOPENMP
 // -fopenmp option is specified

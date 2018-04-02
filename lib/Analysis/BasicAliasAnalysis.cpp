@@ -14,8 +14,6 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/Analysis/BasicAliasAnalysis.h"
-#include "llvm/ADT/APInt.h"
-#include "llvm/ADT/SmallPtrSet.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/Analysis/AliasAnalysis.h"
@@ -25,40 +23,21 @@
 #include "llvm/Analysis/InstructionSimplify.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/MemoryBuiltins.h"
-#include "llvm/Analysis/MemoryLocation.h"
-#include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
-#include "llvm/IR/Argument.h"
-#include "llvm/IR/Attributes.h"
-#include "llvm/IR/CallSite.h"
-#include "llvm/IR/Constant.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
 #include "llvm/IR/Dominators.h"
-#include "llvm/IR/Function.h"
-#include "llvm/IR/GetElementPtrTypeIterator.h"
 #include "llvm/IR/GlobalAlias.h"
 #include "llvm/IR/GlobalVariable.h"
-#include "llvm/IR/InstrTypes.h"
-#include "llvm/IR/Instruction.h"
 #include "llvm/IR/Instructions.h"
 #include "llvm/IR/IntrinsicInst.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Metadata.h"
+#include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/IR/Type.h"
-#include "llvm/IR/User.h"
-#include "llvm/IR/Value.h"
 #include "llvm/Pass.h"
-#include "llvm/Support/Casting.h"
-#include "llvm/Support/CommandLine.h"
-#include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/KnownBits.h"
-#include <cassert>
-#include <cstdint>
-#include <cstdlib>
-#include <utility>
+#include <algorithm>
 
 #define DEBUG_TYPE "basicaa"
 
@@ -244,6 +223,7 @@ static bool isObjectSize(const Value *V, uint64_t Size, const DataLayout &DL,
 
   if (const BinaryOperator *BOp = dyn_cast<BinaryOperator>(V)) {
     if (ConstantInt *RHSC = dyn_cast<ConstantInt>(BOp->getOperand(1))) {
+
       // If we've been called recursively, then Offset and Scale will be wider
       // than the BOp operands. We'll always zext it here as we'll process sign
       // extensions below (see the isa<SExtInst> / isa<ZExtInst> cases).
@@ -594,6 +574,7 @@ bool BasicAAResult::pointsToConstantMemory(const MemoryLocation &Loc,
     // Otherwise be conservative.
     Visited.clear();
     return AAResultBase::pointsToConstantMemory(Loc, OrLocal);
+
   } while (!Worklist.empty() && --MaxLookup);
 
   Visited.clear();
@@ -617,10 +598,6 @@ FunctionModRefBehavior BasicAAResult::getModRefBehavior(ImmutableCallSite CS) {
 
   if (CS.onlyAccessesArgMemory())
     Min = FunctionModRefBehavior(Min & FMRB_OnlyAccessesArgumentPointees);
-  else if (CS.onlyAccessesInaccessibleMemory())
-    Min = FunctionModRefBehavior(Min & FMRB_OnlyAccessesInaccessibleMem);
-  else if (CS.onlyAccessesInaccessibleMemOrArgMem())
-    Min = FunctionModRefBehavior(Min & FMRB_OnlyAccessesInaccessibleOrArgMem);
 
   // If CS has operand bundles then aliasing attributes from the function it
   // calls do not directly apply to the CallSite.  This can be made more
@@ -685,15 +662,16 @@ static bool isWriteOnlyParam(ImmutableCallSite CS, unsigned ArgIdx,
 
 ModRefInfo BasicAAResult::getArgModRefInfo(ImmutableCallSite CS,
                                            unsigned ArgIdx) {
+
   // Checking for known builtin intrinsics and target library functions.
   if (isWriteOnlyParam(CS, ArgIdx, TLI))
-    return ModRefInfo::Mod;
+    return MRI_Mod;
 
   if (CS.paramHasAttr(ArgIdx, Attribute::ReadOnly))
-    return ModRefInfo::Ref;
+    return MRI_Ref;
 
   if (CS.paramHasAttr(ArgIdx, Attribute::ReadNone))
-    return ModRefInfo::NoModRef;
+    return MRI_NoModRef;
 
   return AAResultBase::getArgModRefInfo(CS, ArgIdx);
 }
@@ -770,7 +748,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
   if (isa<AllocaInst>(Object))
     if (const CallInst *CI = dyn_cast<CallInst>(CS.getInstruction()))
       if (CI->isTailCall())
-        return ModRefInfo::NoModRef;
+        return MRI_NoModRef;
 
   // If the pointer is to a locally allocated object that does not escape,
   // then the call can not mod/ref the pointer unless the call takes the pointer
@@ -780,8 +758,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
 
     // Optimistically assume that call doesn't touch Object and check this
     // assumption in the following loop.
-    ModRefInfo Result = ModRefInfo::NoModRef;
-    bool IsMustAlias = true;
+    ModRefInfo Result = MRI_NoModRef;
 
     unsigned OperandNo = 0;
     for (auto CI = CS.data_operands_begin(), CE = CS.data_operands_end();
@@ -803,37 +780,29 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
       // is impossible to alias the pointer we're checking.
       AliasResult AR =
           getBestAAResults().alias(MemoryLocation(*CI), MemoryLocation(Object));
-      if (AR != MustAlias)
-        IsMustAlias = false;
+
       // Operand doesnt alias 'Object', continue looking for other aliases
       if (AR == NoAlias)
         continue;
       // Operand aliases 'Object', but call doesn't modify it. Strengthen
       // initial assumption and keep looking in case if there are more aliases.
       if (CS.onlyReadsMemory(OperandNo)) {
-        Result = setRef(Result);
+        Result = static_cast<ModRefInfo>(Result | MRI_Ref);
         continue;
       }
       // Operand aliases 'Object' but call only writes into it.
       if (CS.doesNotReadMemory(OperandNo)) {
-        Result = setMod(Result);
+        Result = static_cast<ModRefInfo>(Result | MRI_Mod);
         continue;
       }
       // This operand aliases 'Object' and call reads and writes into it.
-      // Setting ModRef will not yield an early return below, MustAlias is not
-      // used further.
-      Result = ModRefInfo::ModRef;
+      Result = MRI_ModRef;
       break;
     }
 
-    // No operand aliases, reset Must bit. Add below if at least one aliases
-    // and all aliases found are MustAlias.
-    if (isNoModRef(Result))
-      IsMustAlias = false;
-
     // Early return if we improved mod ref information
-    if (!isModAndRefSet(Result))
-      return IsMustAlias ? setMust(Result) : clearMust(Result);
+    if (Result != MRI_ModRef)
+      return Result;
   }
 
   // If the CallSite is to malloc or calloc, we can assume that it doesn't
@@ -841,13 +810,13 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
   // routines do not read values visible in the IR.  TODO: Consider special
   // casing realloc and strdup routines which access only their arguments as
   // well.  Or alternatively, replace all of this with inaccessiblememonly once
-  // that's implemented fully.
+  // that's implemented fully. 
   auto *Inst = CS.getInstruction();
   if (isMallocOrCallocLikeFn(Inst, &TLI)) {
     // Be conservative if the accessed pointer may alias the allocation -
     // fallback to the generic handling below.
     if (getBestAAResults().alias(MemoryLocation(Inst), Loc) == NoAlias)
-      return ModRefInfo::NoModRef;
+      return MRI_NoModRef;
   }
 
   // The semantics of memcpy intrinsics forbid overlap between their respective
@@ -860,18 +829,18 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
     if ((SrcAA = getBestAAResults().alias(MemoryLocation::getForSource(Inst),
                                           Loc)) == MustAlias)
       // Loc is exactly the memcpy source thus disjoint from memcpy dest.
-      return ModRefInfo::Ref;
+      return MRI_Ref;
     if ((DestAA = getBestAAResults().alias(MemoryLocation::getForDest(Inst),
                                            Loc)) == MustAlias)
       // The converse case.
-      return ModRefInfo::Mod;
+      return MRI_Mod;
 
     // It's also possible for Loc to alias both src and dest, or neither.
-    ModRefInfo rv = ModRefInfo::NoModRef;
+    ModRefInfo rv = MRI_NoModRef;
     if (SrcAA != NoAlias)
-      rv = setRef(rv);
+      rv = static_cast<ModRefInfo>(rv | MRI_Ref);
     if (DestAA != NoAlias)
-      rv = setMod(rv);
+      rv = static_cast<ModRefInfo>(rv | MRI_Mod);
     return rv;
   }
 
@@ -879,7 +848,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
   // proper control dependencies will be maintained, it never aliases any
   // particular memory location.
   if (isIntrinsicCall(CS, Intrinsic::assume))
-    return ModRefInfo::NoModRef;
+    return MRI_NoModRef;
 
   // Like assumes, guard intrinsics are also marked as arbitrarily writing so
   // that proper control dependencies are maintained but they never mods any
@@ -889,7 +858,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
   // heap state at the point the guard is issued needs to be consistent in case
   // the guard invokes the "deopt" continuation.
   if (isIntrinsicCall(CS, Intrinsic::experimental_guard))
-    return ModRefInfo::Ref;
+    return MRI_Ref;
 
   // Like assumes, invariant.start intrinsics were also marked as arbitrarily
   // writing so that proper control dependencies are maintained but they never
@@ -915,7 +884,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS,
   // rules of invariant.start)  and print 40, while the first program always
   // prints 50.
   if (isIntrinsicCall(CS, Intrinsic::invariant_start))
-    return ModRefInfo::Ref;
+    return MRI_Ref;
 
   // The AAResultBase base class has some smarts, lets use them.
   return AAResultBase::getModRefInfo(CS, Loc);
@@ -928,7 +897,7 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS1,
   // particular memory location.
   if (isIntrinsicCall(CS1, Intrinsic::assume) ||
       isIntrinsicCall(CS2, Intrinsic::assume))
-    return ModRefInfo::NoModRef;
+    return MRI_NoModRef;
 
   // Like assumes, guard intrinsics are also marked as arbitrarily writing so
   // that proper control dependencies are maintained but they never mod any
@@ -942,14 +911,10 @@ ModRefInfo BasicAAResult::getModRefInfo(ImmutableCallSite CS1,
   // possibilities for guard intrinsics.
 
   if (isIntrinsicCall(CS1, Intrinsic::experimental_guard))
-    return isModSet(createModRefInfo(getModRefBehavior(CS2)))
-               ? ModRefInfo::Ref
-               : ModRefInfo::NoModRef;
+    return getModRefBehavior(CS2) & MRI_Mod ? MRI_Ref : MRI_NoModRef;
 
   if (isIntrinsicCall(CS2, Intrinsic::experimental_guard))
-    return isModSet(createModRefInfo(getModRefBehavior(CS1)))
-               ? ModRefInfo::Mod
-               : ModRefInfo::NoModRef;
+    return getModRefBehavior(CS1) & MRI_Mod ? MRI_Mod : MRI_NoModRef;
 
   // The AAResultBase base class has some smarts, lets use them.
   return AAResultBase::getModRefInfo(CS1, CS2);
@@ -962,6 +927,7 @@ static AliasResult aliasSameBasePointerGEPs(const GEPOperator *GEP1,
                                             const GEPOperator *GEP2,
                                             uint64_t V2Size,
                                             const DataLayout &DL) {
+
   assert(GEP1->getPointerOperand()->stripPointerCastsAndBarriers() ==
              GEP2->getPointerOperand()->stripPointerCastsAndBarriers() &&
          GEP1->getPointerOperandType() == GEP2->getPointerOperandType() &&
@@ -1230,10 +1196,8 @@ AliasResult BasicAAResult::aliasGEP(const GEPOperator *GEP1, uint64_t V1Size,
 
     // If we get a No or May, then return it immediately, no amount of analysis
     // will improve this situation.
-    if (BaseAlias != MustAlias) {
-      assert(BaseAlias == NoAlias || BaseAlias == MayAlias);
+    if (BaseAlias != MustAlias)
       return BaseAlias;
-    }
 
     // Otherwise, we have a MustAlias.  Since the base pointers alias each other
     // exactly, see if the computed offset from the common pointer tells us
@@ -1272,15 +1236,13 @@ AliasResult BasicAAResult::aliasGEP(const GEPOperator *GEP1, uint64_t V1Size,
     AliasResult R = aliasCheck(UnderlyingV1, MemoryLocation::UnknownSize,
                                AAMDNodes(), V2, MemoryLocation::UnknownSize,
                                V2AAInfo, nullptr, UnderlyingV2);
-    if (R != MustAlias) {
+    if (R != MustAlias)
       // If V2 may alias GEP base pointer, conservatively returns MayAlias.
       // If V2 is known not to alias GEP base pointer, then the two values
       // cannot alias per GEP semantics: "Any memory access must be done through
       // a pointer value associated with an address range of the memory access,
       // otherwise the behavior is undefined.".
-      assert(R == NoAlias || R == MayAlias);
       return R;
-    }
 
     // If the max search depth is reached the result is undefined
     if (GEP1MaxLookupReached)
@@ -1607,6 +1569,11 @@ AliasResult BasicAAResult::aliasCheck(const Value *V1, uint64_t V1Size,
         (isa<Argument>(O2) && isIdentifiedFunctionLocal(O1)))
       return NoAlias;
 
+    // Most objects can't alias null.
+    if ((isa<ConstantPointerNull>(O2) && isKnownNonNull(O1)) ||
+        (isa<ConstantPointerNull>(O1) && isKnownNonNull(O2)))
+      return NoAlias;
+
     // If one pointer is the result of a call/invoke or load and the other is a
     // non-escaping local object within the same function, then we know the
     // object couldn't escape to a point where the call could return it.
@@ -1685,9 +1652,9 @@ AliasResult BasicAAResult::aliasCheck(const Value *V1, uint64_t V1Size,
   // If both pointers are pointing into the same object and one of them
   // accesses the entire object, then the accesses must overlap in some way.
   if (O1 == O2)
-    if (V1Size != MemoryLocation::UnknownSize &&
-        V2Size != MemoryLocation::UnknownSize &&
-        (isObjectSize(O1, V1Size, DL, TLI) ||
+    if ((V1Size != MemoryLocation::UnknownSize &&
+         isObjectSize(O1, V1Size, DL, TLI)) ||
+        (V2Size != MemoryLocation::UnknownSize &&
          isObjectSize(O2, V2Size, DL, TLI)))
       return AliasCache[Locs] = PartialAlias;
 
@@ -1843,7 +1810,6 @@ BasicAAWrapperPass::BasicAAWrapperPass() : FunctionPass(ID) {
 }
 
 char BasicAAWrapperPass::ID = 0;
-
 void BasicAAWrapperPass::anchor() {}
 
 INITIALIZE_PASS_BEGIN(BasicAAWrapperPass, "basicaa",

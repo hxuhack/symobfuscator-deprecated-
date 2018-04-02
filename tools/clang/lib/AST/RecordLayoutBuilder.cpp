@@ -632,9 +632,6 @@ protected:
   /// pointer, as opposed to inheriting one from a primary base class.
   bool HasOwnVFPtr;
 
-  /// \brief the flag of field offset changing due to packed attribute.
-  bool HasPackedField;
-
   typedef llvm::DenseMap<const CXXRecordDecl *, CharUnits> BaseOffsetsMapTy;
 
   /// Bases - base classes and their offsets in the record.
@@ -669,7 +666,7 @@ protected:
         NonVirtualSize(CharUnits::Zero()),
         NonVirtualAlignment(CharUnits::One()), PrimaryBase(nullptr),
         PrimaryBaseIsVirtual(false), HasOwnVFPtr(false),
-        HasPackedField(false), FirstNearlyEmptyVBase(nullptr) {}
+        FirstNearlyEmptyVBase(nullptr) {}
 
   void Layout(const RecordDecl *D);
   void Layout(const CXXRecordDecl *D);
@@ -1169,6 +1166,7 @@ ItaniumRecordLayoutBuilder::LayoutBase(const BaseSubobjectInfo *Base) {
   // Query the external layout to see if it provides an offset.
   bool HasExternalLayout = false;
   if (UseExternalLayout) {
+    llvm::DenseMap<const CXXRecordDecl *, CharUnits>::iterator Known;
     if (Base->IsVirtual)
       HasExternalLayout = External.getExternalNVBaseOffset(Base->Class, Offset);
     else
@@ -1731,7 +1729,7 @@ void ItaniumRecordLayoutBuilder::LayoutField(const FieldDecl *D,
     const ArrayType* ATy = Context.getAsArrayType(D->getType());
     FieldAlign = Context.getTypeAlignInChars(ATy->getElementType());
   } else if (const ReferenceType *RT = D->getType()->getAs<ReferenceType>()) {
-    unsigned AS = Context.getTargetAddressSpace(RT->getPointeeType());
+    unsigned AS = RT->getPointeeType().getAddressSpace();
     FieldSize = 
       Context.toCharUnitsFromBits(Context.getTargetInfo().getPointerWidth(AS));
     FieldAlign = 
@@ -1849,6 +1847,7 @@ void ItaniumRecordLayoutBuilder::FinishLayout(const NamedDecl *D) {
   uint64_t UnpaddedSize = getSizeInBits() - UnfilledBitsInLastUnit;
   uint64_t UnpackedSizeInBits =
       llvm::alignTo(getSizeInBits(), Context.toBits(UnpackedAlignment));
+  CharUnits UnpackedSize = Context.toCharUnitsFromBits(UnpackedSizeInBits);
   uint64_t RoundedSize =
       llvm::alignTo(getSizeInBits(), Context.toBits(Alignment));
 
@@ -1883,11 +1882,10 @@ void ItaniumRecordLayoutBuilder::FinishLayout(const NamedDecl *D) {
           << (InBits ? 1 : 0); // (byte|bit)
     }
 
-    // Warn if we packed it unnecessarily, when the unpacked alignment is not
-    // greater than the one after packing, the size in bits doesn't change and
-    // the offset of each field is identical.
-    if (Packed && UnpackedAlignment <= Alignment &&
-        UnpackedSizeInBits == getSizeInBits() && !HasPackedField)
+    // Warn if we packed it unnecessarily. If the alignment is 1 byte don't
+    // bother since there won't be alignment issues.
+    if (Packed && UnpackedAlignment > CharUnits::One() && 
+        getSize() == UnpackedSize)
       Diag(D->getLocation(), diag::warn_unnecessary_packed)
           << Context.getTypeDeclType(RD);
   }
@@ -1979,10 +1977,13 @@ void ItaniumRecordLayoutBuilder::CheckFieldPadding(
           << Context.getTypeDeclType(D->getParent())
           << PadSize
           << (InBits ? 1 : 0); // (byte|bit)
- }
- if (isPacked && Offset != UnpackedOffset) {
-   HasPackedField = true;
- }
+  }
+
+  // Warn if we packed it unnecessarily. If the alignment is 1 byte don't
+  // bother since there won't be alignment issues.
+  if (isPacked && UnpackedAlign > CharBitNum && Offset == UnpackedOffset)
+    Diag(D->getLocation(), diag::warn_unnecessary_packed)
+        << D->getIdentifier();
 }
 
 static const CXXMethodDecl *computeKeyFunction(ASTContext &Context,
@@ -2083,7 +2084,7 @@ static bool mustSkipTailPadding(TargetCXXABI ABI, const CXXRecordDecl *RD) {
     // rules, we should implement the restrictions about over-sized
     // bitfields:
     //
-    // http://itanium-cxx-abi.github.io/cxx-abi/abi.html#POD :
+    // http://mentorembedded.github.com/cxx-abi/abi.html#POD :
     //   In general, a type is considered a POD for the purposes of
     //   layout if it is a POD type (in the sense of ISO C++
     //   [basic.types]). However, a POD-struct or POD-union (in the
@@ -2895,12 +2896,13 @@ void MicrosoftRecordLayoutBuilder::computeVtorDispSet(
       Work.insert(MD);
   while (!Work.empty()) {
     const CXXMethodDecl *MD = *Work.begin();
-    auto MethodRange = MD->overridden_methods();
+    CXXMethodDecl::method_iterator i = MD->begin_overridden_methods(),
+                                   e = MD->end_overridden_methods();
     // If a virtual method has no-overrides it lives in its parent's vtable.
-    if (MethodRange.begin() == MethodRange.end())
+    if (i == e)
       BasesWithOverriddenMethods.insert(MD->getParent());
     else
-      Work.insert(MethodRange.begin(), MethodRange.end());
+      Work.insert(i, e);
     // We've finished processing this element, remove it from the working set.
     Work.erase(MD);
   }

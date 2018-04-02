@@ -13,29 +13,16 @@
         lsls r0, pc, #0
         lsls pc, pc, #0
 
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsl pc, r0, #0
-// CHECK-NONARM: note: instruction requires: arm-mode
-// CHECK-NONARM: note: operand must be a register in range [r0, r14]
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsl r0, pc, #0
-// CHECK-NONARM: note: instruction requires: arm-mode
-// CHECK-NONARM: note: operand must be a register in range [r0, r14]
-
 // CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsl pc, pc, #0
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsls pc, r0, #0
-// CHECK-NONARM: note: instruction requires: arm-mode
-// CHECK-NONARM: note: operand must be a register in range [r0, r14]
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsls r0, pc, #0
-// CHECK-NONARM: note: instruction requires: arm-mode
-// CHECK-NONARM: note: operand must be a register in range [r0, r14]
-
 // CHECK-NONARM: error: instruction requires: arm-mode
 // CHECK-NONARM-NEXT: lsls pc, pc, #0
 
@@ -53,37 +40,18 @@
         movs r0, pc, lsl #0
         movs pc, pc, lsl #0
 
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// FIXME: Really the error we should be giving is "requires: arm-mode"
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: mov pc, r0, lsl #0
-// CHECK-NONARM: note: operand must be a register in range [r0, r15]
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r12] or r14
-// CHECK-THUMBV8: note: operand must be a register in range [r0, r14]
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: mov r0, pc, lsl #0
-// CHECK-NONARM: note: operand must be a register in range [r0, r15]
-// CHECK-NONARM: note: invalid operand for instruction
-// CHECK-NONARM: note: invalid operand for instruction
-// CHECK-NONARM: note: operand must be an immediate in the range [256,65535]
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: mov pc, pc, lsl #0
-// CHECK-NONARM: note: operand must be a register in range [r0, r15]
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r12] or r14
-// CHECK-THUMBV8: note: operand must be a register in range [r0, r14]
-
-// CHECK-THUMBV7: error: operand must be a register in range [r0, r12] or r14
-// CHECK-THUMBV8: error: operand must be a register in range [r0, r14]
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: movs pc, r0, lsl #0
-
-// CHECK-NONARM: error: invalid instruction, any one of the following would fix this:
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: movs r0, pc, lsl #0
-// CHECK-NONARM: note: operand must be a register in range [r0, r14]
-// CHECK-NONARM: note: invalid operand for instruction
-// CHECK-NONARM: note: invalid operand for instruction
-
-// CHECK-THUMBV7: error: operand must be a register in range [r0, r12] or r14
-// CHECK-THUMBV8: error: operand must be a register in range [r0, r14]
+// CHECK-NONARM: error: invalid operand for instruction
 // CHECK-NONARM-NEXT: movs pc, pc, lsl #0
 
 // CHECK-ARM: mov pc, r0                @ encoding: [0x00,0xf0,0xa0,0xe1]
@@ -100,22 +68,14 @@
         lsls r0, sp, #0
         lsls sp, r0, #0
 
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: instruction variant requires ARMv8 or later
 // CHECK-THUMBV7-NEXT: lsl sp, sp, #0
-// CHECK-THUMBV7: instruction requires: arm-mode
-// CHECK-THUMBV7: instruction variant requires ARMv8 or later
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: instruction variant requires ARMv8 or later
 // CHECK-THUMBV7-NEXT: lsls sp, sp, #0
-// CHECK-THUMBV7: instruction requires: arm-mode
-// CHECK-THUMBV7: instruction variant requires ARMv8 or later
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: instruction variant requires ARMv8 or later
 // CHECK-THUMBV7-NEXT: lsls r0, sp, #0
-// CHECK-THUMBV7: instruction requires: arm-mode
-// CHECK-THUMBV7: instruction variant requires ARMv8 or later
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: instruction variant requires ARMv8 or later
 // CHECK-THUMBV7-NEXT: lsls sp, r0, #0
-// CHECK-THUMBV7: instruction requires: arm-mode
-// CHECK-THUMBV7: instruction variant requires ARMv8 or later
 
 // CHECK-ARM: mov sp, sp                @ encoding: [0x0d,0xd0,0xa0,0xe1]
 // CHECK-ARM: movs sp, sp               @ encoding: [0x0d,0xd0,0xb0,0xe1]
@@ -128,26 +88,14 @@
         movs sp, r0, lsl #0
 
 // FIXME: We should consistently have the "requires ARMv8" error here
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: invalid operand for instruction
 // CHECK-THUMBV7-NEXT: mov sp, sp, lsl #0
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r15]
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r12] or r14
-
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: invalid operand for instruction
 // CHECK-THUMBV7-NEXT: movs sp, sp, lsl #0
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r14]
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r12] or r14
-
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: instruction variant requires ARMv8 or later
 // CHECK-THUMBV7-NEXT: movs r0, sp, lsl #0
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r14]
-// CHECK-THUMBV7: note: invalid operand for instruction
-// CHECK-THUMBV7: note: instruction variant requires ARMv8 or later
-
-// CHECK-THUMBV7: error: invalid instruction, any one of the following would fix this:
+// CHECK-THUMBV7: error: invalid operand for instruction
 // CHECK-THUMBV7-NEXT: movs sp, r0, lsl #0
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r14]
-// CHECK-THUMBV7: note: operand must be a register in range [r0, r12] or r14
 
 // CHECK-ARM: mov sp, sp                @ encoding: [0x0d,0xd0,0xa0,0xe1]
 // CHECK-ARM: movs sp, sp               @ encoding: [0x0d,0xd0,0xb0,0xe1]

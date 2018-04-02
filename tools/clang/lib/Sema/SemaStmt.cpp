@@ -14,7 +14,6 @@
 #include "clang/Sema/SemaInternal.h"
 #include "clang/AST/ASTContext.h"
 #include "clang/AST/ASTDiagnostic.h"
-#include "clang/AST/ASTLambda.h"
 #include "clang/AST/CharUnits.h"
 #include "clang/AST/CXXInheritance.h"
 #include "clang/AST/DeclObjC.h"
@@ -128,47 +127,34 @@ void Sema::ActOnForEachDeclStmt(DeclGroupPtrTy dg) {
 /// warning from firing.
 static bool DiagnoseUnusedComparison(Sema &S, const Expr *E) {
   SourceLocation Loc;
-  bool CanAssign;
-  enum { Equality, Inequality, Relational, ThreeWay } Kind;
+  bool IsNotEqual, CanAssign, IsRelational;
 
   if (const BinaryOperator *Op = dyn_cast<BinaryOperator>(E)) {
     if (!Op->isComparisonOp())
       return false;
 
-    if (Op->getOpcode() == BO_EQ)
-      Kind = Equality;
-    else if (Op->getOpcode() == BO_NE)
-      Kind = Inequality;
-    else if (Op->getOpcode() == BO_Cmp)
-      Kind = ThreeWay;
-    else {
-      assert(Op->isRelationalOp());
-      Kind = Relational;
-    }
+    IsRelational = Op->isRelationalOp();
     Loc = Op->getOperatorLoc();
+    IsNotEqual = Op->getOpcode() == BO_NE;
     CanAssign = Op->getLHS()->IgnoreParenImpCasts()->isLValue();
   } else if (const CXXOperatorCallExpr *Op = dyn_cast<CXXOperatorCallExpr>(E)) {
     switch (Op->getOperator()) {
+    default:
+      return false;
     case OO_EqualEqual:
-      Kind = Equality;
-      break;
     case OO_ExclaimEqual:
-      Kind = Inequality;
+      IsRelational = false;
       break;
     case OO_Less:
     case OO_Greater:
     case OO_GreaterEqual:
     case OO_LessEqual:
-      Kind = Relational;
+      IsRelational = true;
       break;
-    case OO_Spaceship:
-      Kind = ThreeWay;
-      break;
-    default:
-      return false;
     }
 
     Loc = Op->getOperatorLoc();
+    IsNotEqual = Op->getOperator() == OO_ExclaimEqual;
     CanAssign = Op->getArg(0)->IgnoreParenImpCasts()->isLValue();
   } else {
     // Not a typo-prone comparison.
@@ -181,15 +167,15 @@ static bool DiagnoseUnusedComparison(Sema &S, const Expr *E) {
     return false;
 
   S.Diag(Loc, diag::warn_unused_comparison)
-    << (unsigned)Kind << E->getSourceRange();
+    << (unsigned)IsRelational << (unsigned)IsNotEqual << E->getSourceRange();
 
   // If the LHS is a plausible entity to assign to, provide a fixit hint to
   // correct common typos.
-  if (CanAssign) {
-    if (Kind == Inequality)
+  if (!IsRelational && CanAssign) {
+    if (IsNotEqual)
       S.Diag(Loc, diag::note_inequality_comparison_to_or_assign)
         << FixItHint::CreateReplacement(Loc, "|=");
-    else if (Kind == Equality)
+    else
       S.Diag(Loc, diag::note_equality_comparison_to_assign)
         << FixItHint::CreateReplacement(Loc, "=");
   }
@@ -389,7 +375,7 @@ StmtResult Sema::ActOnCompoundStmt(SourceLocation L, SourceLocation R,
       DiagnoseEmptyLoopBody(Elts[i], Elts[i + 1]);
   }
 
-  return CompoundStmt::Create(Context, Elts, L, R);
+  return new (Context) CompoundStmt(Context, Elts, L, R);
 }
 
 StmtResult
@@ -616,14 +602,14 @@ static bool EqEnumVals(const std::pair<llvm::APSInt, EnumConstantDecl*>& lhs,
 
 /// GetTypeBeforeIntegralPromotion - Returns the pre-promotion type of
 /// potentially integral-promoted expression @p expr.
-static QualType GetTypeBeforeIntegralPromotion(const Expr *&E) {
-  if (const auto *CleanUps = dyn_cast<ExprWithCleanups>(E))
-    E = CleanUps->getSubExpr();
-  while (const auto *ImpCast = dyn_cast<ImplicitCastExpr>(E)) {
-    if (ImpCast->getCastKind() != CK_IntegralCast) break;
-    E = ImpCast->getSubExpr();
+static QualType GetTypeBeforeIntegralPromotion(Expr *&expr) {
+  if (ExprWithCleanups *cleanups = dyn_cast<ExprWithCleanups>(expr))
+    expr = cleanups->getSubExpr();
+  while (ImplicitCastExpr *impcast = dyn_cast<ImplicitCastExpr>(expr)) {
+    if (impcast->getCastKind() != CK_IntegralCast) break;
+    expr = impcast->getSubExpr();
   }
-  return E->getType();
+  return expr->getType();
 }
 
 ExprResult Sema::CheckSwitchCondition(SourceLocation SwitchLoc, Expr *Cond) {
@@ -757,32 +743,6 @@ static bool ShouldDiagnoseSwitchCaseNotInEnum(const Sema &S,
   return true;
 }
 
-static void checkEnumTypesInSwitchStmt(Sema &S, const Expr *Cond,
-                                       const Expr *Case) {
-  QualType CondType = GetTypeBeforeIntegralPromotion(Cond);
-  QualType CaseType = Case->getType();
-
-  const EnumType *CondEnumType = CondType->getAs<EnumType>();
-  const EnumType *CaseEnumType = CaseType->getAs<EnumType>();
-  if (!CondEnumType || !CaseEnumType)
-    return;
-
-  // Ignore anonymous enums.
-  if (!CondEnumType->getDecl()->getIdentifier() &&
-      !CondEnumType->getDecl()->getTypedefNameForAnonDecl())
-    return;
-  if (!CaseEnumType->getDecl()->getIdentifier() &&
-      !CaseEnumType->getDecl()->getTypedefNameForAnonDecl())
-    return;
-
-  if (S.Context.hasSameUnqualifiedType(CondType, CaseType))
-    return;
-
-  S.Diag(Case->getExprLoc(), diag::warn_comparison_of_mixed_enum_types_switch)
-      << CondType << CaseType << Cond->getSourceRange()
-      << Case->getSourceRange();
-}
-
 StmtResult
 Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
                             Stmt *BodyStmt) {
@@ -800,7 +760,7 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
 
   QualType CondType = CondExpr->getType();
 
-  const Expr *CondExprBeforePromotion = CondExpr;
+  Expr *CondExprBeforePromotion = CondExpr;
   QualType CondTypeBeforePromotion =
       GetTypeBeforeIntegralPromotion(CondExprBeforePromotion);
 
@@ -882,8 +842,6 @@ Sema::ActOnFinishSwitchStmt(SourceLocation SwitchLoc, Stmt *Switch,
         HasDependentValue = true;
         break;
       }
-
-      checkEnumTypesInSwitchStmt(*this, CondExpr, Lo);
 
       llvm::APSInt LoVal;
 
@@ -2494,7 +2452,7 @@ Sema::BuildCXXForRangeStmt(SourceLocation ForLoc, SourceLocation CoawaitLoc,
     // C++1z removes this restriction.
     QualType BeginType = BeginVar->getType(), EndType = EndVar->getType();
     if (!Context.hasSameType(BeginType, EndType)) {
-      Diag(RangeLoc, getLangOpts().CPlusPlus17
+      Diag(RangeLoc, getLangOpts().CPlusPlus1z
                          ? diag::warn_for_range_begin_end_types_differ
                          : diag::ext_for_range_begin_end_types_differ)
           << BeginType << EndType;
@@ -3229,12 +3187,6 @@ bool Sema::DeduceFunctionTypeFromReturnExpr(FunctionDecl *FD,
                                             SourceLocation ReturnLoc,
                                             Expr *&RetExpr,
                                             AutoType *AT) {
-  // If this is the conversion function for a lambda, we choose to deduce it
-  // type from the corresponding call operator, not from the synthesized return
-  // statement within it. See Sema::DeduceReturnType.
-  if (isLambdaConversionOperator(FD))
-    return false;
-
   TypeLoc OrigResultType = getReturnTypeLoc(FD);
   QualType Deduced;
 

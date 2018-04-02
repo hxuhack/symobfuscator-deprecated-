@@ -1,4 +1,4 @@
-//===- GCNRegPressure.cpp -------------------------------------------------===//
+//===------------------------- GCNRegPressure.cpp - -----------------------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -6,26 +6,13 @@
 // License. See LICENSE.TXT for details.
 //
 //===----------------------------------------------------------------------===//
+//
+/// \file
+//
+//===----------------------------------------------------------------------===//
 
 #include "GCNRegPressure.h"
-#include "AMDGPUSubtarget.h"
-#include "SIRegisterInfo.h"
-#include "llvm/ADT/SmallVector.h"
-#include "llvm/CodeGen/LiveInterval.h"
-#include "llvm/CodeGen/LiveIntervals.h"
-#include "llvm/CodeGen/MachineInstr.h"
-#include "llvm/CodeGen/MachineOperand.h"
-#include "llvm/CodeGen/MachineRegisterInfo.h"
 #include "llvm/CodeGen/RegisterPressure.h"
-#include "llvm/CodeGen/SlotIndexes.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/MC/LaneBitmask.h"
-#include "llvm/Support/Compiler.h"
-#include "llvm/Support/Debug.h"
-#include "llvm/Support/ErrorHandling.h"
-#include "llvm/Support/raw_ostream.h"
-#include <algorithm>
-#include <cassert>
 
 using namespace llvm;
 
@@ -49,7 +36,7 @@ void llvm::printLivesAt(SlotIndex SI,
       for (const auto &S : LI.subranges()) {
         if (!S.liveAt(SI)) continue;
         if (firstTime) {
-          dbgs() << "  " << printReg(Reg, MRI.getTargetRegisterInfo())
+          dbgs() << "  " << PrintReg(Reg, MRI.getTargetRegisterInfo())
                  << '\n';
           firstTime = false;
         }
@@ -76,6 +63,7 @@ static bool isEqual(const GCNRPTracker::LiveRegSet &S1,
   }
   return true;
 }
+
 #endif
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -119,7 +107,7 @@ void GCNRegPressure::inc(unsigned Reg,
     assert(PrevMask < NewMask);
 
     Value[Kind == SGPR_TUPLE ? SGPR32 : VGPR32] +=
-      Sign * (~PrevMask & NewMask).getNumLanes();
+      Sign * countPopulation((~PrevMask & NewMask).getAsInteger());
 
     if (PrevMask.none()) {
       assert(NewMask.any());
@@ -189,6 +177,7 @@ void GCNRegPressure::print(raw_ostream &OS, const SISubtarget *ST) const {
 }
 #endif
 
+
 static LaneBitmask getDefRegMask(const MachineOperand &MO,
                                  const MachineRegisterInfo &MRI) {
   assert(MO.isDef() && MO.isReg() &&
@@ -212,7 +201,7 @@ static LaneBitmask getUsedRegMask(const MachineOperand &MO,
     return MRI.getTargetRegisterInfo()->getSubRegIndexLaneMask(SubReg);
 
   auto MaxMask = MRI.getMaxLaneMaskForVReg(MO.getReg());
-  if (MaxMask == LaneBitmask::getLane(0)) // cannot have subregs
+  if (MaxMask.getAsInteger() == 1) // cannot have subregs
     return MaxMask;
 
   // For a tentative schedule LIS isn't updated yet but livemask should remain
@@ -441,12 +430,12 @@ static void reportMismatch(const GCNRPTracker::LiveRegSet &LISLR,
   for (auto const &P : TrackedLR) {
     auto I = LISLR.find(P.first);
     if (I == LISLR.end()) {
-      dbgs() << "  " << printReg(P.first, TRI)
+      dbgs() << "  " << PrintReg(P.first, TRI)
              << ":L" << PrintLaneMask(P.second)
              << " isn't found in LIS reported set\n";
     }
     else if (I->second != P.second) {
-      dbgs() << "  " << printReg(P.first, TRI)
+      dbgs() << "  " << PrintReg(P.first, TRI)
         << " masks doesn't match: LIS reported "
         << PrintLaneMask(I->second)
         << ", tracked "
@@ -457,7 +446,7 @@ static void reportMismatch(const GCNRPTracker::LiveRegSet &LISLR,
   for (auto const &P : LISLR) {
     auto I = TrackedLR.find(P.first);
     if (I == TrackedLR.end()) {
-      dbgs() << "  " << printReg(P.first, TRI)
+      dbgs() << "  " << PrintReg(P.first, TRI)
              << ":L" << PrintLaneMask(P.second)
              << " isn't found in tracked set\n";
     }
@@ -495,7 +484,7 @@ void GCNRPTracker::printLiveRegs(raw_ostream &OS, const LiveRegSet& LiveRegs,
     unsigned Reg = TargetRegisterInfo::index2VirtReg(I);
     auto It = LiveRegs.find(Reg);
     if (It != LiveRegs.end() && It->second.any())
-      OS << ' ' << printVRegOrUnit(Reg, TRI) << ':'
+      OS << ' ' << PrintVRegOrUnit(Reg, TRI) << ':'
          << PrintLaneMask(It->second);
   }
   OS << '\n';

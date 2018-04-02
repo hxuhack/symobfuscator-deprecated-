@@ -1,4 +1,4 @@
-//===- PreprocessingRecord.h - Record of Preprocessing ----------*- C++ -*-===//
+//===--- PreprocessingRecord.h - Record of Preprocessing --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,33 +11,24 @@
 //  of what occurred during preprocessing.
 //
 //===----------------------------------------------------------------------===//
-
 #ifndef LLVM_CLANG_LEX_PREPROCESSINGRECORD_H
 #define LLVM_CLANG_LEX_PREPROCESSINGRECORD_H
 
-#include "clang/Basic/LLVM.h"
+#include "clang/Basic/IdentifierTable.h"
 #include "clang/Basic/SourceLocation.h"
 #include "clang/Lex/PPCallbacks.h"
 #include "llvm/ADT/DenseMap.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/Optional.h"
-#include "llvm/ADT/PointerUnion.h"
-#include "llvm/ADT/StringRef.h"
 #include "llvm/ADT/iterator.h"
-#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Allocator.h"
 #include "llvm/Support/Compiler.h"
-#include <cassert>
-#include <cstddef>
-#include <iterator>
-#include <utility>
 #include <vector>
 
 namespace clang {
-
-class PreprocessingRecord;
-
-} // namespace clang
+  class IdentifierInfo;
+  class MacroInfo;
+  class PreprocessingRecord;
+}
 
 /// \brief Allocates memory within a Clang preprocessing record.
 void *operator new(size_t bytes, clang::PreprocessingRecord &PR,
@@ -48,12 +39,8 @@ void operator delete(void *ptr, clang::PreprocessingRecord &PR,
                      unsigned) noexcept;
 
 namespace clang {
-
-class FileEntry;
-class IdentifierInfo;
-class MacroInfo;
-class SourceManager;
-class Token;
+  class MacroDefinitionRecord;
+  class FileEntry;
 
   /// \brief Base class that describes a preprocessed entity, which may be a
   /// preprocessor directive or macro expansion.
@@ -91,10 +78,10 @@ class Token;
     SourceRange Range;
     
   protected:
-    friend class PreprocessingRecord;
-
     PreprocessedEntity(EntityKind Kind, SourceRange Range)
-        : Kind(Kind), Range(Range) {}
+      : Kind(Kind), Range(Range) { }
+
+    friend class PreprocessingRecord;
 
   public:
     /// \brief Retrieve the kind of preprocessed entity stored in this object.
@@ -135,7 +122,7 @@ class Token;
   class PreprocessingDirective : public PreprocessedEntity {
   public:
     PreprocessingDirective(EntityKind Kind, SourceRange Range) 
-        : PreprocessedEntity(Kind, Range) {}
+      : PreprocessedEntity(Kind, Range) { }
     
     // Implement isa/cast/dyncast/etc.
     static bool classof(const PreprocessedEntity *PD) { 
@@ -212,13 +199,10 @@ class Token;
     enum InclusionKind {
       /// \brief An \c \#include directive.
       Include,
-
       /// \brief An Objective-C \c \#import directive.
       Import,
-
       /// \brief A GNU \c \#include_next directive.
       IncludeNext,
-
       /// \brief A Clang \c \#__include_macros directive.
       IncludeMacros
     };
@@ -332,14 +316,11 @@ class Token;
     /// value 1 corresponds to element 0 in the local entities vector,
     /// value 2 corresponds to element 1 in the local entities vector, etc.
     class PPEntityID {
-      friend class PreprocessingRecord;
-
-      int ID = 0;
-
+      int ID;
       explicit PPEntityID(int ID) : ID(ID) {}
-
+      friend class PreprocessingRecord;
     public:
-      PPEntityID() = default;
+      PPEntityID() : ID(0) {}
     };
 
     static PPEntityID getPPEntityID(unsigned Index, bool isLoaded) {
@@ -350,7 +331,7 @@ class Token;
     llvm::DenseMap<const MacroInfo *, MacroDefinitionRecord *> MacroDefinitions;
 
     /// \brief External source of preprocessed entities.
-    ExternalPreprocessingRecordSource *ExternalSource = nullptr;
+    ExternalPreprocessingRecordSource *ExternalSource;
 
     /// \brief Retrieve the preprocessed entity at the given ID.
     PreprocessedEntity *getPreprocessedEntity(PPEntityID PPID);
@@ -390,7 +371,7 @@ class Token;
     }
     
     /// \brief Deallocate memory in the preprocessing record.
-    void Deallocate(void *Ptr) {}
+    void Deallocate(void *Ptr) { }
 
     size_t getTotalMemory() const;
 
@@ -416,12 +397,11 @@ class Token;
                          iterator, int, std::random_access_iterator_tag,
                          PreprocessedEntity *, int, PreprocessedEntity *,
                          PreprocessedEntity *> {
-      friend class PreprocessingRecord;
-
       PreprocessingRecord *Self;
 
       iterator(PreprocessingRecord *Self, int Position)
           : iterator::iterator_adaptor_base(Position), Self(Self) {}
+      friend class PreprocessingRecord;
 
     public:
       iterator() : iterator(nullptr, 0) {}
@@ -471,6 +451,7 @@ class Token;
     /// encompasses.
     ///
     /// \param R the range to look for preprocessed entities.
+    ///
     llvm::iterator_range<iterator>
     getPreprocessedEntitiesInRange(SourceRange R);
 
@@ -504,9 +485,6 @@ class Token;
     }
         
   private:
-    friend class ASTReader;
-    friend class ASTWriter;
-
     void MacroExpands(const Token &Id, const MacroDefinition &MD,
                       SourceRange Range, const MacroArgs *Args) override;
     void MacroDefined(const Token &Id, const MacroDirective *MD) override;
@@ -522,13 +500,11 @@ class Token;
                const MacroDefinition &MD) override;
     void Ifndef(SourceLocation Loc, const Token &MacroNameTok,
                 const MacroDefinition &MD) override;
-
     /// \brief Hook called whenever the 'defined' operator is seen.
     void Defined(const Token &MacroNameTok, const MacroDefinition &MD,
                  SourceRange Range) override;
 
-    void SourceRangeSkipped(SourceRange Range,
-                            SourceLocation EndifLoc) override;
+    void SourceRangeSkipped(SourceRange Range) override;
 
     void addMacroExpansion(const Token &Id, const MacroInfo *MI,
                            SourceRange Range);
@@ -541,9 +517,11 @@ class Token;
     } CachedRangeQuery;
 
     std::pair<int, int> getPreprocessedEntitiesInRangeSlow(SourceRange R);
-  };
 
-} // namespace clang
+    friend class ASTReader;
+    friend class ASTWriter;
+  };
+} // end namespace clang
 
 inline void *operator new(size_t bytes, clang::PreprocessingRecord &PR,
                           unsigned alignment) noexcept {

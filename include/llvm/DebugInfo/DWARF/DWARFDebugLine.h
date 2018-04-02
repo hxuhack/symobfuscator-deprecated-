@@ -15,7 +15,6 @@
 #include "llvm/DebugInfo/DWARF/DWARFDataExtractor.h"
 #include "llvm/DebugInfo/DWARF/DWARFFormValue.h"
 #include "llvm/DebugInfo/DWARF/DWARFRelocMap.h"
-#include "llvm/Support/MD5.h"
 #include <cstdint>
 #include <map>
 #include <string>
@@ -23,7 +22,6 @@
 
 namespace llvm {
 
-class DWARFUnit;
 class raw_ostream;
 
 class DWARFDebugLine {
@@ -35,7 +33,6 @@ public:
     uint64_t DirIdx = 0;
     uint64_t ModTime = 0;
     uint64_t Length = 0;
-    MD5::MD5Result Checksum;
   };
 
   struct Prologue {
@@ -48,11 +45,11 @@ public:
     /// parameters affect interpretation of forms (used in the directory and
     /// file tables starting with v5).
     DWARFFormParams FormParams;
+    /// In v5, size in bytes of a segment selector.
+    uint8_t SegSelectorSize;
     /// The number of bytes following the prologue_length field to the beginning
     /// of the first byte of the statement program itself.
     uint64_t PrologueLength;
-    /// In v5, size in bytes of a segment selector.
-    uint8_t SegSelectorSize;
     /// The size in bytes of the smallest target machine instruction. Statement
     /// program opcodes that alter the address register first multiply their
     /// operands by this value.
@@ -68,8 +65,6 @@ public:
     uint8_t LineRange;
     /// The number assigned to the first special opcode.
     uint8_t OpcodeBase;
-    /// For v5, whether filename entries provide an MD5 checksum.
-    bool HasMD5;
     std::vector<uint8_t> StandardOpcodeLengths;
     std::vector<StringRef> IncludeDirectories;
     std::vector<FileNameEntry> FileNames;
@@ -100,8 +95,7 @@ public:
 
     void clear();
     void dump(raw_ostream &OS) const;
-    bool parse(const DWARFDataExtractor &DebugLineData, uint32_t *OffsetPtr,
-               const DWARFUnit *U = nullptr);
+    bool parse(const DWARFDataExtractor &DebugLineData, uint32_t *OffsetPtr);
   };
 
   /// Standard .debug_line state machine structure.
@@ -223,8 +217,7 @@ public:
     void clear();
 
     /// Parse prologue and all rows.
-    bool parse(DWARFDataExtractor &DebugLineData, uint32_t *OffsetPtr,
-               const DWARFUnit *U, raw_ostream *OS = nullptr);
+    bool parse(const DWARFDataExtractor &DebugLineData, uint32_t *OffsetPtr);
 
     using RowVector = std::vector<Row>;
     using RowIter = RowVector::const_iterator;
@@ -241,8 +234,8 @@ public:
   };
 
   const LineTable *getLineTable(uint32_t Offset) const;
-  const LineTable *getOrParseLineTable(DWARFDataExtractor &DebugLineData,
-                                       uint32_t Offset, const DWARFUnit *U);
+  const LineTable *getOrParseLineTable(const DWARFDataExtractor &DebugLineData,
+                                       uint32_t Offset);
 
 private:
   struct ParsingState {

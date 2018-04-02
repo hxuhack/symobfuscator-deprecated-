@@ -37,7 +37,6 @@ struct YAMLXRayRecord {
   std::string Function;
   uint64_t TSC;
   uint32_t TId;
-  std::vector<uint64_t> CallArgs;
 };
 
 struct YAMLXRayTrace {
@@ -55,8 +54,6 @@ template <> struct ScalarEnumerationTraits<xray::RecordTypes> {
   static void enumeration(IO &IO, xray::RecordTypes &Type) {
     IO.enumCase(Type, "function-enter", xray::RecordTypes::ENTER);
     IO.enumCase(Type, "function-exit", xray::RecordTypes::EXIT);
-    IO.enumCase(Type, "function-tail-exit", xray::RecordTypes::TAIL_EXIT);
-    IO.enumCase(Type, "function-enter-arg", xray::RecordTypes::ENTER_ARG);
   }
 };
 
@@ -76,7 +73,6 @@ template <> struct MappingTraits<xray::YAMLXRayRecord> {
     IO.mapRequired("type", Record.RecordType);
     IO.mapRequired("func-id", Record.FuncId);
     IO.mapOptional("function", Record.Function);
-    IO.mapOptional("args", Record.CallArgs);
     IO.mapRequired("cpu", Record.CPU);
     IO.mapRequired("thread", Record.TId);
     IO.mapRequired("kind", Record.Type);

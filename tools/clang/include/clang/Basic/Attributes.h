@@ -26,8 +26,6 @@ enum class AttrSyntax {
   Microsoft,
   // Is the identifier known as a C++-style attribute?
   CXX,
-  // Is the identifier known as a C-style attribute?
-  C,
   // Is the identifier known as a pragma attribute?
   Pragma
 };

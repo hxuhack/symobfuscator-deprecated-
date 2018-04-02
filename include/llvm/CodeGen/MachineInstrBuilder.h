@@ -25,7 +25,6 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBundle.h"
 #include "llvm/CodeGen/MachineOperand.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
 #include "llvm/IR/InstrTypes.h"
 #include "llvm/IR/Intrinsics.h"
 #include "llvm/Support/ErrorHandling.h"
@@ -49,7 +48,6 @@ namespace RegState {
     EarlyClobber   = 0x40,
     Debug          = 0x80,
     InternalRead   = 0x100,
-    Renamable      = 0x200,
     DefineNoRead   = Define | Undef,
     ImplicitDefine = Implicit | Define,
     ImplicitKill   = Implicit | Kill
@@ -93,8 +91,7 @@ public:
                                                flags & RegState::EarlyClobber,
                                                SubReg,
                                                flags & RegState::Debug,
-                                               flags & RegState::InternalRead,
-                                               flags & RegState::Renamable));
+                                               flags & RegState::InternalRead));
     return *this;
   }
 
@@ -399,31 +396,27 @@ inline MachineInstrBuilder BuildMI(MachineBasicBlock *BB, const DebugLoc &DL,
 }
 
 /// This version of the builder builds a DBG_VALUE intrinsic
-/// for either a value in a register or a register-indirect
+/// for either a value in a register or a register-indirect+offset
 /// address.  The convention is that a DBG_VALUE is indirect iff the
 /// second operand is an immediate.
 MachineInstrBuilder BuildMI(MachineFunction &MF, const DebugLoc &DL,
                             const MCInstrDesc &MCID, bool IsIndirect,
-                            unsigned Reg, const MDNode *Variable,
-                            const MDNode *Expr);
+                            unsigned Reg, unsigned Offset,
+                            const MDNode *Variable, const MDNode *Expr);
 
 /// This version of the builder builds a DBG_VALUE intrinsic
-/// for either a value in a register or a register-indirect
+/// for either a value in a register or a register-indirect+offset
 /// address and inserts it at position I.
 MachineInstrBuilder BuildMI(MachineBasicBlock &BB,
                             MachineBasicBlock::iterator I, const DebugLoc &DL,
                             const MCInstrDesc &MCID, bool IsIndirect,
-                            unsigned Reg, const MDNode *Variable,
-                            const MDNode *Expr);
+                            unsigned Reg, unsigned Offset,
+                            const MDNode *Variable, const MDNode *Expr);
 
 /// Clone a DBG_VALUE whose value has been spilled to FrameIndex.
 MachineInstr *buildDbgValueForSpill(MachineBasicBlock &BB,
                                     MachineBasicBlock::iterator I,
                                     const MachineInstr &Orig, int FrameIndex);
-
-/// Update a DBG_VALUE whose value has been spilled to FrameIndex. Useful when
-/// modifying an instruction in place while iterating over a basic block.
-void updateDbgValueForSpill(MachineInstr &Orig, int FrameIndex);
 
 inline unsigned getDefRegState(bool B) {
   return B ? RegState::Define : 0;
@@ -446,9 +439,6 @@ inline unsigned getInternalReadRegState(bool B) {
 inline unsigned getDebugRegState(bool B) {
   return B ? RegState::Debug : 0;
 }
-inline unsigned getRenamableRegState(bool B) {
-  return B ? RegState::Renamable : 0;
-}
 
 /// Get all register state flags from machine operand \p RegOp.
 inline unsigned getRegState(const MachineOperand &RegOp) {
@@ -459,10 +449,7 @@ inline unsigned getRegState(const MachineOperand &RegOp) {
          getDeadRegState(RegOp.isDead())                  |
          getUndefRegState(RegOp.isUndef())                |
          getInternalReadRegState(RegOp.isInternalRead())  |
-         getDebugRegState(RegOp.isDebug())                |
-         getRenamableRegState(
-             TargetRegisterInfo::isPhysicalRegister(RegOp.getReg()) &&
-             RegOp.isRenamable());
+         getDebugRegState(RegOp.isDebug());
 }
 
 /// Helper class for constructing bundles of MachineInstrs.

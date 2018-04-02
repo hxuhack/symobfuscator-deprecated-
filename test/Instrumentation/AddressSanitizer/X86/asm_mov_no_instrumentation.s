@@ -11,7 +11,7 @@
 # CHECK-NOT: callq __asan_report_store1@PLT
 mov1b:                                  # @mov1b
 	.cfi_startproc
-# %bb.0:
+# BB#0:
 	#APP
 	movb	(%rsi), %al
 	movb	%al, (%rdi)

@@ -14,12 +14,10 @@
 
 #include "llvm/Transforms/Scalar/MemCpyOptimizer.h"
 #include "llvm/ADT/DenseSet.h"
-#include "llvm/ADT/None.h"
 #include "llvm/ADT/STLExtras.h"
 #include "llvm/ADT/SmallVector.h"
 #include "llvm/ADT/Statistic.h"
 #include "llvm/ADT/iterator_range.h"
-#include "llvm/Analysis/AliasAnalysis.h"
 #include "llvm/Analysis/AssumptionCache.h"
 #include "llvm/Analysis/GlobalsModRef.h"
 #include "llvm/Analysis/MemoryDependenceAnalysis.h"
@@ -27,8 +25,6 @@
 #include "llvm/Analysis/TargetLibraryInfo.h"
 #include "llvm/Analysis/ValueTracking.h"
 #include "llvm/IR/Argument.h"
-#include "llvm/IR/BasicBlock.h"
-#include "llvm/IR/CallSite.h"
 #include "llvm/IR/Constants.h"
 #include "llvm/IR/DataLayout.h"
 #include "llvm/IR/DerivedTypes.h"
@@ -45,7 +41,6 @@
 #include "llvm/IR/LLVMContext.h"
 #include "llvm/IR/Module.h"
 #include "llvm/IR/Operator.h"
-#include "llvm/IR/PassManager.h"
 #include "llvm/IR/Type.h"
 #include "llvm/IR/User.h"
 #include "llvm/IR/Value.h"
@@ -59,7 +54,6 @@
 #include <algorithm>
 #include <cassert>
 #include <cstdint>
-#include <utility>
 
 using namespace llvm;
 
@@ -231,18 +225,15 @@ bool MemsetRange::isProfitableToUseMemset(const DataLayout &DL) const {
 namespace {
 
 class MemsetRanges {
-  using range_iterator = SmallVectorImpl<MemsetRange>::iterator;
-
   /// A sorted list of the memset ranges.
   SmallVector<MemsetRange, 8> Ranges;
-
+  typedef SmallVectorImpl<MemsetRange>::iterator range_iterator;
   const DataLayout &DL;
 
 public:
   MemsetRanges(const DataLayout &DL) : DL(DL) {}
 
-  using const_iterator = SmallVectorImpl<MemsetRange>::const_iterator;
-
+  typedef SmallVectorImpl<MemsetRange>::const_iterator const_iterator;
   const_iterator begin() const { return Ranges.begin(); }
   const_iterator end() const { return Ranges.end(); }
   bool empty() const { return Ranges.empty(); }
@@ -268,6 +259,7 @@ public:
 
   void addRange(int64_t Start, int64_t Size, Value *Ptr,
                 unsigned Alignment, Instruction *Inst);
+
 };
 
 } // end anonymous namespace
@@ -364,9 +356,9 @@ private:
   }
 };
 
-} // end anonymous namespace
-
 char MemCpyOptLegacyPass::ID = 0;
+
+} // end anonymous namespace
 
 /// The public interface to this file...
 FunctionPass *llvm::createMemCpyOptPass() { return new MemCpyOptLegacyPass(); }
@@ -458,6 +450,7 @@ Instruction *MemCpyOptPass::tryMergingIntoMemset(Instruction *StartInst,
   // emit memset's for anything big enough to be worthwhile.
   Instruction *AMemSet = nullptr;
   for (const MemsetRange &Range : Ranges) {
+
     if (Range.TheStores.size() == 1) continue;
 
     // If it is profitable to lower this range to memset, do so now.
@@ -518,7 +511,7 @@ static bool moveUp(AliasAnalysis &AA, StoreInst *SI, Instruction *P,
                    const LoadInst *LI) {
   // If the store alias this position, early bail out.
   MemoryLocation StoreLoc = MemoryLocation::get(SI);
-  if (isModOrRefSet(AA.getModRefInfo(P, StoreLoc)))
+  if (AA.getModRefInfo(P, StoreLoc) != MRI_NoModRef)
     return false;
 
   // Keep track of the arguments of all instruction we plan to lift
@@ -542,20 +535,20 @@ static bool moveUp(AliasAnalysis &AA, StoreInst *SI, Instruction *P,
   for (auto I = --SI->getIterator(), E = P->getIterator(); I != E; --I) {
     auto *C = &*I;
 
-    bool MayAlias = isModOrRefSet(AA.getModRefInfo(C, None));
+    bool MayAlias = AA.getModRefInfo(C) != MRI_NoModRef;
 
     bool NeedLift = false;
     if (Args.erase(C))
       NeedLift = true;
     else if (MayAlias) {
       NeedLift = llvm::any_of(MemLocs, [C, &AA](const MemoryLocation &ML) {
-        return isModOrRefSet(AA.getModRefInfo(C, ML));
+        return AA.getModRefInfo(C, ML);
       });
 
       if (!NeedLift)
         NeedLift =
             llvm::any_of(CallSites, [C, &AA](const ImmutableCallSite &CS) {
-              return isModOrRefSet(AA.getModRefInfo(C, CS));
+              return AA.getModRefInfo(C, CS);
             });
     }
 
@@ -565,18 +558,18 @@ static bool moveUp(AliasAnalysis &AA, StoreInst *SI, Instruction *P,
     if (MayAlias) {
       // Since LI is implicitly moved downwards past the lifted instructions,
       // none of them may modify its source.
-      if (isModSet(AA.getModRefInfo(C, LoadLoc)))
+      if (AA.getModRefInfo(C, LoadLoc) & MRI_Mod)
         return false;
       else if (auto CS = ImmutableCallSite(C)) {
         // If we can't lift this before P, it's game over.
-        if (isModOrRefSet(AA.getModRefInfo(P, CS)))
+        if (AA.getModRefInfo(P, CS) != MRI_NoModRef)
           return false;
 
         CallSites.push_back(CS);
       } else if (isa<LoadInst>(C) || isa<StoreInst>(C) || isa<VAArgInst>(C)) {
         // If we can't lift this before P, it's game over.
         auto ML = MemoryLocation::get(C);
-        if (isModOrRefSet(AA.getModRefInfo(P, ML)))
+        if (AA.getModRefInfo(P, ML) != MRI_NoModRef)
           return false;
 
         MemLocs.push_back(ML);
@@ -631,7 +624,7 @@ bool MemCpyOptPass::processStore(StoreInst *SI, BasicBlock::iterator &BBI) {
         // of at the store position.
         Instruction *P = SI;
         for (auto &I : make_range(++LI->getIterator(), SI->getIterator())) {
-          if (isModSet(AA.getModRefInfo(&I, LoadLoc))) {
+          if (AA.getModRefInfo(&I, LoadLoc) & MRI_Mod) {
             P = &I;
             break;
           }
@@ -702,7 +695,7 @@ bool MemCpyOptPass::processStore(StoreInst *SI, BasicBlock::iterator &BBI) {
         MemoryLocation StoreLoc = MemoryLocation::get(SI);
         for (BasicBlock::iterator I = --SI->getIterator(), E = C->getIterator();
              I != E; --I) {
-          if (isModOrRefSet(AA.getModRefInfo(&*I, StoreLoc))) {
+          if (AA.getModRefInfo(&*I, StoreLoc) != MRI_NoModRef) {
             C = nullptr;
             break;
           }
@@ -934,9 +927,9 @@ bool MemCpyOptPass::performCallSlotOptzn(Instruction *cpy, Value *cpyDest,
   AliasAnalysis &AA = LookupAliasAnalysis();
   ModRefInfo MR = AA.getModRefInfo(C, cpyDest, srcSize);
   // If necessary, perform additional analysis.
-  if (isModOrRefSet(MR))
+  if (MR != MRI_NoModRef)
     MR = AA.callCapturesBefore(C, cpyDest, srcSize, &DT);
-  if (isModOrRefSet(MR))
+  if (MR != MRI_NoModRef)
     return false;
 
   // We can't create address space casts here because we don't know if they're

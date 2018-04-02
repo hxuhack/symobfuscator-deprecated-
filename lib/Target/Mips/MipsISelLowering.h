@@ -1,4 +1,4 @@
-//===- MipsISelLowering.h - Mips DAG Lowering Interface ---------*- C++ -*-===//
+//===-- MipsISelLowering.h - Mips DAG Lowering Interface --------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -17,45 +17,16 @@
 
 #include "MCTargetDesc/MipsABIInfo.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
-#include "MCTargetDesc/MipsMCTargetDesc.h"
 #include "Mips.h"
-#include "llvm/CodeGen/ISDOpcodes.h"
-#include "llvm/CodeGen/MachineMemOperand.h"
-#include "llvm/CodeGen/MachineValueType.h"
+#include "llvm/CodeGen/CallingConvLower.h"
 #include "llvm/CodeGen/SelectionDAG.h"
-#include "llvm/CodeGen/SelectionDAGNodes.h"
-#include "llvm/CodeGen/TargetLowering.h"
-#include "llvm/CodeGen/ValueTypes.h"
-#include "llvm/IR/CallingConv.h"
-#include "llvm/IR/InlineAsm.h"
-#include "llvm/IR/Type.h"
-#include "llvm/Target/TargetMachine.h"
-#include <algorithm>
-#include <cassert>
+#include "llvm/IR/Function.h"
+#include "llvm/Target/TargetLowering.h"
 #include <deque>
 #include <string>
-#include <utility>
-#include <vector>
 
 namespace llvm {
-
-class Argument;
-class CCState;
-class CCValAssign;
-class FastISel;
-class FunctionLoweringInfo;
-class MachineBasicBlock;
-class MachineFrameInfo;
-class MachineInstr;
-class MipsCCState;
-class MipsFunctionInfo;
-class MipsSubtarget;
-class MipsTargetMachine;
-class TargetLibraryInfo;
-class TargetRegisterClass;
-
   namespace MipsISD {
-
     enum NodeType : unsigned {
       // Start the numbering from where ISD NodeType finishes.
       FIRST_NUMBER = ISD::BUILTIN_OP_END,
@@ -94,12 +65,6 @@ class TargetRegisterClass;
 
       // Floating Point Compare
       FPCmp,
-
-      // Floating point select
-      FSELECT,
-
-      // Node used to generate an MTC1 i32 to f64 instruction
-      MTC1_D64,
 
       // Floating Point Conditional Moves
       CMovFP_T,
@@ -253,16 +218,17 @@ class TargetRegisterClass;
       SDL,
       SDR
     };
-
-  } // ene namespace MipsISD
+  }
 
   //===--------------------------------------------------------------------===//
   // TargetLowering Implementation
   //===--------------------------------------------------------------------===//
+  class MipsFunctionInfo;
+  class MipsSubtarget;
+  class MipsCCState;
 
   class MipsTargetLowering : public TargetLowering  {
     bool isMicroMips;
-
   public:
     explicit MipsTargetLowering(const MipsTargetMachine &TM,
                                 const MipsSubtarget &STI);
@@ -284,26 +250,26 @@ class TargetRegisterClass;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.
-    MVT getRegisterTypeForCallingConv(MVT VT) const override;
+    virtual MVT getRegisterTypeForCallingConv(MVT VT) const override;
 
     /// Return the register type for a given MVT, ensuring vectors are treated
     /// as a series of gpr sized integers.
-    MVT getRegisterTypeForCallingConv(LLVMContext &Context,
-                                      EVT VT) const override;
+    virtual MVT getRegisterTypeForCallingConv(LLVMContext &Context,
+                                              EVT VT) const override;
 
     /// Return the number of registers for a given MVT, ensuring vectors are
     /// treated as a series of gpr sized integers.
-    unsigned getNumRegistersForCallingConv(LLVMContext &Context,
-                                           EVT VT) const override;
+    virtual unsigned getNumRegistersForCallingConv(LLVMContext &Context,
+                                                   EVT VT) const override;
 
     /// Break down vectors to the correct number of gpr sized integers.
-    unsigned getVectorTypeBreakdownForCallingConv(
+    virtual unsigned getVectorTypeBreakdownForCallingConv(
         LLVMContext &Context, EVT VT, EVT &IntermediateVT,
         unsigned &NumIntermediates, MVT &RegisterVT) const override;
 
     /// Return the correct alignment for the current calling convention.
-    unsigned getABIAlignmentForCallingConv(Type *ArgTy,
-                                           DataLayout DL) const override {
+    virtual unsigned
+    getABIAlignmentForCallingConv(Type *ArgTy, DataLayout DL) const override {
       if (ArgTy->isVectorTy())
         return std::min(DL.getABITypeAlignment(ArgTy), 8U);
       return DL.getABITypeAlignment(ArgTy);
@@ -475,12 +441,13 @@ class TargetRegisterClass;
     // (add $gp, %gp_rel(sym))
     template <class NodeTy>
     SDValue getAddrGPRel(NodeTy *N, const SDLoc &DL, EVT Ty,
-                         SelectionDAG &DAG, bool IsN64) const {
+                         SelectionDAG &DAG) const {
+      assert(Ty == MVT::i32);
       SDValue GPRel = getTargetNode(N, Ty, DAG, MipsII::MO_GPREL);
-      return DAG.getNode(
-          ISD::ADD, DL, Ty,
-          DAG.getRegister(IsN64 ? Mips::GP_64 : Mips::GP, Ty),
-          DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty), GPRel));
+      return DAG.getNode(ISD::ADD, DL, Ty,
+                         DAG.getRegister(Mips::GP, Ty),
+                         DAG.getNode(MipsISD::GPRel, DL, DAG.getVTList(Ty),
+                                     GPRel));
     }
 
     /// This function fills Ops, which is the list of operands that will later
@@ -488,7 +455,7 @@ class TargetRegisterClass;
     /// copyToReg nodes to set up argument registers.
     virtual void
     getOpndList(SmallVectorImpl<SDValue> &Ops,
-                std::deque<std::pair<unsigned, SDValue>> &RegsToPass,
+                std::deque< std::pair<unsigned, SDValue> > &RegsToPass,
                 bool IsPICCall, bool GlobalOrExternal, bool InternalLinkage,
                 bool IsCallReloc, CallLoweringInfo &CLI, SDValue Callee,
                 SDValue Chain) const;
@@ -652,8 +619,7 @@ class TargetRegisterClass;
     }
 
     bool isLegalAddressingMode(const DataLayout &DL, const AddrMode &AM,
-                               Type *Ty, unsigned AS,
-                               Instruction *I = nullptr) const override;
+                               Type *Ty, unsigned AS) const override;
 
     bool isOffsetFoldingLegal(const GlobalAddressSDNode *GA) const override;
 
@@ -708,13 +674,10 @@ class TargetRegisterClass;
   createMipsSETargetLowering(const MipsTargetMachine &TM,
                              const MipsSubtarget &STI);
 
-namespace Mips {
+  namespace Mips {
+    FastISel *createFastISel(FunctionLoweringInfo &funcInfo,
+                             const TargetLibraryInfo *libInfo);
+  }
+}
 
-FastISel *createFastISel(FunctionLoweringInfo &funcInfo,
-                         const TargetLibraryInfo *libInfo);
-
-} // end namespace Mips
-
-} // end namespace llvm
-
-#endif // LLVM_LIB_TARGET_MIPS_MIPSISELLOWERING_H
+#endif

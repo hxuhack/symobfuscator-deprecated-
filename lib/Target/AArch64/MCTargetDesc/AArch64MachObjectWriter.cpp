@@ -430,10 +430,10 @@ void AArch64MachObjectWriter::recordRelocation(
   Writer->addRelocation(RelSymbol, Fragment->getParent(), MRE);
 }
 
-std::unique_ptr<MCObjectWriter>
-llvm::createAArch64MachObjectWriter(raw_pwrite_stream &OS, uint32_t CPUType,
-                                    uint32_t CPUSubtype) {
+MCObjectWriter *llvm::createAArch64MachObjectWriter(raw_pwrite_stream &OS,
+                                                    uint32_t CPUType,
+                                                    uint32_t CPUSubtype) {
   return createMachObjectWriter(
-      llvm::make_unique<AArch64MachObjectWriter>(CPUType, CPUSubtype), OS,
+      new AArch64MachObjectWriter(CPUType, CPUSubtype), OS,
       /*IsLittleEndian=*/true);
 }

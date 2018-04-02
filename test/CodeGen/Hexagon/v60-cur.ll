@@ -1,8 +1,9 @@
-; RUN: llc -march=hexagon < %s | FileCheck %s
+; RUN: llc -march=hexagon -enable-pipeliner=false < %s | FileCheck %s
 
 ; Test that we generate a .cur
 
-; CHECK: v{{[0-9]*}}.cur
+; CHECK: v{{[0-9]*}}.cur{{ *}}
+; CHECK: v{{[0-9]*}}.cur{{ *}}
 
 define void @conv3x3_i(i8* noalias nocapture readonly %iptr0, i32 %shift, i32 %width) #0 {
 entry:
@@ -53,7 +54,7 @@ declare <16 x i32> @llvm.hexagon.V6.vasrwh(<16 x i32>, <16 x i32>, i32) #1
 declare <16 x i32> @llvm.hexagon.V6.hi(<32 x i32>) #1
 declare <16 x i32> @llvm.hexagon.V6.vsathub(<16 x i32>, <16 x i32>) #1
 
-attributes #0 = { nounwind "target-cpu"="hexagonv60" "target-features"="+hvxv60,+hvx-length64b" }
+attributes #0 = { nounwind "target-cpu"="hexagonv60" "target-features"="+hvx" }
 attributes #1 = { nounwind readnone }
 
 !1 = !{!2, !2, i64 0}

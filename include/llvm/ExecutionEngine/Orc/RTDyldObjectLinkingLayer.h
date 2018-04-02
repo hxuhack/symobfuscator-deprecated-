@@ -41,9 +41,9 @@ public:
 
 protected:
 
-  /// @brief Holds an object to be allocated/linked as a unit in the JIT.
+  /// @brief Holds a set of objects to be allocated/linked as a unit in the JIT.
   ///
-  /// An instance of this class will be created for each object added
+  /// An instance of this class will be created for each set of objects added
   /// via JITObjectLayer::addObject. Deleting the instance (via
   /// removeObject) frees its memory, removing all symbol definitions that
   /// had been provided by this instance. Higher level layers are responsible
@@ -83,7 +83,7 @@ protected:
   using LinkedObjectListT = std::list<std::unique_ptr<LinkedObject>>;
 
 public:
-  /// @brief Handle to a loaded object.
+  /// @brief Handle to a set of loaded objects.
   using ObjHandleT = LinkedObjectListT::iterator;
 };
 
@@ -99,9 +99,8 @@ public:
   using RTDyldObjectLinkingLayerBase::ObjectPtr;
 
   /// @brief Functor for receiving object-loaded notifications.
-  using NotifyLoadedFtor =
-    std::function<void(ObjHandleT, const ObjectPtr &Obj,
-                       const RuntimeDyld::LoadedObjectInfo &)>;
+  using NotifyLoadedFtor = std::function<void(ObjHandleT, const ObjectPtr &Obj,
+                                              const LoadedObjectInfo &)>;
 
   /// @brief Functor for receiving finalization notifications.
   using NotifyFinalizedFtor = std::function<void(ObjHandleT)>;
@@ -254,9 +253,10 @@ public:
     this->ProcessAllSections = ProcessAllSections;
   }
 
-  /// @brief Add an object to the JIT.
+  /// @brief Add a set of objects (or archives) that will be treated as a unit
+  ///        for the purposes of symbol lookup and memory management.
   ///
-  /// @return A handle that can be used to refer to the loaded object (for 
+  /// @return A handle that can be used to refer to the loaded objects (for 
   ///         symbol searching, finalization, freeing memory, etc.).
   Expected<ObjHandleT> addObject(ObjectPtr Obj,
                                  std::shared_ptr<JITSymbolResolver> Resolver) {
@@ -291,10 +291,10 @@ public:
     return Handle;
   }
 
-  /// @brief Remove the object associated with handle H.
+  /// @brief Remove the set of objects associated with handle H.
   ///
-  ///   All memory allocated for the object will be freed, and the sections and
-  /// symbols it provided will no longer be available. No attempt is made to
+  ///   All memory allocated for the objects will be freed, and the sections and
+  /// symbols they provided will no longer be available. No attempt is made to
   /// re-emit the missing symbols, and any use of these symbols (directly or
   /// indirectly) will result in undefined behavior. If dependence tracking is
   /// required to detect or resolve such issues it should be added at a higher
@@ -318,27 +318,27 @@ public:
     return nullptr;
   }
 
-  /// @brief Search for the given named symbol in the context of the loaded
-  ///        object represented by the handle H.
-  /// @param H The handle for the object to search in.
+  /// @brief Search for the given named symbol in the context of the set of
+  ///        loaded objects represented by the handle H.
+  /// @param H The handle for the object set to search in.
   /// @param Name The name of the symbol to search for.
   /// @param ExportedSymbolsOnly If true, search only for exported symbols.
   /// @return A handle for the given named symbol, if it is found in the
-  ///         given object.
+  ///         given object set.
   JITSymbol findSymbolIn(ObjHandleT H, StringRef Name,
                          bool ExportedSymbolsOnly) {
     return (*H)->getSymbol(Name, ExportedSymbolsOnly);
   }
 
-  /// @brief Map section addresses for the object associated with the handle H.
+  /// @brief Map section addresses for the objects associated with the handle H.
   void mapSectionAddress(ObjHandleT H, const void *LocalAddress,
                          JITTargetAddress TargetAddr) {
     (*H)->mapSectionAddress(LocalAddress, TargetAddr);
   }
 
-  /// @brief Immediately emit and finalize the object represented by the given
-  ///        handle.
-  /// @param H Handle for object to emit/finalize.
+  /// @brief Immediately emit and finalize the object set represented by the
+  ///        given handle.
+  /// @param H Handle for object set to emit/finalize.
   Error emitAndFinalize(ObjHandleT H) {
     (*H)->finalize();
     return Error::success();

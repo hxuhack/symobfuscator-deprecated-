@@ -11,7 +11,7 @@
 //===----------------------------------------------------------------------===//
 
 #include "llvm/CodeGen/GlobalISel/RegisterBank.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
+#include "llvm/Target/TargetRegisterInfo.h"
 
 #define DEBUG_TYPE "registerbank"
 

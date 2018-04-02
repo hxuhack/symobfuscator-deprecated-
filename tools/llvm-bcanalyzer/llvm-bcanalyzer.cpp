@@ -31,6 +31,7 @@
 #include "llvm/Bitcode/BitcodeReader.h"
 #include "llvm/Bitcode/BitstreamReader.h"
 #include "llvm/Bitcode/LLVMBitCodes.h"
+#include "llvm/IR/Verifier.h"
 #include "llvm/Support/CommandLine.h"
 #include "llvm/Support/Format.h"
 #include "llvm/Support/ManagedStatic.h"
@@ -39,6 +40,10 @@
 #include "llvm/Support/SHA1.h"
 #include "llvm/Support/Signals.h"
 #include "llvm/Support/raw_ostream.h"
+#include <algorithm>
+#include <cctype>
+#include <map>
+#include <system_error>
 using namespace llvm;
 
 static cl::opt<std::string>

@@ -80,14 +80,13 @@ protected:
         ValueType(Ty), Linkage(Linkage), Visibility(DefaultVisibility),
         UnnamedAddrVal(unsigned(UnnamedAddr::None)),
         DllStorageClass(DefaultStorageClass), ThreadLocal(NotThreadLocal),
-        HasLLVMReservedName(false), IsDSOLocal(false),
-        IntID((Intrinsic::ID)0U), Parent(nullptr) {
+        HasLLVMReservedName(false), IntID((Intrinsic::ID)0U), Parent(nullptr) {
     setName(Name);
   }
 
   Type *ValueType;
 
-  static const unsigned GlobalValueSubClassDataBits = 17;
+  static const unsigned GlobalValueSubClassDataBits = 18;
 
   // All bitfields use unsigned as the underlying type so that MSVC will pack
   // them.
@@ -104,15 +103,11 @@ protected:
   /// Function::intrinsicID() returns Intrinsic::not_intrinsic.
   unsigned HasLLVMReservedName : 1;
 
-  /// If true then there is a definition within the same linkage unit and that
-  /// definition cannot be runtime preempted.
-  unsigned IsDSOLocal : 1;
-
 private:
   friend class Constant;
 
   // Give subclasses access to what otherwise would be wasted padding.
-  // (17 + 4 + 2 + 2 + 2 + 3 + 1 + 1) == 32.
+  // (18 + 4 + 2 + 2 + 2 + 3 + 1) == 32.
   unsigned SubClassData : GlobalValueSubClassDataBits;
 
   void destroyConstantImpl();
@@ -265,12 +260,6 @@ public:
   PointerType *getType() const { return cast<PointerType>(User::getType()); }
 
   Type *getValueType() const { return ValueType; }
-
-  void setDSOLocal(bool Local) { IsDSOLocal = Local; }
-
-  bool isDSOLocal() const {
-    return IsDSOLocal;
-  }
 
   static LinkageTypes getLinkOnceLinkage(bool ODR) {
     return ODR ? LinkOnceODRLinkage : LinkOnceAnyLinkage;

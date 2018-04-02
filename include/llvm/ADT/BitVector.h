@@ -911,7 +911,7 @@ public:
   size_t getBitCapacity() const { return Bits.size() * BITWORD_SIZE; }
 };
 
-inline size_t capacity_in_bytes(const BitVector &X) {
+static inline size_t capacity_in_bytes(const BitVector &X) {
   return X.getMemorySize();
 }
 

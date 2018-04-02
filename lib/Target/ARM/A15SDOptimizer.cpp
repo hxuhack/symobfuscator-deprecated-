@@ -34,10 +34,10 @@
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineInstrBuilder.h"
 #include "llvm/CodeGen/MachineRegisterInfo.h"
-#include "llvm/CodeGen/TargetRegisterInfo.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
 #include "llvm/Support/Debug.h"
 #include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetRegisterInfo.h"
+#include "llvm/Target/TargetSubtargetInfo.h"
 #include <map>
 #include <set>
 
@@ -189,7 +189,8 @@ void A15SDOptimizer::eraseInstrWithNoUses(MachineInstr *MI) {
 
     // MI is already known to be dead. We need to see
     // if other instructions can also be removed.
-    for (MachineOperand &MO : MI->operands()) {
+    for (unsigned int i = 0; i < MI->getNumOperands(); ++i) {
+      MachineOperand &MO = MI->getOperand(i);
       if ((!MO.isReg()) || (!MO.isUse()))
         continue;
       unsigned Reg = MO.getReg();
@@ -211,7 +212,8 @@ void A15SDOptimizer::eraseInstrWithNoUses(MachineInstr *MI) {
       // dead. If so, we can also mark this instruction as being
       // dead.
       bool IsDead = true;
-      for (MachineOperand &MODef : Def->operands()) {
+      for (unsigned int j = 0; j < Def->getNumOperands(); ++j) {
+        MachineOperand &MODef = Def->getOperand(j);
         if ((!MODef.isReg()) || (!MODef.isDef()))
           continue;
         unsigned DefReg = MODef.getReg();
@@ -219,11 +221,13 @@ void A15SDOptimizer::eraseInstrWithNoUses(MachineInstr *MI) {
           IsDead = false;
           break;
         }
-        for (MachineInstr &Use : MRI->use_instructions(Reg)) {
+        for (MachineRegisterInfo::use_instr_iterator
+             II = MRI->use_instr_begin(Reg), EE = MRI->use_instr_end();
+             II != EE; ++II) {
           // We don't care about self references.
-          if (&Use == Def)
+          if (&*II == Def)
             continue;
-          if (DeadInstr.find(&Use) == DeadInstr.end()) {
+          if (DeadInstr.find(&*II) == DeadInstr.end()) {
             IsDead = false;
             break;
           }
@@ -273,7 +277,7 @@ unsigned A15SDOptimizer::optimizeSDPattern(MachineInstr *MI) {
               MRI->getRegClass(MI->getOperand(1).getReg());
             if (TRC->hasSuperClassEq(MRI->getRegClass(FullReg))) {
               DEBUG(dbgs() << "Subreg copy is compatible - returning ");
-              DEBUG(dbgs() << printReg(FullReg) << "\n");
+              DEBUG(dbgs() << PrintReg(FullReg) << "\n");
               eraseInstrWithNoUses(MI);
               return FullReg;
             }
@@ -401,7 +405,9 @@ SmallVector<unsigned, 8> A15SDOptimizer::getReadDPRs(MachineInstr *MI) {
     return SmallVector<unsigned, 8>();
 
   SmallVector<unsigned, 8> Defs;
-  for (MachineOperand &MO : MI->operands()) {
+  for (unsigned i = 0; i < MI->getNumOperands(); ++i) {
+    MachineOperand &MO = MI->getOperand(i);
+
     if (!MO.isReg() || !MO.isUse())
       continue;
     if (!usesRegClass(MO, &ARM::DPRRegClass) &&
@@ -611,7 +617,10 @@ bool A15SDOptimizer::runOnInstruction(MachineInstr *MI) {
 
     elideCopiesAndPHIs(Def, DefSrcs);
 
-    for (MachineInstr *MI : DefSrcs) {
+    for (SmallVectorImpl<MachineInstr *>::iterator II = DefSrcs.begin(),
+      EE = DefSrcs.end(); II != EE; ++II) {
+      MachineInstr *MI = *II;
+
       // If we've already analyzed and replaced this operand, don't do
       // anything.
       if (Replacements.find(MI) != Replacements.end())
@@ -644,7 +653,7 @@ bool A15SDOptimizer::runOnInstruction(MachineInstr *MI) {
 
           DEBUG(dbgs() << "Replacing operand "
                        << **I << " with "
-                       << printReg(NewReg) << "\n");
+                       << PrintReg(NewReg) << "\n");
           (*I)->substVirtReg(NewReg, 0, *TRI);
         }
       }
@@ -655,7 +664,7 @@ bool A15SDOptimizer::runOnInstruction(MachineInstr *MI) {
 }
 
 bool A15SDOptimizer::runOnMachineFunction(MachineFunction &Fn) {
-  if (skipFunction(Fn.getFunction()))
+  if (skipFunction(*Fn.getFunction()))
     return false;
 
   const ARMSubtarget &STI = Fn.getSubtarget<ARMSubtarget>();
@@ -673,14 +682,20 @@ bool A15SDOptimizer::runOnMachineFunction(MachineFunction &Fn) {
   DeadInstr.clear();
   Replacements.clear();
 
-  for (MachineBasicBlock &MBB : Fn) {
-    for (MachineInstr &MI : MBB) {
-      Modified |= runOnInstruction(&MI);
+  for (MachineFunction::iterator MFI = Fn.begin(), E = Fn.end(); MFI != E;
+       ++MFI) {
+
+    for (MachineBasicBlock::iterator MI = MFI->begin(), ME = MFI->end();
+      MI != ME;) {
+      Modified |= runOnInstruction(&*MI++);
     }
+
   }
 
-  for (MachineInstr *MI : DeadInstr) {
-    MI->eraseFromParent();
+  for (std::set<MachineInstr *>::iterator I = DeadInstr.begin(),
+                                            E = DeadInstr.end();
+                                            I != E; ++I) {
+    (*I)->eraseFromParent();
   }
 
   return Modified;

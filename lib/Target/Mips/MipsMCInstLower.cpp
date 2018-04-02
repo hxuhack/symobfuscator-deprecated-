@@ -1,4 +1,4 @@
-//===- MipsMCInstLower.cpp - Convert Mips MachineInstr to MCInst ----------===//
+//===-- MipsMCInstLower.cpp - Convert Mips MachineInstr to MCInst ---------===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -11,18 +11,18 @@
 // MCInst records.
 //
 //===----------------------------------------------------------------------===//
-
 #include "MipsMCInstLower.h"
 #include "MCTargetDesc/MipsBaseInfo.h"
-#include "MCTargetDesc/MipsMCExpr.h"
 #include "MipsAsmPrinter.h"
-#include "llvm/CodeGen/MachineBasicBlock.h"
+#include "MipsInstrInfo.h"
+#include "llvm/CodeGen/MachineFunction.h"
 #include "llvm/CodeGen/MachineInstr.h"
 #include "llvm/CodeGen/MachineOperand.h"
+#include "llvm/IR/Mangler.h"
+#include "llvm/MC/MCContext.h"
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInst.h"
-#include "llvm/Support/ErrorHandling.h"
-#include <cassert>
+#include "llvm/MC/MCStreamer.h"
 
 using namespace llvm;
 
@@ -278,3 +278,4 @@ void MipsMCInstLower::Lower(const MachineInstr *MI, MCInst &OutMI) const {
       OutMI.addOperand(MCOp);
   }
 }
+

@@ -1743,7 +1743,6 @@ IEEEFloat::opStatus IEEEFloat::remainder(const IEEEFloat &rhs) {
 IEEEFloat::opStatus IEEEFloat::mod(const IEEEFloat &rhs) {
   opStatus fs;
   fs = modSpecials(rhs);
-  unsigned int origSign = sign;
 
   while (isFiniteNonZero() && rhs.isFiniteNonZero() &&
          compareAbsoluteValue(rhs) != cmpLessThan) {
@@ -1755,8 +1754,6 @@ IEEEFloat::opStatus IEEEFloat::mod(const IEEEFloat &rhs) {
     fs = subtract(V, rmNearestTiesToEven);
     assert(fs==opOK);
   }
-  if (isZero())
-    sign = origSign; // fmod requires this
   return fs;
 }
 
@@ -2546,12 +2543,12 @@ IEEEFloat::convertFromDecimalString(StringRef str, roundingMode rounding_mode) {
 }
 
 bool IEEEFloat::convertFromStringSpecials(StringRef str) {
-  if (str.equals("inf") || str.equals("INFINITY") || str.equals("+Inf")) {
+  if (str.equals("inf") || str.equals("INFINITY")) {
     makeInf(false);
     return true;
   }
 
-  if (str.equals("-inf") || str.equals("-INFINITY") || str.equals("-Inf")) {
+  if (str.equals("-inf") || str.equals("-INFINITY")) {
     makeInf(true);
     return true;
   }
@@ -4366,7 +4363,10 @@ bool DoubleAPFloat::isLargest() const {
 
 bool DoubleAPFloat::isInteger() const {
   assert(Semantics == &semPPCDoubleDouble && "Unexpected Semantics");
-  return Floats[0].isInteger() && Floats[1].isInteger();
+  APFloat Tmp(semPPCDoubleDoubleLegacy);
+  (void)Tmp.add(Floats[0], rmNearestTiesToEven);
+  (void)Tmp.add(Floats[1], rmNearestTiesToEven);
+  return Tmp.isInteger();
 }
 
 void DoubleAPFloat::toString(SmallVectorImpl<char> &Str,

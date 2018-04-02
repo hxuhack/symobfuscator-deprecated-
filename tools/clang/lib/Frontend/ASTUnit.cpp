@@ -243,8 +243,7 @@ static unsigned getDeclShowContexts(const NamedDecl *ND,
   
   uint64_t Contexts = 0;
   if (isa<TypeDecl>(ND) || isa<ObjCInterfaceDecl>(ND) || 
-      isa<ClassTemplateDecl>(ND) || isa<TemplateTemplateParmDecl>(ND) ||
-      isa<TypeAliasTemplateDecl>(ND)) {
+      isa<ClassTemplateDecl>(ND) || isa<TemplateTemplateParmDecl>(ND)) {
     // Types can appear in these contexts.
     if (LangOpts.CPlusPlus || !isa<TagDecl>(ND))
       Contexts |= (1LL << CodeCompletionContext::CCC_TopLevel)
@@ -264,12 +263,8 @@ static unsigned getDeclShowContexts(const NamedDecl *ND,
       Contexts |= (1LL << CodeCompletionContext::CCC_ObjCMessageReceiver);
     
     // In Objective-C, you can only be a subclass of another Objective-C class
-    if (const auto *ID = dyn_cast<ObjCInterfaceDecl>(ND)) {
-      // Objective-C interfaces can be used in a class property expression.
-      if (ID->getDefinition())
-        Contexts |= (1LL << CodeCompletionContext::CCC_Expression);
+    if (isa<ObjCInterfaceDecl>(ND))
       Contexts |= (1LL << CodeCompletionContext::CCC_ObjCInterfaceName);
-    }
 
     // Deal with tag names.
     if (isa<EnumDecl>(ND)) {
@@ -546,9 +541,6 @@ private:
 
     // Initialize the ASTContext
     Context->InitBuiltinTypes(*Target);
-
-    // Adjust printing policy based on language options.
-    Context->setPrintingPolicy(PrintingPolicy(LangOpt));
 
     // We didn't have access to the comment options when the ASTContext was
     // constructed, so register them now.
@@ -970,8 +962,9 @@ public:
     }
   }
 
-  std::unique_ptr<PPCallbacks> createPPCallbacks() override {
-    return llvm::make_unique<MacroDefinitionTrackerPPCallbacks>(Hash);
+  void HandleMacroDefined(const Token &MacroNameTok,
+                          const MacroDirective *MD) override {
+    AddDefinedMacroToHash(MacroNameTok, Hash);
   }
 
 private:
@@ -1023,19 +1016,6 @@ bool ASTUnit::Parse(std::shared_ptr<PCHContainerOperations> PCHContainerOps,
   if (!Invocation)
     return true;
 
-  auto CCInvocation = std::make_shared<CompilerInvocation>(*Invocation);
-  if (OverrideMainBuffer) {
-    assert(Preamble &&
-           "No preamble was built, but OverrideMainBuffer is not null");
-    IntrusiveRefCntPtr<vfs::FileSystem> OldVFS = VFS;
-    Preamble->AddImplicitPreamble(*CCInvocation, VFS, OverrideMainBuffer.get());
-    if (OldVFS != VFS && FileMgr) {
-      assert(OldVFS == FileMgr->getVirtualFileSystem() &&
-             "VFS passed to Parse and VFS in FileMgr are different");
-      FileMgr = new FileManager(FileMgr->getFileSystemOpts(), VFS);
-    }
-  }
-
   // Create the compiler instance to use for building the AST.
   std::unique_ptr<CompilerInstance> Clang(
       new CompilerInstance(std::move(PCHContainerOps)));
@@ -1050,7 +1030,7 @@ bool ASTUnit::Parse(std::shared_ptr<PCHContainerOperations> PCHContainerOps,
   llvm::CrashRecoveryContextCleanupRegistrar<CompilerInstance>
     CICleanup(Clang.get());
 
-  Clang->setInvocation(CCInvocation);
+  Clang->setInvocation(std::make_shared<CompilerInvocation>(*Invocation));
   OriginalSourceFile = Clang->getFrontendOpts().Inputs[0].getFile();
     
   // Set up diagnostics, capturing any diagnostics that would
@@ -1104,6 +1084,9 @@ bool ASTUnit::Parse(std::shared_ptr<PCHContainerOperations> PCHContainerOps,
   // If the main file has been overridden due to the use of a preamble,
   // make that override happen and introduce the preamble.
   if (OverrideMainBuffer) {
+    assert(Preamble && "No preamble was built, but OverrideMainBuffer is not null");
+    Preamble->AddImplicitPreamble(Clang->getInvocation(), OverrideMainBuffer.get());
+    
     // The stored diagnostic has the old source manager in it; update
     // the locations to refer into the new source manager. Since we've
     // been careful to make sure that the source manager's state
@@ -1292,7 +1275,7 @@ ASTUnit::getMainBufferWithPrecompiledPreamble(
 
     llvm::ErrorOr<PrecompiledPreamble> NewPreamble = PrecompiledPreamble::Build(
         PreambleInvocationIn, MainFileBuffer.get(), Bounds, *Diagnostics, VFS,
-        PCHContainerOps, /*StoreInMemory=*/false, Callbacks);
+        PCHContainerOps, Callbacks);
     if (NewPreamble) {
       Preamble = std::move(*NewPreamble);
       PreambleRebuildCounter = 1;
@@ -1675,6 +1658,7 @@ ASTUnit *ASTUnit::LoadFromCommandLine(
   PreprocessorOptions &PPOpts = CI->getPreprocessorOpts();
   PPOpts.RemappedFilesKeepOriginalName = RemappedFilesKeepOriginalName;
   PPOpts.AllowPCHWithCompilerErrors = AllowPCHWithCompilerErrors;
+  PPOpts.GeneratePreamble = PrecompilePreambleAfterNParses != 0;
   PPOpts.SingleFileParseMode = SingleFileParse;
   
   // Override the resources path.
@@ -2168,16 +2152,8 @@ void ASTUnit::CodeComplete(
   // If the main file has been overridden due to the use of a preamble,
   // make that override happen and introduce the preamble.
   if (OverrideMainBuffer) {
-    assert(Preamble &&
-           "No preamble was built, but OverrideMainBuffer is not null");
-
-    auto VFS = FileMgr.getVirtualFileSystem();
-    Preamble->AddImplicitPreamble(Clang->getInvocation(), VFS,
-                                  OverrideMainBuffer.get());
-    // FIXME: there is no way to update VFS if it was changed by
-    // AddImplicitPreamble as FileMgr is accepted as a parameter by this method.
-    // We use on-disk preambles instead and rely on FileMgr's VFS to ensure the
-    // PCH files are always readable.
+    assert(Preamble && "No preamble was built, but OverrideMainBuffer is not null");
+    Preamble->AddImplicitPreamble(Clang->getInvocation(), OverrideMainBuffer.get());
     OwnedBuffers.push_back(OverrideMainBuffer.release());
   } else {
     PreprocessorOpts.PrecompiledPreambleBytes.first = 0;
@@ -2419,7 +2395,7 @@ SourceLocation ASTUnit::getLocation(const FileEntry *File,
 /// \brief If \arg Loc is a loaded location from the preamble, returns
 /// the corresponding local location of the main file, otherwise it returns
 /// \arg Loc.
-SourceLocation ASTUnit::mapLocationFromPreamble(SourceLocation Loc) const {
+SourceLocation ASTUnit::mapLocationFromPreamble(SourceLocation Loc) {
   FileID PreambleID;
   if (SourceMgr)
     PreambleID = SourceMgr->getPreambleFileID();
@@ -2440,7 +2416,7 @@ SourceLocation ASTUnit::mapLocationFromPreamble(SourceLocation Loc) const {
 /// \brief If \arg Loc is a local location of the main file but inside the
 /// preamble chunk, returns the corresponding loaded location from the
 /// preamble, otherwise it returns \arg Loc.
-SourceLocation ASTUnit::mapLocationToPreamble(SourceLocation Loc) const {
+SourceLocation ASTUnit::mapLocationToPreamble(SourceLocation Loc) {
   FileID PreambleID;
   if (SourceMgr)
     PreambleID = SourceMgr->getPreambleFileID();
@@ -2458,7 +2434,7 @@ SourceLocation ASTUnit::mapLocationToPreamble(SourceLocation Loc) const {
   return Loc;
 }
 
-bool ASTUnit::isInPreambleFileID(SourceLocation Loc) const {
+bool ASTUnit::isInPreambleFileID(SourceLocation Loc) {
   FileID FID;
   if (SourceMgr)
     FID = SourceMgr->getPreambleFileID();
@@ -2469,7 +2445,7 @@ bool ASTUnit::isInPreambleFileID(SourceLocation Loc) const {
   return SourceMgr->isInFileID(Loc, FID);
 }
 
-bool ASTUnit::isInMainFileID(SourceLocation Loc) const {
+bool ASTUnit::isInMainFileID(SourceLocation Loc) {
   FileID FID;
   if (SourceMgr)
     FID = SourceMgr->getMainFileID();
@@ -2480,7 +2456,7 @@ bool ASTUnit::isInMainFileID(SourceLocation Loc) const {
   return SourceMgr->isInFileID(Loc, FID);
 }
 
-SourceLocation ASTUnit::getEndOfPreambleFileID() const {
+SourceLocation ASTUnit::getEndOfPreambleFileID() {
   FileID FID;
   if (SourceMgr)
     FID = SourceMgr->getPreambleFileID();
@@ -2491,7 +2467,7 @@ SourceLocation ASTUnit::getEndOfPreambleFileID() const {
   return SourceMgr->getLocForEndOfFile(FID);
 }
 
-SourceLocation ASTUnit::getStartOfMainFileID() const {
+SourceLocation ASTUnit::getStartOfMainFileID() {
   FileID FID;
   if (SourceMgr)
     FID = SourceMgr->getMainFileID();
@@ -2567,7 +2543,7 @@ const FileEntry *ASTUnit::getPCHFile() {
   return nullptr;
 }
 
-bool ASTUnit::isModuleFile() const {
+bool ASTUnit::isModuleFile() {
   return isMainFileAST() && getLangOpts().isCompilingModule();
 }
 

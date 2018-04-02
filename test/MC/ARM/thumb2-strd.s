@@ -2,9 +2,9 @@
 .text
 .thumb
 
-@ CHECK: error: operand must be a register in range [r0, r12] or r14
-@ CHECK: error: operand must be a register in range [r0, r12] or r14
-@ CHECK: error: operand must be a register in range [r0, r12] or r14
+@ CHECK: error: invalid operand for instruction
+@ CHECK: error: invalid operand for instruction
+@ CHECK: error: invalid operand for instruction
 strd r12, SP, [r0, #256]
 strd r12, SP, [r0, #256]!
 strd r12, SP, [r0], #256

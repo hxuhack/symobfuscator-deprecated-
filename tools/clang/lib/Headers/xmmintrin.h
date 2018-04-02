@@ -2035,11 +2035,9 @@ _mm_storer_ps(float *__p, __m128 __a)
   _mm_store_ps(__p, __a);
 }
 
-#define _MM_HINT_ET0 7
-#define _MM_HINT_ET1 6
-#define _MM_HINT_T0  3
-#define _MM_HINT_T1  2
-#define _MM_HINT_T2  1
+#define _MM_HINT_T0 3
+#define _MM_HINT_T1 2
+#define _MM_HINT_T2 1
 #define _MM_HINT_NTA 0
 
 #ifndef _MSC_VER
@@ -2070,8 +2068,7 @@ _mm_storer_ps(float *__p, __m128 __a)
 ///    be generated. \n
 ///    _MM_HINT_T2: Move data using the T2 hint. The PREFETCHT2 instruction will
 ///    be generated.
-#define _mm_prefetch(a, sel) (__builtin_prefetch((void *)(a), \
-                                                 ((sel) >> 2) & 1, (sel) & 0x3))
+#define _mm_prefetch(a, sel) (__builtin_prefetch((void *)(a), 0, (sel)))
 #endif
 
 /// \brief Stores a 64-bit integer in the specified aligned memory location. To

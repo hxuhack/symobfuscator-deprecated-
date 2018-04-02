@@ -328,6 +328,7 @@ entry:
 ; CHECK-LABEL: @getuc0
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 8, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc0
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: clrldi   3, 3, 56
@@ -341,9 +342,11 @@ entry:
 ; CHECK-LABEL: @getuc1
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 16, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc1
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 56, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -354,9 +357,11 @@ entry:
 ; CHECK-LABEL: @getuc2
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 24, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc2
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 48, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -367,9 +372,11 @@ entry:
 ; CHECK-LABEL: @getuc3
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 32, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc3
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 40, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -380,9 +387,11 @@ entry:
 ; CHECK-LABEL: @getuc4
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 40, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc4
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 32, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -393,9 +402,11 @@ entry:
 ; CHECK-LABEL: @getuc5
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 48, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc5
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 24, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -406,9 +417,11 @@ entry:
 ; CHECK-LABEL: @getuc6
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 56, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc6
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 16, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -422,6 +435,7 @@ entry:
 ; CHECK-LE-LABEL: @getuc7
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 8, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -432,6 +446,7 @@ entry:
 ; CHECK-LABEL: @getuc8
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 8, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc8
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: clrldi   3, 3, 56
@@ -445,9 +460,11 @@ entry:
 ; CHECK-LABEL: @getuc9
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 16, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc9
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 56, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -458,9 +475,11 @@ entry:
 ; CHECK-LABEL: @getuc10
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 24, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc10
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 48, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -471,9 +490,11 @@ entry:
 ; CHECK-LABEL: @getuc11
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 32, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc11
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 40, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -484,9 +505,11 @@ entry:
 ; CHECK-LABEL: @getuc12
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 40, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc12
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 32, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -497,9 +520,11 @@ entry:
 ; CHECK-LABEL: @getuc13
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 48, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc13
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 24, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -510,9 +535,11 @@ entry:
 ; CHECK-LABEL: @getuc14
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 56, 56
+; CHECK: clrldi   3, 3, 56
 ; CHECK-LE-LABEL: @getuc14
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 16, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -526,6 +553,7 @@ entry:
 ; CHECK-LE-LABEL: @getuc15
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 8, 56
+; CHECK-LE: clrldi   3, 3, 56
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -711,6 +739,7 @@ entry:
 ; CHECK-LABEL: @getus0
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 16, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus0
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: clrldi   3, 3, 48
@@ -724,9 +753,11 @@ entry:
 ; CHECK-LABEL: @getus1
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 32, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus1
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 48, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -737,9 +768,11 @@ entry:
 ; CHECK-LABEL: @getus2
 ; CHECK: mfvsrd 3, 34
 ; CHECK: rldicl 3, 3, 48, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus2
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 32, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -753,6 +786,7 @@ entry:
 ; CHECK-LE-LABEL: @getus3
 ; CHECK-LE: mfvsrd 3,
 ; CHECK-LE: rldicl 3, 3, 16, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -763,6 +797,7 @@ entry:
 ; CHECK-LABEL: @getus4
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 16, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus4
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: clrldi   3, 3, 48
@@ -776,9 +811,11 @@ entry:
 ; CHECK-LABEL: @getus5
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 32, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus5
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 48, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -789,9 +826,11 @@ entry:
 ; CHECK-LABEL: @getus6
 ; CHECK: mfvsrd 3,
 ; CHECK: rldicl 3, 3, 48, 48
+; CHECK: clrldi   3, 3, 48
 ; CHECK-LE-LABEL: @getus6
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 32, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -805,6 +844,7 @@ entry:
 ; CHECK-LE-LABEL: @getus7
 ; CHECK-LE: mfvsrd 3, 34
 ; CHECK-LE: rldicl 3, 3, 16, 48
+; CHECK-LE: clrldi   3, 3, 48
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -933,9 +973,11 @@ entry:
 ; CHECK-LABEL: @getui0
 ; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 3
 ; CHECK: mfvsrwz 3, [[SHL]]
+; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui0
 ; CHECK-LE: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK-LE: mfvsrwz 3, [[SHL]]
+; CHECK-LE: clrldi   3, 3, 32
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -945,9 +987,11 @@ entry:
   ret i32 %vecext
 ; CHECK-LABEL: @getui1
 ; CHECK: mfvsrwz 3, 34
+; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui1
 ; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 1
 ; CHECK-LE: mfvsrwz 3, [[SHL]]
+; CHECK-LE: clrldi   3, 3, 32
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -958,8 +1002,10 @@ entry:
 ; CHECK-LABEL: @getui2
 ; CHECK: xxsldwi [[SHL:[0-9]+]], 34, 34, 1
 ; CHECK: mfvsrwz 3, [[SHL]]
+; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui2
 ; CHECK-LE: mfvsrwz 3, 34
+; CHECK-LE: clrldi   3, 3, 32
 }
 
 ; Function Attrs: norecurse nounwind readnone
@@ -970,9 +1016,11 @@ entry:
 ; CHECK-LABEL: @getui3
 ; CHECK: xxswapd [[SHL:[0-9]+]], 34
 ; CHECK: mfvsrwz 3, [[SHL]]
+; CHECK: clrldi   3, 3, 32
 ; CHECK-LE-LABEL: @getui3
 ; CHECK-LE: xxsldwi [[SHL:[0-9]+]], 34, 34, 3
 ; CHECK-LE: mfvsrwz 3, [[SHL]]
+; CHECK-LE: clrldi   3, 3, 32
 }
 
 ; Function Attrs: norecurse nounwind readnone

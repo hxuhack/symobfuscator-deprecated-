@@ -96,9 +96,11 @@ struct COFFShortExport {
   }
 };
 
-Error writeImportLibrary(StringRef ImportName, StringRef Path,
-                         ArrayRef<COFFShortExport> Exports,
-                         COFF::MachineTypes Machine, bool MakeWeakAliases);
+std::error_code writeImportLibrary(StringRef ImportName,
+                                   StringRef Path,
+                                   ArrayRef<COFFShortExport> Exports,
+                                   COFF::MachineTypes Machine,
+                                   bool MakeWeakAliases);
 
 } // namespace object
 } // namespace llvm

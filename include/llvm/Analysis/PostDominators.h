@@ -1,4 +1,4 @@
-//=- llvm/Analysis/PostDominators.h - Post Dominator Calculation --*- C++ -*-=//
+//=- llvm/Analysis/PostDominators.h - Post Dominator Calculation-*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,20 +14,16 @@
 #ifndef LLVM_ANALYSIS_POSTDOMINATORS_H
 #define LLVM_ANALYSIS_POSTDOMINATORS_H
 
-#include "llvm/ADT/DepthFirstIterator.h"
 #include "llvm/IR/Dominators.h"
 #include "llvm/IR/PassManager.h"
-#include "llvm/Pass.h"
 
 namespace llvm {
 
-class Function;
-class raw_ostream;
-
 /// PostDominatorTree Class - Concrete subclass of DominatorTree that is used to
 /// compute the post-dominator tree.
+///
 struct PostDominatorTree : public PostDomTreeBase<BasicBlock> {
-  using Base = PostDomTreeBase<BasicBlock>;
+  typedef PostDomTreeBase<BasicBlock> Base;
 
   /// Handle invalidation explicitly.
   bool invalidate(Function &F, const PreservedAnalyses &PA,
@@ -38,12 +34,11 @@ struct PostDominatorTree : public PostDomTreeBase<BasicBlock> {
 class PostDominatorTreeAnalysis
     : public AnalysisInfoMixin<PostDominatorTreeAnalysis> {
   friend AnalysisInfoMixin<PostDominatorTreeAnalysis>;
-
   static AnalysisKey Key;
 
 public:
-  /// \brief Provide the result type for this analysis pass.
-  using Result = PostDominatorTree;
+  /// \brief Provide the result typedef for this analysis pass.
+  typedef PostDominatorTree Result;
 
   /// \brief Run the analysis pass over a function and produce a post dominator
   ///        tree.
@@ -57,13 +52,11 @@ class PostDominatorTreePrinterPass
 
 public:
   explicit PostDominatorTreePrinterPass(raw_ostream &OS);
-
   PreservedAnalyses run(Function &F, FunctionAnalysisManager &AM);
 };
 
 struct PostDominatorTreeWrapperPass : public FunctionPass {
   static char ID; // Pass identification, replacement for typeid
-
   PostDominatorTree DT;
 
   PostDominatorTreeWrapperPass() : FunctionPass(ID) {
@@ -106,6 +99,6 @@ template <> struct GraphTraits<PostDominatorTree*>
   }
 };
 
-} // end namespace llvm
+} // End llvm namespace
 
-#endif // LLVM_ANALYSIS_POSTDOMINATORS_H
+#endif

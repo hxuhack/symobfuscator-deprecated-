@@ -8,14 +8,6 @@
 // RUN: %clang_cc1 -DCK1 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck %s --check-prefix CK1 --check-prefix CK1-32
 // RUN: %clang_cc1 -DCK1 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
 // RUN: %clang_cc1 -DCK1 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CK1 --check-prefix CK1-32
-
-// RUN: %clang_cc1 -DCK1 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY0 %s
-// RUN: %clang_cc1 -DCK1 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK1 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
-// RUN: %clang_cc1 -DCK1 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY0 %s
-// RUN: %clang_cc1 -DCK1 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK1 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY0 %s
-// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
 #ifdef CK1
 
 int Gbla;
@@ -29,7 +21,7 @@ int teams_argument_global_local(int a){
   int la = 23;
   float lc = 25.0;
 
-  // CK1: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 1, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 0)
+  // CK1: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 1, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 0)
   // CK1: call void @{{.+}}(i{{64|32}} %{{.+}})
   #pragma omp target
   #pragma omp teams
@@ -37,7 +29,7 @@ int teams_argument_global_local(int a){
     ++comp;
   }
 
-  // CK1: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 1, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 0)
+  // CK1: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 1, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 0)
   // CK1: call void @{{.+}}(i{{64|32}} %{{.+}})
   #pragma omp target
   {{{
@@ -47,7 +39,7 @@ int teams_argument_global_local(int a){
     }
   }}}
 
-  // CK1-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 0)
+  // CK1-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 0)
   // CK1-DAG: [[NT]] = load i32, i32* [[NTA:%[^,]+]],
 
   // CK1: call void @{{.+}}(i{{64|32}} %{{.+}})
@@ -57,7 +49,7 @@ int teams_argument_global_local(int a){
     ++comp;
   }
 
-  // CK1-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 [[NT:%[^,]+]])
+  // CK1-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 0, i32 [[NT:%[^,]+]])
   // CK1-DAG: [[NT]] = load i32, i32* [[NTA:%[^,]+]],
 
   // CK1: call void @{{.+}}(i{{64|32}} %{{.+}})
@@ -67,7 +59,7 @@ int teams_argument_global_local(int a){
     ++comp;
   }
 
-  // CK1-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 5, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
+  // CK1-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 5, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
 
   // CK1-DAG: [[NT]] = add nsw i32 [[NTA:%[^,]+]], [[NTB:%[^,]+]]
   // CK1-DAG: [[NTA]] = load i32, i32* @Gbla,
@@ -86,7 +78,7 @@ int teams_argument_global_local(int a){
     ++comp;
   }
 
-  // CK1-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 {{.+}}, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
+  // CK1-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 {{.+}}, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
 
   // CK1-DAG: [[NT]] = add nsw i32 [[NTA:%[^,]+]], 1
   // CK1-DAG: [[NTA]] = load i32, i32* @Gbla,
@@ -113,14 +105,6 @@ int teams_argument_global_local(int a){
 // RUN: %clang_cc1 -DCK2 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck %s --check-prefix CK2 --check-prefix CK2-32
 // RUN: %clang_cc1 -DCK2 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
 // RUN: %clang_cc1 -DCK2 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CK2 --check-prefix CK2-32
-
-// RUN: %clang_cc1 -DCK2 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY1 %s
-// RUN: %clang_cc1 -DCK2 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK2 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY1 %s
-// RUN: %clang_cc1 -DCK2 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY1 %s
-// RUN: %clang_cc1 -DCK2 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK2 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY1 %s
-// SIMD-ONLY1-NOT: {{__kmpc|__tgt}}
 #ifdef CK2
 
 // CK2-DAG: [[SSI:%.+]] = type { i32, float }
@@ -141,7 +125,7 @@ int teams_template_arg(void) {
   SS<int> la;
   SS<long long> lb;
 
-  // CK2-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 3, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
+  // CK2-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 3, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
 
   // CK2-DAG: [[NT]] = load i32, i32* getelementptr inbounds ([[SSI]], [[SSI]]* @Gbla, i32 0, i32 0)
 
@@ -157,7 +141,7 @@ int teams_template_arg(void) {
     ++comp;
   }
 
-  // CK2-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 3, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
+  // CK2-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 3, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 [[TL:%[^,]+]])
 
   // CK2-DAG: [[TL]] = trunc i64 [[TLD:%[^,]+]] to i32
   // CK2-DAG: [[TLD]] = load i64, i64* getelementptr inbounds ([[SSL]], [[SSL]]* @Gblb, i32 0, i32 0),
@@ -184,14 +168,6 @@ int teams_template_arg(void) {
 // RUN: %clang_cc1 -DCK3 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck %s --check-prefix CK3 --check-prefix CK3-32
 // RUN: %clang_cc1 -DCK3 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
 // RUN: %clang_cc1 -DCK3 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CK3 --check-prefix CK3-32
-
-// RUN: %clang_cc1 -DCK3 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY2 %s
-// RUN: %clang_cc1 -DCK3 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK3 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY2 %s
-// RUN: %clang_cc1 -DCK3 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -o - | FileCheck --check-prefix SIMD-ONLY2 %s
-// RUN: %clang_cc1 -DCK3 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -o %t %s
-// RUN: %clang_cc1 -DCK3 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY2 %s
-// SIMD-ONLY2-NOT: {{__kmpc|__tgt}}
 #ifdef CK3
 
 // CK3: [[SSI:%.+]] = type { i32, float }
@@ -205,7 +181,7 @@ struct SS{
   int foo(void) {
     int comp = 1;
 
-    // CK3-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 123)
+    // CK3-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 [[NT:%[^,]+]], i32 123)
 
     // CK3-DAG: [[NT]] = load i32, i32* [[NTA:%[^,]+]],
     // CK3-DAG: [[NTA]] = getelementptr inbounds [[SSI]], [[SSI]]* [[NTB:%[^,]+]], i32 0, i32 0
@@ -218,7 +194,7 @@ struct SS{
       ++comp;
     }
 
-    // CK3-DAG: call i32 @__tgt_target_teams(i64 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i64* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 456, i32 [[TL:%[^,]+]])
+    // CK3-DAG: call i32 @__tgt_target_teams(i32 -1, i8* @{{[^,]+}}, i32 2, i8** %{{[^,]+}}, i8** %{{[^,]+}}, i{{64|32}}* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32* {{.+}}@{{[^,]+}}, i32 0, i32 0), i32 456, i32 [[TL:%[^,]+]])
 
     // CK3-DAG: [[TL]] = add nsw i32 [[TLA:%[^,]+]], 123
     // CK3-DAG: [[TLA]] = fptosi float [[TLB:%[^,]+]] to i32
@@ -251,16 +227,6 @@ int teams_template_struct(void) {
 // RUN: %clang_cc1 -DCK4 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck %s --check-prefix CK4 --check-prefix CK4-32
 // RUN: %clang_cc1 -DCK4 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
 // RUN: %clang_cc1 -DCK4 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CK4 --check-prefix CK4-32
-
-// RUN: %clang_cc1 -DCK4 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm-bc %s -o %t-ppc-host.bc
-// RUN: %clang_cc1 -DCK4 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o - | FileCheck --check-prefix SIMD-ONLY3 %s
-// RUN: %clang_cc1 -DCK4 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o %t %s
-// RUN: %clang_cc1 -DCK4 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY3 %s
-// RUN: %clang_cc1 -DCK4 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm-bc %s -o %t-x86-host.bc
-// RUN: %clang_cc1 -DCK4 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck --check-prefix SIMD-ONLY3 %s
-// RUN: %clang_cc1 -DCK4 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
-// RUN: %clang_cc1 -DCK4 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY3 %s
-// SIMD-ONLY3-NOT: {{__kmpc|__tgt}}
 
 #ifdef CK4
 
@@ -311,16 +277,6 @@ int main (int argc, char **argv) {
 // RUN: %clang_cc1 -DCK5 -verify -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck %s --check-prefix CK5 --check-prefix CK5-32
 // RUN: %clang_cc1 -DCK5 -fopenmp -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
 // RUN: %clang_cc1 -DCK5 -fopenmp -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck %s --check-prefix CK5 --check-prefix CK5-32
-
-// RUN: %clang_cc1 -DCK5 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm-bc %s -o %t-ppc-host.bc
-// RUN: %clang_cc1 -DCK5 -verify -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o - | FileCheck --check-prefix SIMD-ONLY4 %s
-// RUN: %clang_cc1 -DCK5 -fopenmp-simd -x c++ -std=c++11 -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -o %t %s
-// RUN: %clang_cc1 -DCK5 -fopenmp-simd -x c++ -triple powerpc64le-unknown-unknown -fopenmp-targets=powerpc64le-ibm-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-ppc-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY4 %s
-// RUN: %clang_cc1 -DCK5 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm-bc %s -o %t-x86-host.bc
-// RUN: %clang_cc1 -DCK5 -verify -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-llvm %s -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o - | FileCheck --check-prefix SIMD-ONLY4 %s
-// RUN: %clang_cc1 -DCK5 -fopenmp-simd -x c++ -std=c++11 -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -emit-pch -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -o %t %s
-// RUN: %clang_cc1 -DCK5 -fopenmp-simd -x c++ -triple i386-unknown-unknown -fopenmp-targets=i386-pc-linux-gnu -std=c++11 -fopenmp-is-device -fopenmp-host-ir-file-path %t-x86-host.bc -include-pch %t -verify %s -emit-llvm -o - | FileCheck --check-prefix SIMD-ONLY4 %s
-// SIMD-ONLY4-NOT: {{__kmpc|__tgt}}
 
 // expected-no-diagnostics
 #ifdef CK5

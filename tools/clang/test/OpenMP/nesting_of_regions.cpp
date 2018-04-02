@@ -1,8 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -fopenmp -verify %s
 
-// RUN: %clang_cc1 -fsyntax-only -fopenmp-simd -verify %s
-// SIMD-ONLY0-NOT: {{__kmpc|__tgt}}
-
 void bar();
 
 template <class T>

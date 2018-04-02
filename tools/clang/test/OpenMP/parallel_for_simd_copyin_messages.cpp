@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -verify -fopenmp -o - %s
 
-// RUN: %clang_cc1 -verify -fopenmp-simd -o - %s
-
 void foo() {
 }
 

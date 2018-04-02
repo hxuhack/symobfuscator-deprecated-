@@ -1,4 +1,4 @@
-//===- TemplateBase.h - Core classes for C++ templates ----------*- C++ -*-===//
+//===-- TemplateBase.h - Core classes for C++ templates ---------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -15,32 +15,21 @@
 #ifndef LLVM_CLANG_AST_TEMPLATEBASE_H
 #define LLVM_CLANG_AST_TEMPLATEBASE_H
 
-#include "clang/AST/NestedNameSpecifier.h"
 #include "clang/AST/TemplateName.h"
 #include "clang/AST/Type.h"
-#include "clang/Basic/LLVM.h"
-#include "clang/Basic/SourceLocation.h"
-#include "llvm/ADT/APInt.h"
 #include "llvm/ADT/APSInt.h"
-#include "llvm/ADT/ArrayRef.h"
-#include "llvm/ADT/None.h"
-#include "llvm/ADT/Optional.h"
 #include "llvm/ADT/SmallVector.h"
+#include "llvm/ADT/iterator_range.h"
 #include "llvm/Support/Compiler.h"
+#include "llvm/Support/ErrorHandling.h"
 #include "llvm/Support/TrailingObjects.h"
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
 
 namespace llvm {
-
-class FoldingSetNodeID;
-
-} // namespace llvm
+  class FoldingSetNodeID;
+}
 
 namespace clang {
 
-class ASTContext;
 class DiagnosticBuilder;
 class Expr;
 struct PrintingPolicy;
@@ -55,37 +44,29 @@ public:
     /// \brief Represents an empty template argument, e.g., one that has not
     /// been deduced.
     Null = 0,
-
     /// The template argument is a type.
     Type,
-
     /// The template argument is a declaration that was provided for a pointer,
     /// reference, or pointer to member non-type template parameter.
     Declaration,
-
     /// The template argument is a null pointer or null pointer to member that
     /// was provided for a non-type template parameter.
     NullPtr,
-
     /// The template argument is an integral value stored in an llvm::APSInt
     /// that was provided for an integral non-type template parameter.
     Integral,
-
     /// The template argument is a template name that was provided for a
     /// template template parameter.
     Template,
-
     /// The template argument is a pack expansion of a template name that was
     /// provided for a template template parameter.
     TemplateExpansion,
-
     /// The template argument is an expression, and we've not resolved it to one
     /// of the other forms yet, either because it's dependent or because we're
     /// representing a non-canonical template argument (for instance, in a
     /// TemplateSpecializationType). Also used to represent a non-dependent
     /// __uuidof expression (a Microsoft extension).
     Expression,
-
     /// The template argument is actually a parameter pack. Arguments are stored
     /// in the Args struct.
     Pack
@@ -107,11 +88,8 @@ private:
     unsigned BitWidth : 31;
     unsigned IsUnsigned : 1;
     union {
-      /// Used to store the <= 64 bits integer value.
-      uint64_t VAL;
-
-      /// Used to store the >64 bits integer value.
-      const uint64_t *pVal;
+      uint64_t VAL;          ///< Used to store the <= 64 bits integer value.
+      const uint64_t *pVal;  ///< Used to store the >64 bits integer value.
     };
     void *Type;
   };
@@ -137,6 +115,8 @@ private:
     struct TV TypeOrValue;
   };
 
+  TemplateArgument(TemplateName, bool) = delete;
+  
 public:
   /// \brief Construct an empty, invalid template argument.
   constexpr TemplateArgument() : TypeOrValue({Null, 0}) {}
@@ -222,8 +202,6 @@ public:
     this->Args.NumArgs = Args.size();
   }
 
-  TemplateArgument(TemplateName, bool) = delete;
-
   static TemplateArgument getEmptyPack() { return TemplateArgument(None); }
 
   /// \brief Create a new template argument pack by copying the given set of
@@ -300,9 +278,7 @@ public:
   // FIXME: Provide a way to read the integral data without copying the value.
   llvm::APSInt getAsIntegral() const {
     assert(getKind() == Integral && "Unexpected kind");
-
     using namespace llvm;
-
     if (Integer.BitWidth <= 64)
       return APSInt(APInt(Integer.BitWidth, Integer.VAL), Integer.IsUnsigned);
 
@@ -333,7 +309,7 @@ public:
   }
 
   /// \brief Iterator that traverses the elements of a template argument pack.
-  using pack_iterator = const TemplateArgument *;
+  typedef const TemplateArgument * pack_iterator;
 
   /// \brief Iterator referencing the first argument of a template argument
   /// pack.
@@ -392,6 +368,7 @@ public:
 /// Location information for a TemplateArgument.
 struct TemplateArgumentLocInfo {
 private:
+
   struct T {
     // FIXME: We'd like to just use the qualifier in the TemplateName,
     // but template arguments get canonicalized too quickly.
@@ -416,7 +393,8 @@ public:
   
   TemplateArgumentLocInfo(NestedNameSpecifierLoc QualifierLoc,
                           SourceLocation TemplateNameLoc,
-                          SourceLocation EllipsisLoc) {
+                          SourceLocation EllipsisLoc)
+  {
     Template.Qualifier = QualifierLoc.getNestedNameSpecifier();
     Template.QualifierLocData = QualifierLoc.getOpaqueData();
     Template.TemplateNameLoc = TemplateNameLoc.getRawEncoding();
@@ -456,15 +434,16 @@ public:
 
   TemplateArgumentLoc(const TemplateArgument &Argument,
                       TemplateArgumentLocInfo Opaque)
-      : Argument(Argument), LocInfo(Opaque) {}
+    : Argument(Argument), LocInfo(Opaque) {
+  }
 
   TemplateArgumentLoc(const TemplateArgument &Argument, TypeSourceInfo *TInfo)
-      : Argument(Argument), LocInfo(TInfo) {
+    : Argument(Argument), LocInfo(TInfo) {
     assert(Argument.getKind() == TemplateArgument::Type);
   }
 
   TemplateArgumentLoc(const TemplateArgument &Argument, Expr *E)
-      : Argument(Argument), LocInfo(E) {
+    : Argument(Argument), LocInfo(E) {
     assert(Argument.getKind() == TemplateArgument::Expression);
   }
 
@@ -472,8 +451,7 @@ public:
                       NestedNameSpecifierLoc QualifierLoc,
                       SourceLocation TemplateNameLoc,
                       SourceLocation EllipsisLoc = SourceLocation())
-      : Argument(Argument),
-        LocInfo(QualifierLoc, TemplateNameLoc, EllipsisLoc) {
+    : Argument(Argument), LocInfo(QualifierLoc, TemplateNameLoc, EllipsisLoc) {
     assert(Argument.getKind() == TemplateArgument::Template ||
            Argument.getKind() == TemplateArgument::TemplateExpansion);
   }
@@ -548,16 +526,16 @@ class TemplateArgumentListInfo {
   SourceLocation LAngleLoc;
   SourceLocation RAngleLoc;
 
-public:
-  TemplateArgumentListInfo() = default;
-
-  TemplateArgumentListInfo(SourceLocation LAngleLoc,
-                           SourceLocation RAngleLoc)
-      : LAngleLoc(LAngleLoc), RAngleLoc(RAngleLoc) {}
-
   // This can leak if used in an AST node, use ASTTemplateArgumentListInfo
   // instead.
   void *operator new(size_t bytes, ASTContext &C) = delete;
+
+public:
+  TemplateArgumentListInfo() {}
+
+  TemplateArgumentListInfo(SourceLocation LAngleLoc,
+                           SourceLocation RAngleLoc)
+    : LAngleLoc(LAngleLoc), RAngleLoc(RAngleLoc) {}
 
   SourceLocation getLAngleLoc() const { return LAngleLoc; }
   SourceLocation getRAngleLoc() const { return RAngleLoc; }
@@ -596,8 +574,8 @@ struct ASTTemplateArgumentListInfo final
     : private llvm::TrailingObjects<ASTTemplateArgumentListInfo,
                                     TemplateArgumentLoc> {
 private:
-  friend class ASTNodeImporter;
   friend TrailingObjects;
+  friend class ASTNodeImporter;
 
   ASTTemplateArgumentListInfo(const TemplateArgumentListInfo &List);
 
@@ -690,6 +668,6 @@ inline const TemplateArgument &
   return getArgs()[Idx];
 }
   
-} // namespace clang
+} // end namespace clang
 
-#endif // LLVM_CLANG_AST_TEMPLATEBASE_H
+#endif

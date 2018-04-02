@@ -49,26 +49,22 @@ void test3() {
       (halt()); // expected-warning {{will never be executed}}
 }
 
-namespace Test4 {
+void test4() {
   struct S {
     int mem;
   } s;
   S &foor();
-  void test4() {
-    halt(), foor()// expected-warning {{will never be executed}}
-      .mem;       
-  }
+  halt(), foor()// expected-warning {{will never be executed}}
+    .mem;       
 }
 
-namespace Test5 {
+void test5() {
   struct S {
     int mem;
   } s;
   S &foonr() __attribute__((noreturn));
-  void test5() {
-    foonr()
-      .mem;       // expected-warning {{will never be executed}}
-  }
+  foonr()
+    .mem;       // expected-warning {{will never be executed}}
 }
 
 void test6() {

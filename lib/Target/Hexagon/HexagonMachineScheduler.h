@@ -1,4 +1,4 @@
-//===- HexagonMachineScheduler.h - Custom Hexagon MI scheduler --*- C++ -*-===//
+//===-- HexagonMachineScheduler.h - Custom Hexagon MI scheduler.      ----===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -14,24 +14,24 @@
 #ifndef LLVM_LIB_TARGET_HEXAGON_HEXAGONMACHINESCHEDULER_H
 #define LLVM_LIB_TARGET_HEXAGON_HEXAGONMACHINESCHEDULER_H
 
-#include "llvm/ADT/STLExtras.h"
-#include "llvm/ADT/Twine.h"
-#include "llvm/CodeGen/DFAPacketizer.h"
+#include "llvm/ADT/PriorityQueue.h"
+#include "llvm/Analysis/AliasAnalysis.h"
+#include "llvm/CodeGen/LiveIntervalAnalysis.h"
 #include "llvm/CodeGen/MachineScheduler.h"
+#include "llvm/CodeGen/Passes.h"
+#include "llvm/CodeGen/RegisterClassInfo.h"
 #include "llvm/CodeGen/RegisterPressure.h"
+#include "llvm/CodeGen/ResourcePriorityQueue.h"
+#include "llvm/CodeGen/ScheduleDAGInstrs.h"
 #include "llvm/CodeGen/ScheduleHazardRecognizer.h"
-#include "llvm/CodeGen/TargetInstrInfo.h"
-#include "llvm/CodeGen/TargetSchedule.h"
-#include "llvm/CodeGen/TargetSubtargetInfo.h"
-#include <algorithm>
-#include <cassert>
-#include <limits>
-#include <memory>
-#include <vector>
+#include "llvm/Support/Debug.h"
+#include "llvm/Support/ErrorHandling.h"
+#include "llvm/Support/raw_ostream.h"
+#include "llvm/Target/TargetInstrInfo.h"
+
+using namespace llvm;
 
 namespace llvm {
-
-class SUnit;
 
 class VLIWResourceModel {
   /// ResourcesModel - Represents VLIW state.
@@ -43,18 +43,19 @@ class VLIWResourceModel {
 
   /// Local packet/bundle model. Purely
   /// internal to the MI schedulre at the time.
-  std::vector<SUnit *> Packet;
+  std::vector<SUnit*> Packet;
 
   /// Total packets created.
-  unsigned TotalPackets = 0;
+  unsigned TotalPackets;
 
 public:
   /// Save the last formed packet.
-  std::vector<SUnit *> OldPacket;
+  std::vector<SUnit*> OldPacket;
 
+public:
   VLIWResourceModel(const TargetSubtargetInfo &STI, const TargetSchedModel *SM)
-      : SchedModel(SM) {
-    ResourcesModel = STI.getInstrInfo()->CreateTargetScheduleState(STI);
+      : SchedModel(SM), TotalPackets(0) {
+  ResourcesModel = STI.getInstrInfo()->CreateTargetScheduleState(STI);
 
     // This hard requirement could be relaxed,
     // but for now do not let it proceed.
@@ -88,6 +89,7 @@ public:
   bool reserveResources(SUnit *SU);
   void savePacket();
   unsigned getTotalPackets() const { return TotalPackets; }
+
   bool isInPacket(SUnit *SU) const { return is_contained(Packet, SU); }
 };
 
@@ -112,19 +114,20 @@ public:
 /// ConvergingVLIWScheduler shrinks the unscheduled zone using heuristics
 /// to balance the schedule.
 class ConvergingVLIWScheduler : public MachineSchedStrategy {
+
   /// Store the state used by ConvergingVLIWScheduler heuristics, required
   ///  for the lifetime of one invocation of pickNode().
   struct SchedCandidate {
     // The best SUnit candidate.
-    SUnit *SU = nullptr;
+    SUnit *SU;
 
     // Register pressure values for the best candidate.
     RegPressureDelta RPDelta;
 
     // Best scheduling cost.
-    int SCost = 0;
+    int SCost;
 
-    SchedCandidate() = default;
+    SchedCandidate(): SU(nullptr), SCost(0) {}
   };
   /// Represent the type of SchedCandidate found within a single queue.
   enum CandResult {
@@ -135,30 +138,33 @@ class ConvergingVLIWScheduler : public MachineSchedStrategy {
   /// current cycle in whichever direction at has moved, and maintains the state
   /// of "hazards" and other interlocks at the current cycle.
   struct VLIWSchedBoundary {
-    VLIWMachineScheduler *DAG = nullptr;
-    const TargetSchedModel *SchedModel = nullptr;
+    VLIWMachineScheduler *DAG;
+    const TargetSchedModel *SchedModel;
 
     ReadyQueue Available;
     ReadyQueue Pending;
-    bool CheckPending = false;
+    bool CheckPending;
 
-    ScheduleHazardRecognizer *HazardRec = nullptr;
-    VLIWResourceModel *ResourceModel = nullptr;
+    ScheduleHazardRecognizer *HazardRec;
+    VLIWResourceModel *ResourceModel;
 
-    unsigned CurrCycle = 0;
-    unsigned IssueCount = 0;
+    unsigned CurrCycle;
+    unsigned IssueCount;
 
     /// MinReadyCycle - Cycle of the soonest available instruction.
-    unsigned MinReadyCycle = std::numeric_limits<unsigned>::max();
+    unsigned MinReadyCycle;
 
     // Remember the greatest min operand latency.
-    unsigned MaxMinLatency = 0;
+    unsigned MaxMinLatency;
 
     /// Pending queues extend the ready queues with the same ID and the
     /// PendingFlag set.
-    VLIWSchedBoundary(unsigned ID, const Twine &Name)
-        : Available(ID, Name+".A"),
-          Pending(ID << ConvergingVLIWScheduler::LogMaxQID, Name+".P") {}
+    VLIWSchedBoundary(unsigned ID, const Twine &Name):
+      DAG(nullptr), SchedModel(nullptr), Available(ID, Name+".A"),
+      Pending(ID << ConvergingVLIWScheduler::LogMaxQID, Name+".P"),
+      CheckPending(false), HazardRec(nullptr), ResourceModel(nullptr),
+      CurrCycle(0), IssueCount(0),
+      MinReadyCycle(UINT_MAX), MaxMinLatency(0) {}
 
     ~VLIWSchedBoundary() {
       delete ResourceModel;
@@ -190,8 +196,8 @@ class ConvergingVLIWScheduler : public MachineSchedStrategy {
     SUnit *pickOnlyChoice();
   };
 
-  VLIWMachineScheduler *DAG = nullptr;
-  const TargetSchedModel *SchedModel = nullptr;
+  VLIWMachineScheduler *DAG;
+  const TargetSchedModel *SchedModel;
 
   // State of the top and bottom scheduled instruction boundaries.
   VLIWSchedBoundary Top;
@@ -205,7 +211,9 @@ public:
     LogMaxQID = 2
   };
 
-  ConvergingVLIWScheduler() : Top(TopQID, "TopQ"), Bot(BotQID, "BotQ") {}
+  ConvergingVLIWScheduler()
+    : DAG(nullptr), SchedModel(nullptr), Top(TopQID, "TopQ"),
+      Bot(BotQID, "BotQ") {}
 
   void initialize(ScheduleDAGMI *dag) override;
 
@@ -241,6 +249,7 @@ protected:
 #endif
 };
 
-} // end namespace llvm
+} // namespace
 
-#endif // LLVM_LIB_TARGET_HEXAGON_HEXAGONMACHINESCHEDULER_H
+
+#endif

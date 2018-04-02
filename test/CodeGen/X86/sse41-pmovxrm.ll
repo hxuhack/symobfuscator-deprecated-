@@ -5,12 +5,12 @@
 
 define <8 x i16> @test_llvm_x86_sse41_pmovsxbw(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxbw:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxbw (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxbw:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxbw (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -21,12 +21,12 @@ define <8 x i16> @test_llvm_x86_sse41_pmovsxbw(<16 x i8>* %a) {
 
 define <4 x i32> @test_llvm_x86_sse41_pmovsxbd(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxbd:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxbd (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxbd:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxbd (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -37,12 +37,12 @@ define <4 x i32> @test_llvm_x86_sse41_pmovsxbd(<16 x i8>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovsxbq(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxbq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxbq (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxbq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxbq (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -53,12 +53,12 @@ define <2 x i64> @test_llvm_x86_sse41_pmovsxbq(<16 x i8>* %a) {
 
 define <4 x i32> @test_llvm_x86_sse41_pmovsxwd(<8 x i16>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxwd:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxwd (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxwd:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxwd (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <8 x i16>, <8 x i16>* %a, align 1
@@ -69,12 +69,12 @@ define <4 x i32> @test_llvm_x86_sse41_pmovsxwd(<8 x i16>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovsxwq(<8 x i16>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxwq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxwq (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxwq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxwq (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <8 x i16>, <8 x i16>* %a, align 1
@@ -85,12 +85,12 @@ define <2 x i64> @test_llvm_x86_sse41_pmovsxwq(<8 x i16>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovsxdq(<4 x i32>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovsxdq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovsxdq (%rdi), %xmm0
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovsxdq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovsxdq (%rdi), %xmm0
 ; AVX-NEXT:    retq
   %1 = load <4 x i32>, <4 x i32>* %a, align 1
@@ -101,12 +101,12 @@ define <2 x i64> @test_llvm_x86_sse41_pmovsxdq(<4 x i32>* %a) {
 
 define <8 x i16> @test_llvm_x86_sse41_pmovzxbw(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxbw:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxbw {{.*#+}} xmm0 = mem[0],zero,mem[1],zero,mem[2],zero,mem[3],zero,mem[4],zero,mem[5],zero,mem[6],zero,mem[7],zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxbw:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxbw {{.*#+}} xmm0 = mem[0],zero,mem[1],zero,mem[2],zero,mem[3],zero,mem[4],zero,mem[5],zero,mem[6],zero,mem[7],zero
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -117,12 +117,12 @@ define <8 x i16> @test_llvm_x86_sse41_pmovzxbw(<16 x i8>* %a) {
 
 define <4 x i32> @test_llvm_x86_sse41_pmovzxbd(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxbd:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxbd {{.*#+}} xmm0 = mem[0],zero,zero,zero,mem[1],zero,zero,zero,mem[2],zero,zero,zero,mem[3],zero,zero,zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxbd:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxbd {{.*#+}} xmm0 = mem[0],zero,zero,zero,mem[1],zero,zero,zero,mem[2],zero,zero,zero,mem[3],zero,zero,zero
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -133,12 +133,12 @@ define <4 x i32> @test_llvm_x86_sse41_pmovzxbd(<16 x i8>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovzxbq(<16 x i8>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxbq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxbq {{.*#+}} xmm0 = mem[0],zero,zero,zero,zero,zero,zero,zero,mem[1],zero,zero,zero,zero,zero,zero,zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxbq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxbq {{.*#+}} xmm0 = mem[0],zero,zero,zero,zero,zero,zero,zero,mem[1],zero,zero,zero,zero,zero,zero,zero
 ; AVX-NEXT:    retq
   %1 = load <16 x i8>, <16 x i8>* %a, align 1
@@ -149,12 +149,12 @@ define <2 x i64> @test_llvm_x86_sse41_pmovzxbq(<16 x i8>* %a) {
 
 define <4 x i32> @test_llvm_x86_sse41_pmovzxwd(<8 x i16>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxwd:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxwd {{.*#+}} xmm0 = mem[0],zero,mem[1],zero,mem[2],zero,mem[3],zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxwd:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxwd {{.*#+}} xmm0 = mem[0],zero,mem[1],zero,mem[2],zero,mem[3],zero
 ; AVX-NEXT:    retq
   %1 = load <8 x i16>, <8 x i16>* %a, align 1
@@ -165,12 +165,12 @@ define <4 x i32> @test_llvm_x86_sse41_pmovzxwd(<8 x i16>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovzxwq(<8 x i16>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxwq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxwq {{.*#+}} xmm0 = mem[0],zero,zero,zero,mem[1],zero,zero,zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxwq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxwq {{.*#+}} xmm0 = mem[0],zero,zero,zero,mem[1],zero,zero,zero
 ; AVX-NEXT:    retq
   %1 = load <8 x i16>, <8 x i16>* %a, align 1
@@ -181,12 +181,12 @@ define <2 x i64> @test_llvm_x86_sse41_pmovzxwq(<8 x i16>* %a) {
 
 define <2 x i64> @test_llvm_x86_sse41_pmovzxdq(<4 x i32>* %a) {
 ; SSE41-LABEL: test_llvm_x86_sse41_pmovzxdq:
-; SSE41:       ## %bb.0:
+; SSE41:       ## BB#0:
 ; SSE41-NEXT:    pmovzxdq {{.*#+}} xmm0 = mem[0],zero,mem[1],zero
 ; SSE41-NEXT:    retq
 ;
 ; AVX-LABEL: test_llvm_x86_sse41_pmovzxdq:
-; AVX:       ## %bb.0:
+; AVX:       ## BB#0:
 ; AVX-NEXT:    vpmovzxdq {{.*#+}} xmm0 = mem[0],zero,mem[1],zero
 ; AVX-NEXT:    retq
   %1 = load <4 x i32>, <4 x i32>* %a, align 1

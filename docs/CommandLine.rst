@@ -1251,7 +1251,9 @@ Unices have a relatively low limit on command-line length. It is therefore
 customary to use the so-called 'response files' to circumvent this
 restriction. These files are mentioned on the command-line (using the "@file")
 syntax. The program reads these files and inserts the contents into argv,
-thereby working around the command-line length limits.
+thereby working around the command-line length limits. Response files are
+enabled by an optional fourth argument to `cl::ParseEnvironmentOptions`_ and
+`cl::ParseCommandLineOptions`_.
 
 Top-Level Classes and Functions
 -------------------------------
@@ -1322,7 +1324,8 @@ option variables once ``argc`` and ``argv`` are available.
 
 The ``cl::ParseCommandLineOptions`` function requires two parameters (``argc``
 and ``argv``), but may also take an optional third parameter which holds
-`additional extra text`_ to emit when the ``-help`` option is invoked.
+`additional extra text`_ to emit when the ``-help`` option is invoked, and a
+fourth boolean parameter that enables `response files`_.
 
 .. _cl::ParseEnvironmentOptions:
 
@@ -1337,8 +1340,9 @@ command line option variables just like `cl::ParseCommandLineOptions`_ does.
 
 It takes four parameters: the name of the program (since ``argv`` may not be
 available, it can't just look in ``argv[0]``), the name of the environment
-variable to examine, and the optional `additional extra text`_ to emit when the
-``-help`` option is invoked.
+variable to examine, the optional `additional extra text`_ to emit when the
+``-help`` option is invoked, and the boolean switch that controls whether
+`response files`_ should be read.
 
 ``cl::ParseEnvironmentOptions`` will break the environment variable's value up
 into words and then process them using `cl::ParseCommandLineOptions`_.

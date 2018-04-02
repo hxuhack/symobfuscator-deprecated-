@@ -1,5 +1,4 @@
 set(LLVM_LINK_COMPONENTS
-  BinaryFormat
   DebugInfoCodeView
   DebugInfoMSF
   DebugInfoPDB
@@ -14,7 +13,6 @@ add_llvm_tool(llvm-pdbutil
   Diff.cpp
   DiffPrinter.cpp
   DumpOutputStyle.cpp
-  InputFile.cpp
   llvm-pdbutil.cpp
   FormatUtil.cpp
   LinePrinter.cpp
@@ -34,3 +32,7 @@ add_llvm_tool(llvm-pdbutil
   StreamUtil.cpp
   YAMLOutputStyle.cpp
   )
+
+if(LLVM_USE_SANITIZE_COVERAGE)
+  add_subdirectory(fuzzer)
+endif()

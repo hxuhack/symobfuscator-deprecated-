@@ -373,9 +373,7 @@ static void PrintCallingConv(unsigned cc, raw_ostream &Out) {
   case CallingConv::HHVM:          Out << "hhvmcc"; break;
   case CallingConv::HHVM_C:        Out << "hhvm_ccc"; break;
   case CallingConv::AMDGPU_VS:     Out << "amdgpu_vs"; break;
-  case CallingConv::AMDGPU_LS:     Out << "amdgpu_ls"; break;
   case CallingConv::AMDGPU_HS:     Out << "amdgpu_hs"; break;
-  case CallingConv::AMDGPU_ES:     Out << "amdgpu_es"; break;
   case CallingConv::AMDGPU_GS:     Out << "amdgpu_gs"; break;
   case CallingConv::AMDGPU_PS:     Out << "amdgpu_ps"; break;
   case CallingConv::AMDGPU_CS:     Out << "amdgpu_cs"; break;
@@ -1048,10 +1046,6 @@ void SlotTracker::CreateFunctionSlot(const Value *V) {
 void SlotTracker::CreateMetadataSlot(const MDNode *N) {
   assert(N && "Can't insert a null Value into SlotTracker!");
 
-  // Don't make slots for DIExpressions. We just print them inline everywhere.
-  if (isa<DIExpression>(N))
-    return;
-
   unsigned DestSlot = mdnNext;
   if (!mdnMap.insert(std::make_pair(N, DestSlot)).second)
     return;
@@ -1108,12 +1102,10 @@ static void writeAtomicRMWOperation(raw_ostream &Out,
 
 static void WriteOptimizationInfo(raw_ostream &Out, const User *U) {
   if (const FPMathOperator *FPO = dyn_cast<const FPMathOperator>(U)) {
-    // 'Fast' is an abbreviation for all fast-math-flags.
-    if (FPO->isFast())
+    // Unsafe algebra implies all the others, no need to write them all out
+    if (FPO->hasUnsafeAlgebra())
       Out << " fast";
     else {
-      if (FPO->hasAllowReassoc())
-        Out << " reassoc";
       if (FPO->hasNoNaNs())
         Out << " nnan";
       if (FPO->hasNoInfs())
@@ -1124,8 +1116,6 @@ static void WriteOptimizationInfo(raw_ostream &Out, const User *U) {
         Out << " arcp";
       if (FPO->hasAllowContract())
         Out << " contract";
-      if (FPO->hasApproxFunc())
-        Out << " afn";
     }
   }
 
@@ -1748,7 +1738,6 @@ static void writeDICompileUnit(raw_ostream &Out, const DICompileUnit *N,
   Printer.printBool("splitDebugInlining", N->getSplitDebugInlining(), true);
   Printer.printBool("debugInfoForProfiling", N->getDebugInfoForProfiling(),
                     false);
-  Printer.printBool("gnuPubnames", N->getGnuPubnames(), false);
   Out << ")";
 }
 
@@ -2084,13 +2073,6 @@ static void WriteAsOperandInternal(raw_ostream &Out, const Metadata *MD,
                                    TypePrinting *TypePrinter,
                                    SlotTracker *Machine, const Module *Context,
                                    bool FromValue) {
-  // Write DIExpressions inline when used as a value. Improves readability of
-  // debug info intrinsics.
-  if (const DIExpression *Expr = dyn_cast<DIExpression>(MD)) {
-    writeDIExpression(Out, Expr, TypePrinter, Machine, Context);
-    return;
-  }
-
   if (const MDNode *N = dyn_cast<MDNode>(MD)) {
     std::unique_ptr<SlotTracker> MachineStorage;
     if (!Machine) {
@@ -2442,16 +2424,7 @@ void AssemblyWriter::printNamedMDNode(const NamedMDNode *NMD) {
   for (unsigned i = 0, e = NMD->getNumOperands(); i != e; ++i) {
     if (i)
       Out << ", ";
-
-    // Write DIExpressions inline.
-    // FIXME: Ban DIExpressions in NamedMDNodes, they will serve no purpose.
-    MDNode *Op = NMD->getOperand(i);
-    if (auto *Expr = dyn_cast<DIExpression>(Op)) {
-      writeDIExpression(Out, Expr, nullptr, nullptr, nullptr);
-      continue;
-    }
-
-    int Slot = Machine.getMetadataSlot(Op);
+    int Slot = Machine.getMetadataSlot(NMD->getOperand(i));
     if (Slot == -1)
       Out << "<badref>";
     else
@@ -2495,11 +2468,6 @@ static void PrintVisibility(GlobalValue::VisibilityTypes Vis,
   case GlobalValue::HiddenVisibility:    Out << "hidden "; break;
   case GlobalValue::ProtectedVisibility: Out << "protected "; break;
   }
-}
-
-static void PrintDSOLocation(bool IsDSOLocal, formatted_raw_ostream &Out){
-  if (IsDSOLocal)
-    Out << "dso_local ";
 }
 
 static void PrintDLLStorageClass(GlobalValue::DLLStorageClassTypes SCT,
@@ -2572,7 +2540,6 @@ void AssemblyWriter::printGlobal(const GlobalVariable *GV) {
     Out << "external ";
 
   Out << getLinkagePrintName(GV->getLinkage());
-  PrintDSOLocation(GV->isDSOLocal(), Out);
   PrintVisibility(GV->getVisibility(), Out);
   PrintDLLStorageClass(GV->getDLLStorageClass(), Out);
   PrintThreadLocalModel(GV->getThreadLocalMode(), Out);
@@ -2619,7 +2586,6 @@ void AssemblyWriter::printIndirectSymbol(const GlobalIndirectSymbol *GIS) {
   Out << " = ";
 
   Out << getLinkagePrintName(GIS->getLinkage());
-  PrintDSOLocation(GIS->isDSOLocal(), Out);
   PrintVisibility(GIS->getVisibility(), Out);
   PrintDLLStorageClass(GIS->getDLLStorageClass(), Out);
   PrintThreadLocalModel(GIS->getThreadLocalMode(), Out);
@@ -2731,7 +2697,6 @@ void AssemblyWriter::printFunction(const Function *F) {
     Out << "define ";
 
   Out << getLinkagePrintName(F->getLinkage());
-  PrintDSOLocation(F->isDSOLocal(), Out);
   PrintVisibility(F->getVisibility(), Out);
   PrintDLLStorageClass(F->getDLLStorageClass(), Out);
 
@@ -3607,7 +3572,7 @@ static void printMetadataImpl(raw_ostream &ROS, const Metadata &MD,
                          /* FromValue */ true);
 
   auto *N = dyn_cast<MDNode>(&MD);
-  if (OnlyAsOperand || !N || isa<DIExpression>(MD))
+  if (OnlyAsOperand || !N)
     return;
 
   OS << " = ";

@@ -333,11 +333,6 @@ TEST_F(FormatTestJava, Generics) {
   verifyFormat("Iterable<? extends SomeObject> a;");
 
   verifyFormat("A.<B>doSomething();");
-  verifyFormat("A.<B<C>>doSomething();");
-  verifyFormat("A.<B<C<D>>>doSomething();");
-  verifyFormat("A.<B<C<D<E>>>>doSomething();");
-
-  verifyFormat("OrderedPair<String, List<Box<Integer>>> p = null;");
 
   verifyFormat("@Override\n"
                "public Map<String, ?> getAll() {}");
@@ -417,7 +412,6 @@ TEST_F(FormatTestJava, SynchronizedKeyword) {
 
 TEST_F(FormatTestJava, AssertKeyword) {
   verifyFormat("assert a && b;");
-  verifyFormat("assert (a && b);");
 }
 
 TEST_F(FormatTestJava, PackageDeclarations) {
@@ -529,15 +523,6 @@ TEST_F(FormatTestJava, AlignsBlockComments) {
                    "   * comment.\n"
                    "   */\n"
                    "  void f() {}"));
-}
-
-TEST_F(FormatTestJava, KeepsDelimitersOnOwnLineInJavaDocComments) {
-  EXPECT_EQ("/**\n"
-            " * javadoc line 1\n"
-            " * javadoc line 2\n"
-            " */",
-            format("/** javadoc line 1\n"
-                   " * javadoc line 2 */"));
 }
 
 TEST_F(FormatTestJava, RetainsLogicalShifts) {

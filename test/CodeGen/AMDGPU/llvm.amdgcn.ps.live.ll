@@ -1,10 +1,7 @@
 ; RUN: llc -march=amdgcn -verify-machineinstrs < %s | FileCheck %s
 
 ; CHECK-LABEL: {{^}}test1:
-; CHECK: s_mov_b64 s[0:1], exec
-; CHECK: v_cndmask_b32_e64 v0, 0, 1, s[0:1]
-;
-; Note: The hardware doesn't implement EXEC as src2 for v_cndmask.
+; CHECK: v_cndmask_b32_e64 v0, 0, 1, exec
 ;
 ; Note: We could generate better code here if we recognized earlier that
 ; there is no WQM use and therefore llvm.amdgcn.ps.live is constant. However,

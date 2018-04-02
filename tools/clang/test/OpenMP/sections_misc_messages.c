@@ -1,7 +1,5 @@
 // RUN: %clang_cc1 -fsyntax-only -fopenmp -verify %s
 
-// RUN: %clang_cc1 -fsyntax-only -fopenmp-simd -verify %s
-
 void foo();
 
 // expected-error@+1 {{unexpected OpenMP directive '#pragma omp sections'}}

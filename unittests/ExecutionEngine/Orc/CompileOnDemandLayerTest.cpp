@@ -21,7 +21,7 @@ public:
   DummyCallbackManager() : JITCompileCallbackManager(0) {}
 
 public:
-  Error grow() override { llvm_unreachable("not implemented"); }
+  void grow() override { llvm_unreachable("not implemented"); }
 };
 
 class DummyStubsManager : public orc::IndirectStubsManager {
@@ -49,18 +49,21 @@ public:
 };
 
 TEST(CompileOnDemandLayerTest, FindSymbol) {
-  MockBaseLayer<int, std::shared_ptr<Module>> TestBaseLayer;
-  TestBaseLayer.findSymbolImpl =
-    [](const std::string &Name, bool) {
-      if (Name == "foo")
-        return JITSymbol(1, JITSymbolFlags::Exported);
-      return JITSymbol(nullptr);
-    };
+  auto MockBaseLayer = createMockBaseLayer<int>(
+      DoNothingAndReturn<int>(0),
+      [](int Handle) { return Error::success(); },
+      [](const std::string &Name, bool) {
+        if (Name == "foo")
+          return JITSymbol(1, JITSymbolFlags::Exported);
+        return JITSymbol(nullptr);
+      },
+      ReturnNullJITSymbol());
 
+  typedef decltype(MockBaseLayer) MockBaseLayerT;
   DummyCallbackManager CallbackMgr;
 
-  llvm::orc::CompileOnDemandLayer<decltype(TestBaseLayer)> COD(
-      TestBaseLayer, [](Function &F) { return std::set<Function *>{&F}; },
+  llvm::orc::CompileOnDemandLayer<MockBaseLayerT> COD(
+      MockBaseLayer, [](Function &F) { return std::set<Function *>{&F}; },
       CallbackMgr, [] { return llvm::make_unique<DummyStubsManager>(); }, true);
 
   auto Sym = COD.findSymbol("foo", true);

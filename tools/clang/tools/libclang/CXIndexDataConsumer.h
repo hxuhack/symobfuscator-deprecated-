@@ -342,7 +342,7 @@ public:
   CXTranslationUnit getCXTU() const { return CXTU; }
 
   void setASTContext(ASTContext &ctx);
-  void setPreprocessor(std::shared_ptr<Preprocessor> PP) override;
+  void setPreprocessor(std::shared_ptr<Preprocessor> PP);
 
   bool shouldSuppressRefs() const {
     return IndexOptions & CXIndexOpt_SuppressRedundantRefs;

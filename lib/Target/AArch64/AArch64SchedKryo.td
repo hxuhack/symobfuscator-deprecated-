@@ -27,8 +27,6 @@ def KryoModel : SchedMachineModel {
   // experiments and benchmarking data.
   let LoopMicroOpBufferSize = 16;
   let CompleteModel = 1;
-
-  list<Predicate> UnsupportedFeatures = [HasSVE];
 }
 
 //===----------------------------------------------------------------------===//

@@ -182,11 +182,11 @@ file_magic llvm::identify_magic(StringRef Magic) {
     break;
 
   case 'M': // Possible MS-DOS stub on Windows PE file
-    if (startswith(Magic, "MZ") && Magic.size() >= 0x3c + 4) {
+    if (startswith(Magic, "MZ")) {
       uint32_t off = read32le(Magic.data() + 0x3c);
       // PE/COFF file, either EXE or DLL.
-      if (Magic.substr(off).startswith(
-              StringRef(COFF::PEMagic, sizeof(COFF::PEMagic))))
+      if (off < Magic.size() &&
+          memcmp(Magic.data() + off, COFF::PEMagic, sizeof(COFF::PEMagic)) == 0)
         return file_magic::pecoff_executable;
     }
     break;
