@@ -1,18 +1,42 @@
-Low Level Virtual Machine (LLVM)
-================================
+# symobfuscator
+## Introduction
+sysmobfuscator is the implementation of paper *Manufacturing Resilient Bi-Opaque Predicates against Symbolic Execution*.
+## Installation
+```
+cd symobfuscator
+mkdir build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ../
+make -j7
+```
+## Available Compiler Options
+- `-mllvm -bcf`: Activates control flow flattening
+- `-mllvm -boguscf-prob`: Choose the probability each basic blocks will be obfuscated by the -bcf pass
+- `-mllvm -OpqType`: Choose the opaque predicate type
+- `-mllvm -OpqNum`: Set the number of opaque predicates
+- `-mllvm -boguscf-loop`: Choose how many time the -bcf pass loop on a function
 
-This directory and its subdirectories contain source code for LLVM,
-a toolkit for the construction of highly optimized compilers,
-optimizers, and runtime environments.
+## Example
+```
+# Under the build folder
+# Type 1: Symbolic memory
+./bin/clang demo.c -o demo -mllvm -bcf -mllvm -boguscf-prob=20 -mllvm -OpqType=1 -mllvm -OpqNum=1
 
-LLVM is open source software. You may freely distribute it under the terms of
-the license agreement found in LICENSE.txt.
+# Type 2: Floating-point number
+./bin/clang demo.c -o demo -mllvm -bcf -mllvm -boguscf-prob=20 -mllvm -OpqType=2 -mllvm -OpqNum=1
 
-Please see the documentation provided in docs/ for further
-assistance with LLVM, and in particular docs/GettingStarted.rst for getting
-started with LLVM and docs/README.txt for an overview of LLVM's
-documentation setup.
+# Type 3: Covert symbolic propagation
+./bin/clang -c rtlib.c
+./bin/clang -c demo.c -mllvm -bcf -mllvm -boguscf-prob=50 -mllvm -OpqType=3 -mllvm -OpqNum=1
+./bin/clang demo.o rtlib.o -lpthread -o demo
 
-If you are writing a package for LLVM, see docs/Packaging.rst for our
-suggestions.
+# Type 4: Parallel programming (Thread)
+./bin/clang -c rtlib.c
+./bin/clang -c demo.c -mllvm -bcf -mllvm -boguscf-prob=50 -mllvm -OpqType=4 -mllvm -OpqNum=1
+./bin/clang demo.o rtlib.o -lpthread -o demo
 
+# Type 5: Parallel programming (Fork)
+./bin/clang -c rtlib.c
+./bin/clang -c demo.c -mllvm -bcf -mllvm -boguscf-prob=50 -mllvm -OpqType=5 -mllvm -OpqNum=1
+./bin/clang demo.o rtlib.o -lpthread -o demo
+```
