@@ -1,6 +1,7 @@
 # symobfuscator
 ## Introduction
-sysmobfuscator is the implementation of paper *Manufacturing Resilient Bi-Opaque Predicates against Symbolic Execution*.
+See the [DSN2018](https://dsn2018.uni.lu/main-track-accepted-papers/) paper *Manufacturing Resilient Bi-Opaque Predicates against Symbolic Execution* for more details.  
+Authors: Hui Xu (CUHK); Yangfan Zhou, Yu Kang (Fudan University); Fengzhi Tu, Michael R. Lyu (CUHK)
 ## Installation
 ```
 cd symobfuscator
